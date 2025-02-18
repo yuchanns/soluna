@@ -21,7 +21,7 @@ local function tohex(c)
 end
 
 local p = {
-	name = cname:match "([^/_]+)%.h$",
+	name = cname:match "([^/_]+)%.lua%.h$",
 	bytes = string.gsub(bin, ".", tohex),	
 }
 

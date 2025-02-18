@@ -8,10 +8,19 @@
 #include <stdio.h>
 
 #include "sokol_app.h"
+#include "sokol_gfx.h"
+#include "sokol_glue.h"
 #include "sokol_log.h"
 #include "sokol_args.h"
 #include "message.h"
 #include "loginfo.h"
+#include "triangle.glsl.h"
+
+struct test_state {
+    sg_pipeline pip;
+    sg_bindings bind;
+    sg_pass_action pass_action;
+};
 
 struct app_context {
 	lua_State *L;
@@ -19,6 +28,8 @@ struct app_context {
 	void *send_message_ud;
 	int (*send_log)(void *ud, unsigned int id, void *data, uint32_t sz);
 	void *send_log_ud;
+	
+	struct test_state state;
 };
 
 static struct app_context *CTX = NULL;
@@ -114,6 +125,50 @@ log_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* mes
 }
 
 static void
+state_init(struct test_state *state) {
+	float vertices[] = {
+		// positions            // colors
+		 0.0f,  0.5f, 0.5f,     1.0f, 0.0f, 0.0f, 1.0f,
+		 0.5f, -0.5f, 0.5f,     0.0f, 1.0f, 0.0f, 1.0f,
+		-0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f
+    };
+	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc){
+        .data = SG_RANGE(vertices),
+        .label = "triangle-vertices"
+    });
+	// create shader from code-generated sg_shader_desc
+    sg_shader shd = sg_make_shader(triangle_shader_desc(sg_query_backend()));
+
+	// create a pipeline object (default render states are fine for triangle)
+    state->pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = shd,
+        // if the vertex layout doesn't have gaps, don't need to provide strides and offsets
+        .layout = {
+            .attrs = {
+                [ATTR_triangle_position].format = SG_VERTEXFORMAT_FLOAT3,
+                [ATTR_triangle_color0].format = SG_VERTEXFORMAT_FLOAT4
+            }
+        },
+        .label = "triangle-pipeline"
+    });
+
+    // a pass action to clear framebuffer to black
+    state->pass_action = (sg_pass_action) {
+        .colors[0] = { .load_action=SG_LOADACTION_CLEAR, .clear_value={0.0f, 0.0f, 0.0f, 1.0f } }
+    };	
+}
+
+static void
+state_commit(struct test_state *state) {
+	sg_begin_pass(&(sg_pass){ .action = state->pass_action, .swapchain = sglue_swapchain() });
+	sg_apply_pipeline(state->pip);
+	sg_apply_bindings(&state->bind);
+	sg_draw(0, 3, 1);
+	sg_end_pass();
+	sg_commit();	
+}
+
+static void
 app_init() {
 	static struct app_context app;
 	lua_State *L = luaL_newstate();
@@ -127,7 +182,13 @@ app_init() {
 	app.send_log_ud = NULL;
 	
 	CTX = &app;
-
+	
+	sg_setup(&(sg_desc) {
+        .environment = sglue_environment(),
+        .logger.func = log_func,			
+	});
+		
+	state_init(&app.state);
 	start_app(L);
 	sargs_shutdown();
 }
@@ -135,6 +196,7 @@ app_init() {
 static void
 app_frame() {
 	send_app_message(message_create("frame", 0, 0));
+	state_commit(&CTX->state);
 }
 
 static int
@@ -157,6 +219,7 @@ app_cleanup() {
 	}
 	lua_close(L);
 	memset(CTX, 0, sizeof(*CTX));
+	sg_shutdown();
 }
 
 static void
@@ -227,6 +290,7 @@ sokol_main(int argc, char* argv[]) {
 	d.logger.func = log_func;
 	d.win32_console_utf8 = 1;
 	d.win32_console_attach = 1;
+	d.window_title = "soluna";
 
 	return d;
 }

@@ -1,2 +1,4 @@
-bin/*
-build/*
+bin/*.exe
+build/*.o
+build/*.lua.h
+build/*.exe
