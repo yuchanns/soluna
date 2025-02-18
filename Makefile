@@ -1,0 +1,71 @@
+.PHONY : all clean test
+
+BUILD=build
+BIN=bin
+APPNAME=soluna.exe
+CC=gcc
+CFLAGS=-Wall -O2
+LDFLAGS=-Wl,-subsystem,windows -lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 $(LUALIB) -lwinmm -lws2_32 -lntdll
+LUA_EXE=$(BUILD)/lua.exe
+
+all : $(BIN)/$(APPNAME)
+
+SOKOLINC=-I3rd/sokol
+
+LUAINC=-I3rd/lua
+LUASRC:=$(wildcard 3rd/lua/*.c 3rd/lua/*.h)
+
+$(LUA_EXE) : $(LUASRC)
+	$(CC) $(CFLAGS) -o $@ 3rd/lua/onelua.c -DMAKE_LUA -std=c99 -lm
+
+COMPILE_C=$(CC) $(CFLAGS) -c -o $@ $<
+COMPILE_LUA=$(LUA_EXE) script/lua2c.lua $< $@
+
+LUA_O=$(BUILD)/onelua.o
+
+$(LUA_O) : $(LUASRC)
+	$(CC) $(CFLAGS) -c -o $@ 3rd/lua/onelua.c -DMAKE_LIB -std=c99 -lm
+ 
+MAIN_FULL=$(wildcard src/*.c)
+MAIN_C=$(notdir $(MAIN_FULL))
+MAIN_O=$(patsubst %.c,$(BUILD)/soluna_%.o,$(MAIN_C))
+
+LTASK_FULL=$(wildcard 3rd/ltask/src/*.c)
+LTASK_C=$(notdir $(LTASK_FULL))
+LTASK_O=$(patsubst %.c,$(BUILD)/ltask_%.o,$(LTASK_C))
+
+LTASK_LUASRC=\
+  3rd/ltask/service/root.lua\
+  3rd/ltask/service/timer.lua\
+  $(wildcard 3rd/ltask/lualib/*.lua src/lualib/*.lua src/service/*.lua)
+
+LTASK_LUACODE=$(patsubst %.lua, $(BUILD)/ltasklua_%.h, $(notdir $(LTASK_LUASRC)))
+
+$(LTASK_LUACODE) : | $(LUA_EXE)
+
+$(BUILD)/ltasklua_%.h : 3rd/ltask/service/%.lua
+	$(COMPILE_LUA)
+
+$(BUILD)/ltasklua_%.h : 3rd/ltask/lualib/%.lua
+	$(COMPILE_LUA)
+
+$(BUILD)/ltasklua_%.h : src/lualib/%.lua
+	$(COMPILE_LUA)
+
+$(BUILD)/ltasklua_%.h : src/service/%.lua
+	$(COMPILE_LUA)
+
+$(BUILD)/soluna_embedlua.o : src/embedlua.c $(LTASK_LUACODE)
+	$(COMPILE_C) -I$(BUILD) $(LUAINC)
+
+$(BUILD)/soluna_%.o : src/%.c
+	$(COMPILE_C) $(LUAINC) $(SOKOLINC) -Wno-unknown-pragmas
+	
+$(BUILD)/ltask_%.o : 3rd/ltask/src/%.c
+	$(COMPILE_C) $(LUAINC) -D_WIN32_WINNT=0x0601 -DLTASK_EXTERNAL_OPENLIBS=soluna_openlibs
+
+$(BIN)/$(APPNAME): $(MAIN_O) $(LTASK_O) $(LUA_O)
+	$(CC) -o $@ $^ $(LDFLAGS)
+	
+clean :
+	rm -f $(BIN)/*.exe $(BUILD)/*.o $(BUILD)/*.h

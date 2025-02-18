@@ -1,0 +1,1 @@
+The temporary directory used to build the project.
