@@ -40,7 +40,7 @@ MAIN_FULL=$(wildcard src/*.c)
 MAIN_C=$(notdir $(MAIN_FULL))
 MAIN_O=$(patsubst %.c,$(BUILD)/soluna_%.o,$(MAIN_C))
 
-$(MAIN_O) : | $(SHADER_O)
+$(MAIN_O) : $(SHADER_O)
 
 LTASK_FULL=$(wildcard 3rd/ltask/src/*.c)
 LTASK_C=$(notdir $(LTASK_FULL))

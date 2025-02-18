@@ -1,3 +1,5 @@
+#include "draw.h"
+
 #define SOKOL_IMPL
 #define SOKOL_D3D11
 
@@ -14,13 +16,6 @@
 #include "sokol_args.h"
 #include "message.h"
 #include "loginfo.h"
-#include "triangle.glsl.h"
-
-struct test_state {
-    sg_pipeline pip;
-    sg_bindings bind;
-    sg_pass_action pass_action;
-};
 
 struct app_context {
 	lua_State *L;
@@ -29,7 +24,7 @@ struct app_context {
 	int (*send_log)(void *ud, unsigned int id, void *data, uint32_t sz);
 	void *send_log_ud;
 	
-	struct test_state state;
+	struct draw_state state;
 };
 
 static struct app_context *CTX = NULL;
@@ -125,50 +120,6 @@ log_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* mes
 }
 
 static void
-state_init(struct test_state *state) {
-	float vertices[] = {
-		// positions            // colors
-		 0.0f,  0.5f, 0.5f,     1.0f, 0.0f, 0.0f, 1.0f,
-		 0.5f, -0.5f, 0.5f,     0.0f, 1.0f, 0.0f, 1.0f,
-		-0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f
-    };
-	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc){
-        .data = SG_RANGE(vertices),
-        .label = "triangle-vertices"
-    });
-	// create shader from code-generated sg_shader_desc
-    sg_shader shd = sg_make_shader(triangle_shader_desc(sg_query_backend()));
-
-	// create a pipeline object (default render states are fine for triangle)
-    state->pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = shd,
-        // if the vertex layout doesn't have gaps, don't need to provide strides and offsets
-        .layout = {
-            .attrs = {
-                [ATTR_triangle_position].format = SG_VERTEXFORMAT_FLOAT3,
-                [ATTR_triangle_color0].format = SG_VERTEXFORMAT_FLOAT4
-            }
-        },
-        .label = "triangle-pipeline"
-    });
-
-    // a pass action to clear framebuffer to black
-    state->pass_action = (sg_pass_action) {
-        .colors[0] = { .load_action=SG_LOADACTION_CLEAR, .clear_value={0.0f, 0.0f, 0.0f, 1.0f } }
-    };	
-}
-
-static void
-state_commit(struct test_state *state) {
-	sg_begin_pass(&(sg_pass){ .action = state->pass_action, .swapchain = sglue_swapchain() });
-	sg_apply_pipeline(state->pip);
-	sg_apply_bindings(&state->bind);
-	sg_draw(0, 3, 1);
-	sg_end_pass();
-	sg_commit();	
-}
-
-static void
 app_init() {
 	static struct app_context app;
 	lua_State *L = luaL_newstate();
@@ -188,7 +139,7 @@ app_init() {
         .logger.func = log_func,			
 	});
 		
-	state_init(&app.state);
+	draw_state_init(&app.state, sapp_width(), sapp_height());
 	start_app(L);
 	sargs_shutdown();
 }
@@ -196,7 +147,7 @@ app_init() {
 static void
 app_frame() {
 	send_app_message(message_create("frame", 0, 0));
-	state_commit(&CTX->state);
+	draw_state_commit(&CTX->state);
 }
 
 static int
@@ -252,6 +203,24 @@ mouse_message(const sapp_event* ev) {
 	send_app_message(message_create(typestr, p1, p2));
 }
 
+static void
+window_message(const sapp_event *ev) {
+	const char *typestr = NULL;
+	int p1 = 0;
+	int p2 = 0;
+	switch (ev->type) {
+	case SAPP_EVENTTYPE_RESIZED:
+		typestr = "window_resize";
+		p1 = ev->window_width;
+		p2 = ev->window_height;
+		break;
+	default:
+		typestr = "window";
+		p1 = ev->type;
+		break;
+	}
+	send_app_message(message_create(typestr, p1, p2));
+}
 
 static void
 app_event(const sapp_event* ev) {
@@ -263,6 +232,9 @@ app_event(const sapp_event* ev) {
 	case SAPP_EVENTTYPE_MOUSE_ENTER:
 	case SAPP_EVENTTYPE_MOUSE_LEAVE:
 		mouse_message(ev);
+		break;
+	case SAPP_EVENTTYPE_RESIZED:
+		window_message(ev);
 		break;
 	default:
 		send_app_message(message_create("message", ev->type, 0));
