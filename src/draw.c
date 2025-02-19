@@ -42,14 +42,6 @@ draw_state_init(struct draw_state *state, int w, int h) {
 		.usage = SG_USAGE_STREAM,
 		.label = "texquad-sprite"
 	});
-	uint16_t indices[] = {
-		0,1,2, 1,2,3,
-	};
-    state->bind.index_buffer = sg_make_buffer(&(sg_buffer_desc){
-        .type = SG_BUFFERTYPE_INDEXBUFFER,
-        .data = SG_RANGE(indices),
-        .label = "texquad-indices"
-    });
 	// create a checkerboard texture
 	uint32_t pixels[4*4] = {
         0xFFFFFFFF, 0x20000020, 0xFFFFFFFF, 0x20000020,
@@ -88,7 +80,7 @@ draw_state_init(struct draw_state *state, int w, int h) {
 			.dst_factor_alpha = SG_BLENDFACTOR_ZERO
 		},
         .shader = shd,
-        .index_type = SG_INDEXTYPE_UINT16,
+		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .label = "texquad-pipeline"
     });
     // default pass action
@@ -135,7 +127,7 @@ draw_state_commit(struct draw_state *state) {
 	sg_apply_pipeline(state->pip);
 	sg_apply_bindings(&state->bind);
 	sg_apply_uniforms(UB_vs_params, &SG_RANGE(vs_params));
-	sg_draw(0, 6, 2);
+	sg_draw(0, 4, 2);
 	sg_end_pass();
 	sg_commit();	
 }
