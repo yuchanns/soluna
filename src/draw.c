@@ -8,32 +8,40 @@
 #include <string.h>
 #include <assert.h>
 
+#define MAX_SPRITE_VERTEX 4096
+
 struct vertex_t {
+	float dx, dy;
+	float u, v;
+};
+
+struct instance_t {
 	float x, y;
-	int16_t dx, dy;
-	uint16_t u, v;
-	uint16_t sr;
-	uint16_t dummy;
+	float sr;
 };
 
 void
 draw_state_init(struct draw_state *state, int w, int h) {
 	state->frame[0] = 2.0f / (float)w;
 	state->frame[1] = -2.0f / (float)h;
-	state->vb = sg_make_buffer(&(sg_buffer_desc) {
-		.size = 4 * sizeof(struct vertex_t),
+	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc) {
+		.size = 2 * sizeof(struct instance_t),
 		.type = SG_BUFFERTYPE_VERTEXBUFFER,
 		.usage = SG_USAGE_STREAM,
-		.label = "texquad-vertices"
+		.label = "texquad-instance"
     });
-	state->srb = sg_make_buffer(&(sg_buffer_desc) {
+	state->bind.storage_buffers[SBUF_sr_lut] = sg_make_buffer(&(sg_buffer_desc) {
 		.size = sizeof(state->srb_mem.data),
 		.type = SG_BUFFERTYPE_STORAGEBUFFER,
 		.usage = SG_USAGE_DYNAMIC,
 		.label = "texquad-scalerot"
 	});
-	state->bind.vertex_buffers[0] = state->vb;
-    state->bind.storage_buffers[SBUF_sr_lut] = state->srb;
+	state->bind.storage_buffers[SBUF_sprite_buffer] = sg_make_buffer(&(sg_buffer_desc) {
+		.size = sizeof(struct vertex_t) * MAX_SPRITE_VERTEX,
+		.type = SG_BUFFERTYPE_STORAGEBUFFER,
+		.usage = SG_USAGE_STREAM,
+		.label = "texquad-sprite"
+	});
 	uint16_t indices[] = {
 		0,1,2, 1,2,3,
 	};
@@ -67,11 +75,10 @@ draw_state_init(struct draw_state *state, int w, int h) {
 
 	state->pip = sg_make_pipeline(&(sg_pipeline_desc){
 		.layout = {
-		.attrs = {
-                [ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT2,
-                [ATTR_texquad_offset].format = SG_VERTEXFORMAT_SHORT2N,
-                [ATTR_texquad_texcoord].format = SG_VERTEXFORMAT_USHORT4N,
-            }
+			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+			.attrs = {
+					[ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT3,
+				}
         },
 		.colors[0].blend = (sg_blend_state) {
 			.enabled = true,
@@ -97,27 +104,38 @@ draw_state_commit(struct draw_state *state) {
 	struct draw_primitive tmp;
 	uint64_t count = sapp_frame_count();
 	sprite_set_rot(&tmp, count * 3.1415927f / 180.0f);
-	int index = srbuffer_add(&state->srb_mem, tmp.sr);
-	assert(index <= 1);
+	int index1 = srbuffer_add(&state->srb_mem, tmp.sr);
+	sprite_set_rot(&tmp, -(count * 3.1415927f / 180.0f));
+	int index2 = srbuffer_add(&state->srb_mem, tmp.sr);
+	assert(index1 <= 2);
+	assert(index2 <= 2);
 	int x = 256, y = 256;
 	int length = 128;
 	struct vertex_t vertices[] = {
-		// pos   // uvs
-		{  x,y, -length,  -length,      0,      0, index, 0 },
-		{  x,y,  length,  -length, 0xffff,      0, index, 0 },
-		{  x,y, -length,   length,      0, 0xffff, index, 0 },
-		{  x,y,  length,   length, 0xffff, 0xffff, index, 0 },
+		{  -length,  -length,     0,    0 },
+		{   length,  -length,     1,    0 },
+		{  -length,   length,     0,    1 },
+		{   length,   length,     1,    1 },
+		{  -length/2,  -length/2, 0,    0 },
+		{   length/2,  -length/2, 1,    0 },
+		{  -length/2,   length/2, 0,    1 },
+		{   length/2,   length/2, 1,    1 },
 	};
-	sg_update_buffer(state->vb, &SG_RANGE(vertices));
-	sg_update_buffer(state->srb, &(sg_range){ state->srb_mem.data, state->srb_mem.n * sizeof(struct sr_mat)});
-	
+	struct instance_t inst[] = {
+		{ x, y, (float)index1 },
+		{ x+100, y+100, (float)index2 },
+	};
+	sg_update_buffer(state->bind.vertex_buffers[0], &SG_RANGE(inst));
+	sg_update_buffer(state->bind.storage_buffers[SBUF_sr_lut], &(sg_range){ state->srb_mem.data, state->srb_mem.n * sizeof(struct sr_mat)});
+	sg_update_buffer(state->bind.storage_buffers[SBUF_sprite_buffer], &SG_RANGE(vertices));
+
 	vs_params_t vs_params;
 	memcpy(vs_params.framesize, state->frame, sizeof(state->frame));
 	sg_begin_pass(&(sg_pass) { .action = state->pass_action, .swapchain = sglue_swapchain() });
 	sg_apply_pipeline(state->pip);
 	sg_apply_bindings(&state->bind);
 	sg_apply_uniforms(UB_vs_params, &SG_RANGE(vs_params));
-	sg_draw(0, 6, 1);
+	sg_draw(0, 6, 2);
 	sg_end_pass();
 	sg_commit();	
 }

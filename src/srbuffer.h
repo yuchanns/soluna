@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define MAX_SR (16 * 1024)
+#define MAX_SR 4096
 
 struct sr_mat {
 	float v[4];
