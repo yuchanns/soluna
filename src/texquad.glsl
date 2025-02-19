@@ -20,8 +20,9 @@ out vec2 uv;
 
 void main() {
 	int index = int(texcoord.z * 65535.0f);
-	float dx = dot(offset, sr[index].line1);
-	float dy = dot(offset, sr[index].line2);
+	vec2 t = offset * 32767.0f;
+	float dx = dot(t, sr[index].line1);
+	float dy = dot(t, sr[index].line2);
 	vec2 pos = (vec2(dx, dy) + position) * framesize;
 	gl_Position = vec4(pos.x - 1.0f, pos.y + 1.0f, 0, 1);
 	uv = vec2(texcoord.x, texcoord.y);

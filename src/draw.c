@@ -10,7 +10,7 @@
 
 struct vertex_t {
 	float x, y;
-	float dx, dy;
+	int16_t dx, dy;
 	uint16_t u, v;
 	uint16_t sr;
 	uint16_t dummy;
@@ -69,7 +69,7 @@ draw_state_init(struct draw_state *state, int w, int h) {
 		.layout = {
 		.attrs = {
                 [ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT2,
-                [ATTR_texquad_offset].format = SG_VERTEXFORMAT_FLOAT2,
+                [ATTR_texquad_offset].format = SG_VERTEXFORMAT_SHORT2N,
                 [ATTR_texquad_texcoord].format = SG_VERTEXFORMAT_USHORT4N,
             }
         },
