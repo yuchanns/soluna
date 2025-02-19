@@ -3,15 +3,28 @@ layout(binding=0) uniform vs_params {
 	vec2 framesize;
 };
 
+struct sr_mat {
+	vec2 line1;
+	vec2 line2;
+};
+
+layout(binding=0) readonly buffer sr_lut {
+	sr_mat sr[];
+};
+
 in vec2 position;
-in vec2 texcoord;
+in vec2 offset;
+in vec4 texcoord;
 
 out vec2 uv;
 
 void main() {
-	vec2 pos = position * framesize;
+	int index = int(texcoord.z * 65535.0f);
+	float dx = dot(offset, sr[index].line1);
+	float dy = dot(offset, sr[index].line2);
+	vec2 pos = (vec2(dx, dy) + position) * framesize;
 	gl_Position = vec4(pos.x - 1.0f, pos.y + 1.0f, 0, 1);
-	uv = texcoord;
+	uv = vec2(texcoord.x, texcoord.y);
 }
 @end
 

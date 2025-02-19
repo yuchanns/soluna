@@ -2,11 +2,15 @@
 #define soluna_draw_h
 
 #include "sokol_gfx.h"
+#include "srbuffer.h"
 
 struct draw_state {
-    sg_pipeline pip;
-    sg_bindings bind;
-    sg_pass_action pass_action;
+	sg_pipeline pip;
+	sg_bindings bind;
+	sg_pass_action pass_action;
+	sg_buffer vb;
+	sg_buffer srb;
+	struct sr_buffer srb_mem;
 	float frame[2];
 };
 

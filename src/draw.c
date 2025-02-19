@@ -1,31 +1,39 @@
 #include "draw.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
-//#include "triangle.glsl.h"
+#include "sokol_app.h"
+#include "sprite_submit.h"
 #include "texquad.glsl.h"
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 
 struct vertex_t {
 	float x, y;
+	float dx, dy;
 	uint16_t u, v;
+	uint16_t sr;
+	uint16_t dummy;
 };
 
 void
 draw_state_init(struct draw_state *state, int w, int h) {
 	state->frame[0] = 2.0f / (float)w;
 	state->frame[1] = -2.0f / (float)h;
-	struct vertex_t vertices[] = {
-		// pos   // uvs
-		{   64,  64,      0,      0 },
-		{  256,  64, 0x7fff,      0 },
-		{   64, 256,      0, 0x7fff },
-		{  256, 256, 0x7fff, 0x7fff },
-	};
-	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc) {
-		.data = SG_RANGE(vertices),
+	state->vb = sg_make_buffer(&(sg_buffer_desc) {
+		.size = 4 * sizeof(struct vertex_t),
+		.type = SG_BUFFERTYPE_VERTEXBUFFER,
+		.usage = SG_USAGE_STREAM,
 		.label = "texquad-vertices"
     });
+	state->srb = sg_make_buffer(&(sg_buffer_desc) {
+		.size = sizeof(state->srb_mem.data),
+		.type = SG_BUFFERTYPE_STORAGEBUFFER,
+		.usage = SG_USAGE_DYNAMIC,
+		.label = "texquad-scalerot"
+	});
+	state->bind.vertex_buffers[0] = state->vb;
+    state->bind.storage_buffers[SBUF_sr_lut] = state->srb;
 	uint16_t indices[] = {
 		0,1,2, 1,2,3,
 	};
@@ -61,7 +69,8 @@ draw_state_init(struct draw_state *state, int w, int h) {
 		.layout = {
 		.attrs = {
                 [ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT2,
-                [ATTR_texquad_texcoord].format = SG_VERTEXFORMAT_SHORT2N,
+                [ATTR_texquad_offset].format = SG_VERTEXFORMAT_FLOAT2,
+                [ATTR_texquad_texcoord].format = SG_VERTEXFORMAT_USHORT4N,
             }
         },
 		.colors[0].blend = (sg_blend_state) {
@@ -79,10 +88,29 @@ draw_state_init(struct draw_state *state, int w, int h) {
 	state->pass_action = (sg_pass_action) {
 		.colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { 0.25f, 0.5f, 0.75f, 1.0f } }
 	};
+	srbuffer_init(&state->srb_mem);
 }
 
 void
 draw_state_commit(struct draw_state *state) {
+	srbuffer_init(&state->srb_mem);
+	struct draw_primitive tmp;
+	uint64_t count = sapp_frame_count();
+	sprite_set_rot(&tmp, count * 3.1415927f / 180.0f);
+	int index = srbuffer_add(&state->srb_mem, tmp.sr);
+	assert(index <= 1);
+	int x = 256, y = 256;
+	int length = 128;
+	struct vertex_t vertices[] = {
+		// pos   // uvs
+		{  x,y, -length,  -length,      0,      0, index, 0 },
+		{  x,y,  length,  -length, 0xffff,      0, index, 0 },
+		{  x,y, -length,   length,      0, 0xffff, index, 0 },
+		{  x,y,  length,   length, 0xffff, 0xffff, index, 0 },
+	};
+	sg_update_buffer(state->vb, &SG_RANGE(vertices));
+	sg_update_buffer(state->srb, &(sg_range){ state->srb_mem.data, state->srb_mem.n * sizeof(struct sr_mat)});
+	
 	vs_params_t vs_params;
 	memcpy(vs_params.framesize, state->frame, sizeof(state->frame));
 	sg_begin_pass(&(sg_pass) { .action = state->pass_action, .swapchain = sglue_swapchain() });
