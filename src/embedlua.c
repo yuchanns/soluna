@@ -6,6 +6,7 @@
 #include "main.lua.h"
 #include "external.lua.h"
 #include "start.lua.h"
+#include "print_r.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -31,6 +32,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(bootstrap)
 			REG_SOURCE(service)
 			REG_SOURCE(main)
+			REG_SOURCE(print_r)
 		lua_setfield(L, -2, "runtime");
 			
 		lua_newtable(L);	// service

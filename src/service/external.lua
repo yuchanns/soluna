@@ -19,7 +19,8 @@ local function dispatch(type, ...)
 	if f then
 		f(...)
 	else
-		print(type, ...)
+--		todo:	
+--		print(type, ...)
 	end
 end
 

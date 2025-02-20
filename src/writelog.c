@@ -44,7 +44,8 @@ static int
 log_write_ltask(lua_State *L) {
 	uint64_t ti = lua_tointeger(L, 1);
 	const char *level = luaL_checkstring(L, 2);
-	const char *msg = luaL_checkstring(L, 3);
+	size_t sz;
+	const char *msg = luaL_checklstring(L, 3, &sz);
 	char upper[6];
 	int i;
 	for (i=0;i<5;i++) {
@@ -54,7 +55,21 @@ log_write_ltask(lua_State *L) {
 	}
 	upper[5] = 0;
 	write_timestamp(ti);
-	printf("[%-5s] %s\n", upper, msg );
+	if (strnlen(msg, sz+1) < sz) {
+		printf("[%-5s] ", upper);
+		int i;
+		for (i=0;i<sz;i++) {
+			unsigned char c = (unsigned char)msg[i];
+			if (c < 32) {
+				printf("/%02X", c);
+			} else {
+				printf("%c", c);
+			}
+		}
+		printf("\n");
+	} else {
+		printf("[%-5s] %s\n", upper, msg );
+	}
 	return 0;
 }
 

@@ -7,6 +7,7 @@ int luaopen_ltask_bootstrap(lua_State* L);
 int luaopen_embedsource(lua_State *L);
 int luaopen_appmessage(lua_State *L);
 int luaopen_applog(lua_State *L);
+int luaopen_image(lua_State *L);
 
 void soluna_embed(lua_State* L) {
     static const luaL_Reg modules[] = {
@@ -16,6 +17,7 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.embedsource", luaopen_embedsource},
 		{ "soluna.appmessage", luaopen_appmessage},
 		{ "soluna.log", luaopen_applog },
+		{ "soluna.image", luaopen_image },
 //		{ "luaforward", luaopen_luaforward },
         { NULL, NULL },
     };

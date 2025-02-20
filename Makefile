@@ -11,7 +11,7 @@ SHDC=sokol-shdc.exe
 
 all : $(BIN)/$(APPNAME)
 
-SOKOLINC=-I3rd/sokol
+3RDINC=-I3rd
 
 LUAINC=-I3rd/lua
 LUASRC:=$(wildcard 3rd/lua/*.c 3rd/lua/*.h)
@@ -71,7 +71,7 @@ $(BUILD)/soluna_embedlua.o : src/embedlua.c $(LTASK_LUACODE)
 	$(COMPILE_C) -I$(BUILD) $(LUAINC)
 
 $(BUILD)/soluna_%.o : src/%.c
-	$(COMPILE_C) $(LUAINC) $(SOKOLINC) $(SHADERINC) -Wno-unknown-pragmas
+	$(COMPILE_C) $(LUAINC) $(3RDINC) $(SHADERINC) -Wno-unknown-pragmas
 	
 $(BUILD)/ltask_%.o : 3rd/ltask/src/%.c
 	$(COMPILE_C) $(LUAINC) -D_WIN32_WINNT=0x0601 -DLTASK_EXTERNAL_OPENLIBS=soluna_openlibs

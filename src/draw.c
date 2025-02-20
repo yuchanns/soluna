@@ -1,20 +1,20 @@
 #include "draw.h"
-#include "sokol_gfx.h"
-#include "sokol_glue.h"
-#include "sokol_app.h"
+#include "sokol/sokol_gfx.h"
+#include "sokol/sokol_glue.h"
+#include "sokol/sokol_app.h"
 #include "sprite_submit.h"
 #include "texquad.glsl.h"
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
 
-#define MAX_SPRITE_VERTEX 4096
-
 struct vertex_t {
 	uint32_t offset;
 	uint32_t u;
 	uint32_t v;
 };
+
+#define MAX_SPRITE_VERTEX (64 * 1024 / sizeof(struct vertex_t))
 
 struct instance_t {
 	float x, y;
@@ -122,7 +122,7 @@ draw_state_commit(struct draw_state *state) {
 	int length = 128;
 	struct vertex_t vertices[] = {
 		{ pack_short2(length, length),     pack_ushort2(0, 256), pack_ushort2(0, 256) },
-		{ pack_short2(length/2, length/2), pack_ushort2(0, 128), pack_ushort2(0, 128) },
+		{ pack_short2(0, 0), pack_ushort2(0, 128), pack_ushort2(0, 128) },
 	};
 	struct instance_t inst[] = {
 		{ x, y, (float)index1 },

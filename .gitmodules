@@ -7,3 +7,9 @@
 [submodule "3rd/lua"]
 	path = 3rd/lua
 	url = https://github.com/lua/lua.git
+[submodule "3rd/stb"]
+	path = 3rd/stb
+	url = https://github.com/nothings/stb.git
+[submodule "3rd/datalist"]
+	path = 3rd/datalist
+	url = https://github.com/cloudwu/datalist.git

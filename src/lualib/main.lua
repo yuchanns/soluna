@@ -8,6 +8,7 @@ local init_func_temp = [=[
 	local embedsource = require "soluna.embedsource"
 	package.path = [[${lua_path}]]
 	package.cpath = [[${lua_cpath}]]
+	_G.print_r = load(embedsource.runtime.print_r(), "@src/lualib/print_r.lua")()
 	local embedcode = embedsource.service[name]
 	if embedcode then
 		return load(embedcode(),"=("..name..")")
@@ -54,11 +55,24 @@ function _G.cleanup()
 	wait_func()
 end
 
+local args = ... or {}
+
+for i = 2, select("#", ...) do
+	args[i-1] = select(i, ...)
+end
+
+if args.path then
+	package.path = args.path
+end
+
+if args.cpath then
+	package.cpath = args.cpath
+end
+
 start {
     core = {
         debuglog = "=", -- stdout
     },
-    service_path = "src/service/?.lua",
     bootstrap = {
         {
             name = "timer",
@@ -70,6 +84,7 @@ start {
         },
         {
             name = "start",
+			args = { args },
         },
     },
 }

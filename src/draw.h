@@ -1,7 +1,7 @@
 #ifndef soluna_draw_h
 #define soluna_draw_h
 
-#include "sokol_gfx.h"
+#include "sokol/sokol_gfx.h"
 #include "srbuffer.h"
 
 struct draw_state {
