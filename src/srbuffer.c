@@ -44,7 +44,7 @@ srbuffer_add(struct sr_buffer *SR, uint32_t v) {
 	uint32_t rot_fix = v & 0xfff;
 	if (rot_fix == 0) {
 		mat[0] = scale; mat[1] = 0;
-		mat[2] = 0; mat[2] = scale;
+		mat[2] = 0; mat[3] = scale;
 	} else {
 		const float pi = 3.1415927f;
 		float rot = (float) rot_fix * ( pi / 2048.0f );
