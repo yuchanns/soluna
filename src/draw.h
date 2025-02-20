@@ -13,7 +13,4 @@ struct draw_state {
 	float frame[2];
 };
 
-void draw_state_init(struct draw_state *state, int w, int h);
-void draw_state_commit(struct draw_state *state);
-
 #endif

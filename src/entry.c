@@ -1,5 +1,3 @@
-#include "draw.h"
-
 #define SOKOL_IMPL
 #define SOKOL_D3D11
 
@@ -23,8 +21,6 @@ struct app_context {
 	void *send_message_ud;
 	int (*send_log)(void *ud, unsigned int id, void *data, uint32_t sz);
 	void *send_log_ud;
-	
-	struct draw_state state;
 };
 
 static struct app_context *CTX = NULL;
@@ -138,8 +134,6 @@ app_init() {
         .environment = sglue_environment(),
         .logger.func = log_func,			
 	});
-		
-	draw_state_init(&app.state, sapp_width(), sapp_height());
 	start_app(L);
 	sargs_shutdown();
 }
@@ -147,7 +141,6 @@ app_init() {
 static void
 app_frame() {
 	send_app_message(message_create("frame", 0, 0));
-	draw_state_commit(&CTX->state);
 }
 
 static int
@@ -240,6 +233,30 @@ app_event(const sapp_event* ev) {
 		send_app_message(message_create("message", ev->type, 0));
 		break;
 	}
+}
+
+static int
+lappinfo_width(lua_State *L) {
+	lua_pushinteger(L, sapp_width());
+	return 1;
+}
+
+static int
+lappinfo_height(lua_State *L) {
+	lua_pushinteger(L, sapp_height());
+	return 1;
+}
+
+int
+luaopen_appinfo(lua_State *L) {
+	lua_newtable(L);
+	luaL_Reg l[] = {
+		{ "width", lappinfo_width },
+		{ "height", lappinfo_height },
+		{ NULL , NULL },
+	};
+	luaL_newlib(L, l);
+	return 1;
 }
 
 sapp_desc

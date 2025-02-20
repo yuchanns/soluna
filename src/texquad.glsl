@@ -31,7 +31,7 @@ void main() {
 	ivec2 u2 = ivec2(s.u >> 16 , s.u & 0xffff);
 	ivec2 v2 = ivec2(s.v >> 16 , s.v & 0xffff);
 	ivec2 off = ivec2(s.offset >> 16 , s.offset & 0xffff) - 0x8000;
-	uv = vec2(u2[gl_VertexIndex % 2] , v2[gl_VertexIndex >> 1]);
+	uv = vec2(u2[gl_VertexIndex & 1] , v2[gl_VertexIndex >> 1]);
 	vec2 pos = uv - ( off + ivec2(u2[0], v2[0]));
 	pos = (pos * sr[int(position.z)].m + position.xy) * framesize;
 	gl_Position = vec4(pos.x - 1.0f, pos.y + 1.0f, 0, 1);

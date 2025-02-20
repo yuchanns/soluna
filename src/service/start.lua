@@ -1,8 +1,10 @@
 local ltask = require "ltask"
 
-local arg = ...
+local arg, app = ...
 
-ltask.spawn "external"
+local external = ltask.spawn "external"
+
+ltask.send(external, "init", app)
 
 local filename = arg[1]
 

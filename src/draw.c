@@ -1,3 +1,6 @@
+#include <lua.h>
+#include <lauxlib.h>
+
 #include "draw.h"
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_glue.h"
@@ -21,7 +24,7 @@ struct instance_t {
 	float sr;
 };
 
-void
+static void
 draw_state_init(struct draw_state *state, int w, int h) {
 	state->frame[0] = 2.0f / (float)w;
 	state->frame[1] = -2.0f / (float)h;
@@ -105,7 +108,7 @@ pack_ushort2(uint16_t a, uint16_t b) {
 	return a << 16 | b;
 }
 
-void
+static void
 draw_state_commit(struct draw_state *state) {
 	srbuffer_init(&state->srb_mem);
 	struct draw_primitive tmp;
@@ -142,4 +145,32 @@ draw_state_commit(struct draw_state *state) {
 	sg_draw(0, 4, 2);
 	sg_end_pass();
 	sg_commit();	
+}
+
+static int
+render_init(lua_State *L) {
+	int w = luaL_checkinteger(L, 1);
+	int h = luaL_checkinteger(L, 2);
+	struct draw_state * S = (struct draw_state *)lua_newuserdatauv(L, sizeof(*S), 0);
+	draw_state_init(S, w, h);
+	return 1;
+}
+
+static int
+render_commit(lua_State *L) {
+	struct draw_state *S = lua_touserdata(L, 1);
+	draw_state_commit(S);
+	return 0;
+}
+
+int
+luaopen_render(lua_State *L) {
+	luaL_checkversion(L);
+	luaL_Reg l[] = {
+		{ "init", render_init },
+		{ "commit", render_commit },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, l);
+	return 1;
 }
