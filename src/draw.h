@@ -9,6 +9,7 @@ struct draw_state {
 	sg_bindings bind;
 	sg_pass_action pass_action;
 	struct sr_buffer srb_mem;
+	float texsize[2];
 	float frame[2];
 };
 

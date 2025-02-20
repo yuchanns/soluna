@@ -1,5 +1,6 @@
 @vs vs
 layout(binding=0) uniform vs_params {
+	vec2 texsize;
 	vec2 framesize;
 };
 
@@ -12,8 +13,9 @@ layout(binding=0) readonly buffer sr_lut {
 };
 
 struct sprite {
-	vec2 offset;
-	vec2 texcoord;
+	uint offset;
+	uint u;
+	uint v;
 };
 
 layout(binding=1) readonly buffer sprite_buffer {
@@ -25,11 +27,15 @@ in vec3 position;
 out vec2 uv;
 
 void main() {
-	int sr_index = int(position.z);
-	int index = gl_InstanceIndex * 4 + gl_VertexIndex;
-	vec2 pos = (spr[index].offset * sr[sr_index].m + vec2(position.x, position.y)) * framesize;
+	sprite s = spr[gl_InstanceIndex]; 
+	ivec2 u2 = ivec2(s.u >> 16 , s.u & 0xffff);
+	ivec2 v2 = ivec2(s.v >> 16 , s.v & 0xffff);
+	ivec2 off = ivec2(s.offset >> 16 , s.offset & 0xffff) - 0x8000;
+	uv = vec2(u2[gl_VertexIndex % 2] , v2[gl_VertexIndex >> 1]);
+	vec2 pos = uv - ( off + ivec2(u2[0], v2[0]));
+	pos = (pos * sr[int(position.z)].m + position.xy) * framesize;
 	gl_Position = vec4(pos.x - 1.0f, pos.y + 1.0f, 0, 1);
-	uv = spr[index].texcoord;
+	uv = uv * texsize;
 }
 
 @end

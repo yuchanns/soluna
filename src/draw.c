@@ -11,8 +11,9 @@
 #define MAX_SPRITE_VERTEX 4096
 
 struct vertex_t {
-	float dx, dy;
-	float u, v;
+	uint32_t offset;
+	uint32_t u;
+	uint32_t v;
 };
 
 struct instance_t {
@@ -24,6 +25,8 @@ void
 draw_state_init(struct draw_state *state, int w, int h) {
 	state->frame[0] = 2.0f / (float)w;
 	state->frame[1] = -2.0f / (float)h;
+	state->texsize[0] = 1.0f / 256.0f;	// texture virtual size
+	state->texsize[1] = 1.0f / 256.0f;	// virtual size
 	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc) {
 		.size = 2 * sizeof(struct instance_t),
 		.type = SG_BUFFERTYPE_VERTEXBUFFER,
@@ -90,28 +93,36 @@ draw_state_init(struct draw_state *state, int w, int h) {
 	srbuffer_init(&state->srb_mem);
 }
 
+static inline uint32_t
+pack_short2(int16_t a, int16_t b) {
+	uint32_t v1 = a + 0x8000;
+	uint32_t v2 = b + 0x8000;
+	return v1 << 16 | v2;
+}
+
+static inline uint32_t
+pack_ushort2(uint16_t a, uint16_t b) {
+	return a << 16 | b;
+}
+
 void
 draw_state_commit(struct draw_state *state) {
 	srbuffer_init(&state->srb_mem);
 	struct draw_primitive tmp;
 	uint64_t count = sapp_frame_count();
-	sprite_set_rot(&tmp, count * 3.1415927f / 180.0f);
+	float rad = count * 3.1415927f / 180.0f;
+	float s = sinf(rad) + 1.2f;
+	sprite_set_sr(&tmp, s, rad);
 	int index1 = srbuffer_add(&state->srb_mem, tmp.sr);
-	sprite_set_rot(&tmp, -(count * 3.1415927f / 180.0f));
+	sprite_set_sr(&tmp, s, -rad);
 	int index2 = srbuffer_add(&state->srb_mem, tmp.sr);
-	assert(index1 <= 2);
-	assert(index2 <= 2);
+	assert(index1 <= 3);
+	assert(index2 <= 3);
 	int x = 256, y = 256;
 	int length = 128;
 	struct vertex_t vertices[] = {
-		{  -length,  -length,     0,    0 },
-		{   length,  -length,     1,    0 },
-		{  -length,   length,     0,    1 },
-		{   length,   length,     1,    1 },
-		{  -length/2,  -length/2, 0,    0 },
-		{   length/2,  -length/2, 1,    0 },
-		{  -length/2,   length/2, 0,    1 },
-		{   length/2,   length/2, 1,    1 },
+		{ pack_short2(length, length),     pack_ushort2(0, 256), pack_ushort2(0, 256) },
+		{ pack_short2(length/2, length/2), pack_ushort2(0, 128), pack_ushort2(0, 128) },
 	};
 	struct instance_t inst[] = {
 		{ x, y, (float)index1 },
@@ -122,6 +133,7 @@ draw_state_commit(struct draw_state *state) {
 	sg_update_buffer(state->bind.storage_buffers[SBUF_sprite_buffer], &SG_RANGE(vertices));
 
 	vs_params_t vs_params;
+	memcpy(vs_params.texsize, state->texsize, sizeof(state->texsize));
 	memcpy(vs_params.framesize, state->frame, sizeof(state->frame));
 	sg_begin_pass(&(sg_pass) { .action = state->pass_action, .swapchain = sglue_swapchain() });
 	sg_apply_pipeline(state->pip);
