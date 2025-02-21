@@ -2,12 +2,17 @@
 #include <lauxlib.h>
 
 #include <stdint.h>
+#include <string.h>
 
 #define STBI_ONLY_PNG
 #define STBI_MAX_DIMENSIONS 65536
 #define STBI_NO_STDIO
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
+
+#define STBIW_WINDOWS_UTF8
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image_write.h"
 
 static stbi_uc const *
 get_buffer(lua_State *L, size_t *sz) {
@@ -171,7 +176,7 @@ remove_right(struct rect *r) {
 }
 
 static int
-image_clipbox(lua_State *L) {
+image_crop(lua_State *L) {
 	size_t sz;
 	const uint8_t * image = get_buffer(L, &sz);
 	int x = luaL_checkinteger(L, 2);
@@ -204,14 +209,203 @@ image_clipbox(lua_State *L) {
 	return 4;
 }
 
+static uint8_t *
+get_image_buffer(lua_State *L, int *w, int *h) {
+	uint8_t * buffer = lua_touserdata(L, 1);
+	if (buffer == NULL || !lua_getmetatable(L, 1))
+		luaL_error(L, "Neet image userdata");
+	if (lua_getfield(L, -1, "width") != LUA_TNUMBER) {
+		luaL_error(L, "No .width");
+	}
+	int width = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	
+	if (lua_getfield(L, -1, "height") != LUA_TNUMBER) {
+		luaL_error(L, "No .height");
+	}
+	int height = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	
+	int size = lua_rawlen(L, 1);
+	if (width * height * 4 != size)
+		luaL_error(L, "Invalid size %d * %d * 4 != %d", width, height, size);
+	*w = width;
+	*h = height;
+	return buffer;
+}
+
+static int
+limage_write_png(lua_State *L) {
+	int width, height;
+	uint8_t * buffer = get_image_buffer(L, &width, &height);
+	
+	const char * filename = luaL_checkstring(L, 2);
+	if (!stbi_write_png(filename, width, height, 4, buffer, width * 4)) {
+		return luaL_error(L, "Write %s failed", filename);
+	}
+
+	return 0;
+}
+
+struct canvas {
+	void * buffer;
+	int width;
+	int height;
+	int stride;
+};
+
+static int
+limage_tocanvas(lua_State *L) {
+	int width, height;
+	uint8_t * buffer = get_image_buffer(L, &width, &height);
+	struct canvas * c = (struct canvas *)lua_newuserdatauv(L, sizeof(*c), 1);
+	lua_pushvalue(L, 1);
+	lua_setiuservalue(L, -2, 1);
+	c->buffer = buffer;
+	c->width = width;
+	c->height = height;
+	c->stride = width * 4;
+
+	return 1;
+}
+
+static int
+image_new(lua_State *L) {
+	int w = luaL_checkinteger(L, 1);
+	int h = luaL_checkinteger(L, 2);
+	uint8_t * buffer = (uint8_t *)lua_newuserdatauv(L, w * h * 4, 0);
+	memset(buffer, 0, w * h * 4);
+
+	lua_newtable(L);
+
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -2, "__index");
+
+	lua_pushvalue(L, 1);
+	lua_setfield(L, -2, "width");
+
+	lua_pushvalue(L, 2);
+	lua_setfield(L, -2, "height");
+
+	lua_pushcfunction(L, limage_write_png);
+	lua_setfield(L, -2, "write");
+
+	lua_pushcfunction(L, limage_tocanvas);
+	lua_setfield(L, -2, "canvas");
+
+	lua_setmetatable(L, -2);
+	return 1;
+}
+
+static int
+image_canvas(lua_State *L) {
+	int t = lua_type(L, 1);
+	if (t != LUA_TSTRING && t != LUA_TUSERDATA && t != LUA_TLIGHTUSERDATA)
+		return luaL_error(L, "Need buffer");
+	int width = luaL_checkinteger(L, 2);
+	int height = luaL_checkinteger(L, 3);
+	int stride;
+	int stack_top= lua_gettop(L);
+	int x = 0;
+	int y = 0;
+	if (stack_top <= 4) {
+		stride = luaL_optinteger(L, 4, width * 4);
+	}  else {
+		x = luaL_checkinteger(L, 4);
+		y = luaL_checkinteger(L, 5);
+		int w = luaL_checkinteger(L, 6);
+		int h = luaL_checkinteger(L, 7);
+		stride = width * 4;
+		if (x < 0 || y < 0 || x+w >= width || y+h >= height) {
+			return luaL_error(L, "Invalid rect (%d %d %d %d)", x, y, w, h);
+		}
+		width = w;
+		height = h;
+	}
+	struct canvas * c = (struct canvas *)lua_newuserdatauv(L, sizeof(*c), 1);
+	lua_pushvalue(L, 1);
+	lua_setiuservalue(L, -2, 1);
+	if (t == LUA_TSTRING) {
+		size_t sz;
+		c->buffer = (void *)lua_tolstring(L, 1, &sz);
+		if (stride * (y + height) > sz)
+			return luaL_error(L, "Invalid buffer size %d * %d > %d", stride, (y + height), sz);
+	} else {
+		c->buffer = lua_touserdata(L, 1);
+	}
+	c->buffer = (void *)((char *)c->buffer + y * stride + x * 4);
+	c->width = width;
+	c->height = height;
+	c->stride = stride;
+	return 1;	
+}
+
+static int
+check_canvas(lua_State *L, int index) {
+	if (lua_type(L, index) != LUA_TUSERDATA)
+		return luaL_error(L, "Need canvas");
+	
+	int t = lua_getiuservalue(L, index, 1);
+	if (t != LUA_TSTRING && t != LUA_TUSERDATA && t != LUA_TLIGHTUSERDATA)
+		return luaL_error(L, "Invalid canvas");
+	lua_pop(L, 1);
+	return t;
+}
+
+static int
+canvas_blit(lua_State *L) {
+	if (check_canvas(L, 1) == LUA_TSTRING)
+		return luaL_error(L, "dst canvas is readonly");
+	check_canvas(L, 2);
+	struct canvas * dst = (struct canvas *)lua_touserdata(L, 1);
+	struct canvas * src = (struct canvas *)lua_touserdata(L, 2);
+	int x = luaL_optinteger(L, 3, 0);
+	int y = luaL_optinteger(L, 4, 0);
+	int w = src->width;
+	int h = src->height;
+	int sx = 0;
+	int sy = 0;
+	if (x < 0) {
+		w += x;
+		sx = -x;
+		x = 0;
+	}
+	if (y < 0) {
+		h += y;
+		sy = -y;
+		y = 0;
+	}
+	if (x + w > dst->width) {
+		w = dst->width - x;
+	}
+	if (y + h > dst->height) {
+		h = dst->height - y;
+	}
+	if (w <=0 || h <= 0)
+		return 0;
+	
+	int i;
+	uint8_t * dst_ptr = (uint8_t *)dst->buffer + y * dst->stride + 4 * x;
+	const uint8_t *src_ptr = (const uint8_t *)src->buffer + sy * src->stride + 4 * sx;
+	for (i=0;i<h;i++) {
+		memcpy(dst_ptr, src_ptr, w * 4);
+		src_ptr += src->stride;
+		dst_ptr += dst->stride;
+	}
+	
+	return 0;
+}
+
 int
 luaopen_image(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "load", image_load },
 		{ "info", image_info },
-		{ "clipbox", image_clipbox },
-//		{ "blit", image_blit },
+		{ "crop", image_crop },
+		{ "canvas", image_canvas },
+		{ "new", image_new },
+		{ "blit", canvas_blit },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
