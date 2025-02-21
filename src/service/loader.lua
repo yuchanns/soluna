@@ -1,4 +1,5 @@
 local image = require "soluna.image"
+local spritepack = require "soluna.spritepack"
 
 local missing = {}
 
@@ -26,7 +27,9 @@ local function fetchfile(filecache, filename)
 	return r
 end
 
-local filecache = setmetatable({} , { __mode = "kv", __index = fetchfile })
+-- todo: make weak table
+--local filecache = setmetatable({} , { __mode = "kv", __index = fetchfile })
+local filecache = setmetatable({} , { __index = fetchfile })
 
 local S = {}
 
@@ -50,6 +53,8 @@ function S.load(filename, offx, offy, x, y, w, h)
 		return obj.id
 	end
 	local cx, cy, cw, ch = image.crop(c.data, c.w, c.h, x, y, w, h)
+	offx = offx - cx
+	offy = offy - cy
 	local id = #sprite+1
 	sprite[id] = {
 		filename = filename,
@@ -57,12 +62,33 @@ function S.load(filename, offx, offy, x, y, w, h)
 		id = id,
 		x = offx,
 		y = offy,
-		cx = cx,
-		cy = cy,
+		cx = cx + (x or 0),
+		cy = cy + (y or 0),
 		cw = cw,
 		ch = ch,
 	}
 	return id
+end
+
+-- todo: packing should be out of loader 
+function S.pack(width)
+	local n = #sprite
+	local pack = spritepack.pack(n)
+	for i=1,n do
+		local s = sprite[i]
+		pack:add(i, s.cw, s.ch)
+	end
+	local r = pack:run(width)
+	for id,v in pairs(r) do
+		local x = v >> 32
+		local y = v & 0xffffffff
+		local obj = sprite[id]
+		local c = filecache[obj.filename]
+		local data = image.canvas(c.data, c.w, c.h, obj.cx, obj.cy, obj.cw, obj.ch)
+		local w, h, ptr = image.canvas_size(data)
+		r[id] = { id = id, data = ptr, x = x, y = y, w = w, h = h, stride = c.w * 4, dx = obj.x, dy = obj.y }
+	end
+	return r
 end
 
 function S.write(id, filename)

@@ -48,23 +48,8 @@ draw_state_init(struct draw_state *state, int w, int h) {
 		.usage = SG_USAGE_STREAM,
 		.label = "texquad-sprite"
 	});
-	// create a checkerboard texture
-	uint32_t pixels[4*4] = {
-        0xFFFFFFFF, 0x20000020, 0xFFFFFFFF, 0x20000020,
-        0x20000020, 0xFFFFFFFF, 0x20000020, 0xFFFFFFFF,
-        0xFFFFFFFF, 0x20000020, 0xFFFFFFFF, 0x20000020,
-        0x20000020, 0xFFFFFFFF, 0x20000020, 0xFFFFFFFF,
-    };
 
-	// NOTE: SLOT_tex is provided by shader code generation
-    state->bind.images[IMG_tex] = sg_make_image(&(sg_image_desc){
-        .width = 4,
-        .height = 4,
-        .data.subimage[0][0] = SG_RANGE(pixels),
-        .label = "texquad-texture"
-    });
-
-    // create a default sampler object with default attributes
+	// create a default sampler object with default attributes
     state->bind.samplers[SMP_smp] = sg_make_sampler(&(sg_sampler_desc){
         .label = "texquad-sampler"
     });
@@ -108,8 +93,13 @@ pack_ushort2(uint16_t a, uint16_t b) {
 	return a << 16 | b;
 }
 
+struct sprite_rect {
+	int dx, dy;
+	int uv[4];
+};
+
 static void
-draw_state_commit(struct draw_state *state) {
+draw_state_commit(struct draw_state *state, struct sprite_rect *rect) {
 	srbuffer_init(&state->srb_mem);
 	struct draw_primitive tmp;
 	uint64_t count = sapp_frame_count();
@@ -122,14 +112,18 @@ draw_state_commit(struct draw_state *state) {
 	assert(index1 <= 3);
 	assert(index2 <= 3);
 	int x = 256, y = 256;
-	int length = 128;
+//	printf("dx = %d dy = %d uv = %d %d %d %d\n", rect->dx, rect->dy, rect->uv[0], rect->uv[1], rect->uv[2], rect->uv[3]);
 	struct vertex_t vertices[] = {
-		{ pack_short2(length, length),     pack_ushort2(0, 256), pack_ushort2(0, 256) },
-		{ pack_short2(0, 0), pack_ushort2(0, 128), pack_ushort2(0, 128) },
+		{ 
+			pack_short2(rect->dx, rect->dy),
+			pack_ushort2(rect->uv[0], rect->uv[1]),
+			pack_ushort2(rect->uv[2], rect->uv[3]),
+		},
+//		{ pack_short2(0, 0), pack_ushort2(0, 128), pack_ushort2(0, 128) },
 	};
 	struct instance_t inst[] = {
 		{ x, y, (float)index1 },
-		{ x+100, y+100, (float)index2 },
+//		{ x+100, y+100, (float)index2 },
 	};
 	sg_update_buffer(state->bind.vertex_buffers[0], &SG_RANGE(inst));
 	sg_update_buffer(state->bind.storage_buffers[SBUF_sr_lut], &(sg_range){ state->srb_mem.data, state->srb_mem.n * sizeof(struct sr_mat)});
@@ -142,7 +136,7 @@ draw_state_commit(struct draw_state *state) {
 	sg_apply_pipeline(state->pip);
 	sg_apply_bindings(&state->bind);
 	sg_apply_uniforms(UB_vs_params, &SG_RANGE(vs_params));
-	sg_draw(0, 4, 2);
+	sg_draw(0, 4, sizeof(inst)/sizeof(inst[0]));
 	sg_end_pass();
 	sg_commit();	
 }
@@ -159,7 +153,34 @@ render_init(lua_State *L) {
 static int
 render_commit(lua_State *L) {
 	struct draw_state *S = lua_touserdata(L, 1);
-	draw_state_commit(S);
+	struct sprite_rect rect;
+	rect.dx = luaL_checkinteger(L, 2);
+	rect.dy = luaL_checkinteger(L, 3);
+	rect.uv[0] = luaL_checkinteger(L, 4);
+	rect.uv[1] = rect.uv[0] +luaL_checkinteger(L, 6);
+	rect.uv[2] = luaL_checkinteger(L, 5);
+	rect.uv[3] = rect.uv[2] + luaL_checkinteger(L, 7);
+	draw_state_commit(S, &rect);
+	return 0;
+}
+
+static int
+render_make_image(lua_State *L) {
+	struct draw_state *S = lua_touserdata(L, 1);
+	void * buffer = lua_touserdata(L, 2);
+	int width = luaL_checkinteger(L, 3);
+	int height = luaL_checkinteger(L, 4);
+	
+	S->bind.images[IMG_tex] = sg_make_image(&(sg_image_desc){
+		.width = width,
+        .height = height,
+        .data.subimage[0][0].ptr = buffer,
+        .data.subimage[0][0].size = width * height * 4,
+        .label = "texquad-texture"
+    });
+	
+	S->texsize[0] = 1.0f / width;
+	S->texsize[1] = 1.0f / height;
 	return 0;
 }
 
@@ -169,6 +190,7 @@ luaopen_render(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "init", render_init },
 		{ "commit", render_commit },
+		{ "make_image", render_make_image },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

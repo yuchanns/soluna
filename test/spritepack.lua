@@ -1,6 +1,6 @@
 local spritepack = require "soluna.spritepack"
 
-local pack = spritepack.init(128)
+local pack = spritepack.pack(128)
 
 local rects = {
 	{ 64, 32 },

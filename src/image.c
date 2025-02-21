@@ -359,7 +359,10 @@ image_canvas_size(lua_State *L) {
 	
 	lua_pushinteger(L, c->width);
 	lua_pushinteger(L, c->height);
-	return 2;
+	
+	lua_pushlightuserdata(L, c->buffer);
+	
+	return 3;
 }
 
 static int
@@ -393,7 +396,7 @@ canvas_blit(lua_State *L) {
 	}
 	if (w <=0 || h <= 0)
 		return 0;
-	
+
 	int i;
 	uint8_t * dst_ptr = (uint8_t *)dst->buffer + y * dst->stride + 4 * x;
 	const uint8_t *src_ptr = (const uint8_t *)src->buffer + sy * src->stride + 4 * sx;

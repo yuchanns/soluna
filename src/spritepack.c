@@ -80,7 +80,7 @@ lspritepack_run(lua_State *L) {
 }
 
 static int
-lspritepack_init(lua_State *L) {
+lspritepack_pack(lua_State *L) {
 	int cap = luaL_checkinteger(L, 1);
 	struct sprite_pack *sp = (struct sprite_pack *)lua_newuserdatauv(L, sizeof(*sp) + (cap - 1) * sizeof(sp->rect[0]), 0);
 	sp->n = 0;
@@ -107,7 +107,7 @@ int
 luaopen_spritepack(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
-		{ "init", lspritepack_init },
+		{ "pack", lspritepack_pack },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
