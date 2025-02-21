@@ -7,6 +7,7 @@
 #include "external.lua.h"
 #include "start.lua.h"
 #include "print_r.lua.h"
+#include "loader.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -41,6 +42,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(timer)
 			REG_SOURCE(external)
 			REG_SOURCE(start)
+			REG_SOURCE(loader)
 		lua_setfield(L, -2, "service");
 	return 1;
 }

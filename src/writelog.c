@@ -68,7 +68,7 @@ log_write_ltask(lua_State *L) {
 		}
 		printf("\n");
 	} else {
-		printf("[%-5s] %s\n", upper, msg );
+		printf("[%-5s]%s\n", upper, msg );
 	}
 	return 0;
 }

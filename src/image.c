@@ -189,11 +189,11 @@ image_crop(lua_State *L) {
 	int h = luaL_optinteger(L, 7, y - dy);
 	
 	struct rect r;
-	
+
 	if (!(rect_init(&r, image, x, y, dx, dy, w, h))) {
 		return 0;
 	}
-	
+
 	int top = remove_top(&r);
 	if (top == h)
 		return 0;
@@ -353,6 +353,16 @@ check_canvas(lua_State *L, int index) {
 }
 
 static int
+image_canvas_size(lua_State *L) {
+	check_canvas(L, 1);
+	struct canvas * c = (struct canvas *)lua_touserdata(L, 1);
+	
+	lua_pushinteger(L, c->width);
+	lua_pushinteger(L, c->height);
+	return 2;
+}
+
+static int
 canvas_blit(lua_State *L) {
 	if (check_canvas(L, 1) == LUA_TSTRING)
 		return luaL_error(L, "dst canvas is readonly");
@@ -396,6 +406,28 @@ canvas_blit(lua_State *L) {
 	return 0;
 }
 
+static int
+image_makeindex(lua_State *L) {
+	if (lua_isnoneornil(L, 1)) {
+		lua_pushinteger(L, -1);
+		return 1;
+	}
+	int x = luaL_checkinteger(L, 1);
+	int y = luaL_checkinteger(L, 2);
+	int w = luaL_checkinteger(L, 3);
+	int h = luaL_checkinteger(L, 4);
+	union {
+		uint64_t index;
+		uint16_t v[4];
+	} u;
+	u.v[0] = (uint16_t)x;
+	u.v[1] = (uint16_t)y;
+	u.v[2] = (uint16_t)w;
+	u.v[3] = (uint16_t)h;
+	lua_pushinteger(L, u.index);
+	return 1;
+}
+
 int
 luaopen_image(lua_State *L) {
 	luaL_checkversion(L);
@@ -404,8 +436,10 @@ luaopen_image(lua_State *L) {
 		{ "info", image_info },
 		{ "crop", image_crop },
 		{ "canvas", image_canvas },
+		{ "canvas_size", image_canvas_size },
 		{ "new", image_new },
 		{ "blit", canvas_blit },
+		{ "makeindex", image_makeindex },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

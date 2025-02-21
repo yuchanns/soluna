@@ -29,7 +29,7 @@ local function start(config)
 		initfunc = init_func_temp:gsub("%$%{([^}]*)%}", {
 			lua_path = package.path,
 			lua_cpath = package.cpath,
-			service_path = config.service_path,
+			service_path = config.service_path or "",
 		}),
 	}
 
@@ -77,18 +77,22 @@ local app = {
 }
 
 start {
-    core = {
-        debuglog = "=", -- stdout
-    },
-    bootstrap = {
-        {
-            name = "timer",
-            unique = true,
-        },
-        {
-            name = "log",
-            unique = true,
-        },
+	core = {
+		debuglog = "=", -- stdout
+	},
+	bootstrap = {
+		{
+			name = "timer",
+			unique = true,
+		},
+		{
+			name = "log",
+			unique = true,
+		},
+		{
+			name = "loader",
+			unique = true,
+		},
         {
             name = "start",
 			args = { args, app },
