@@ -18,6 +18,8 @@ local command = {}
 function command.frame()
 	if STATE then
 		STATE.pass:begin()
+			STATE.pipeline:apply()
+			STATE.uniform:apply()
 			draw.commit(STATE.bindings, RECT.dx, RECT.dy, RECT.x, RECT.y, RECT.w, RECT.h)
 		STATE.pass:finish()
 		render.submit()
@@ -72,8 +74,27 @@ function S.init(arg)
 		bindings = S,
 		pass = render.pass {
 			color0 = 0x4080c0,
-		}
+		},
+		pipeline = render.pipeline "default",
 	}
+	STATE.uniform = STATE.pipeline:uniform_slot(0):init {
+		tex_width = {
+			offset = 0,
+			type = "float",
+		},
+		tex_height = {
+			offset = 4,
+			type = "float",
+		},
+		framesize = {
+			offset = 8,
+			type = "float",
+			n = 2,
+		},
+	}
+	STATE.uniform.framesize = { 2/arg.width, -2/arg.height }
+	STATE.uniform.tex_width = 1/1024
+	STATE.uniform.tex_height = 1/1024
 end
 
 return S

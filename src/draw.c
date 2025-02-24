@@ -6,6 +6,7 @@
 #include "sokol/sokol_app.h"
 #include "sprite_submit.h"
 #include "texquad.glsl.h"
+
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
@@ -25,10 +26,6 @@ struct instance_t {
 
 static void
 draw_state_init(struct draw_state *state, int w, int h) {
-	state->frame[0] = 2.0f / (float)w;
-	state->frame[1] = -2.0f / (float)h;
-	state->texsize[0] = 1.0f / 256.0f;	// texture virtual size
-	state->texsize[1] = 1.0f / 256.0f;	// virtual size
 	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc) {
 		.size = 2 * sizeof(struct instance_t),
 		.type = SG_BUFFERTYPE_VERTEXBUFFER,
@@ -53,26 +50,6 @@ draw_state_init(struct draw_state *state, int w, int h) {
         .label = "texquad-sampler"
     });
 	
-	sg_shader shd = sg_make_shader(texquad_shader_desc(sg_query_backend()));
-
-	state->pip = sg_make_pipeline(&(sg_pipeline_desc){
-		.layout = {
-			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
-			.attrs = {
-					[ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT3,
-				}
-        },
-		.colors[0].blend = (sg_blend_state) {
-			.enabled = true,
-			.src_factor_rgb = SG_BLENDFACTOR_ONE,
-			.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-			.src_factor_alpha = SG_BLENDFACTOR_ONE,
-			.dst_factor_alpha = SG_BLENDFACTOR_ZERO
-		},
-        .shader = shd,
-		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
-        .label = "texquad-pipeline"
-    });
 	srbuffer_init(&state->srb_mem);
 }
 
@@ -107,7 +84,6 @@ draw_state_commit(struct draw_state *state, struct sprite_rect *rect) {
 	assert(index1 <= 3);
 	assert(index2 <= 3);
 	int x = 256, y = 256;
-//	printf("dx = %d dy = %d uv = %d %d %d %d\n", rect->dx, rect->dy, rect->uv[0], rect->uv[1], rect->uv[2], rect->uv[3]);
 	struct vertex_t vertices[] = {
 		{ 
 			pack_short2(rect->dx, rect->dy),
@@ -124,12 +100,7 @@ draw_state_commit(struct draw_state *state, struct sprite_rect *rect) {
 	sg_update_buffer(state->bind.storage_buffers[SBUF_sr_lut], &(sg_range){ state->srb_mem.data, state->srb_mem.n * sizeof(struct sr_mat)});
 	sg_update_buffer(state->bind.storage_buffers[SBUF_sprite_buffer], &SG_RANGE(vertices));
 
-	vs_params_t vs_params;
-	memcpy(vs_params.texsize, state->texsize, sizeof(state->texsize));
-	memcpy(vs_params.framesize, state->frame, sizeof(state->frame));
-	sg_apply_pipeline(state->pip);
 	sg_apply_bindings(&state->bind);
-	sg_apply_uniforms(UB_vs_params, &SG_RANGE(vs_params));
 	sg_draw(0, 4, sizeof(inst)/sizeof(inst[0]));
 }
 
@@ -170,9 +141,6 @@ render_make_image(lua_State *L) {
         .data.subimage[0][0].size = width * height * 4,
         .label = "texquad-texture"
     });
-	
-	S->texsize[0] = 1.0f / width;
-	S->texsize[1] = 1.0f / height;
 	return 0;
 }
 
