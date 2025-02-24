@@ -374,6 +374,73 @@ lpipeline(lua_State *L) {
 	return 1;
 }
 
+struct image {
+	sg_image img;
+	int width;
+	int height;
+};
+
+static int
+limage_update(lua_State *L) {
+	struct image *p = (struct image *)luaL_checkudata(L, 1, "SOKOL_IMAGE");
+	// todo: support subimage
+	luaL_checktype(L, 2, LUA_TUSERDATA);
+	void *buffer = lua_touserdata(L, 2);
+	sg_image_data data = {
+		.subimage[0][0].ptr = buffer,
+		.subimage[0][0].size = p->width * p->height * 4,
+	};
+	sg_update_image(p->img, &data);
+	return 0;
+}
+
+static int
+limage_id(lua_State *L) {
+	struct image *p = (struct image *)luaL_checkudata(L, 1, "SOKOL_IMAGE");
+	lua_pushinteger(L, p->img.id);
+	return 1;
+}
+
+static int
+limage(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	sg_image_desc img = { .usage = SG_USAGE_DYNAMIC };
+	if (lua_getfield(L, 1, "width") != LUA_TNUMBER) {
+		return luaL_error(L, "Need .width");
+	}
+	img.width = luaL_checkinteger(L, -1);
+	lua_pop(L, 1);
+	if (lua_getfield(L, 1, "height") != LUA_TNUMBER) {
+		return luaL_error(L, "Need .height");
+	}
+	img.height = luaL_checkinteger(L, -1);
+	lua_pop(L, 1);
+	if (lua_getfield(L, 1, "label") == LUA_TSTRING) {
+		img.label = lua_tostring(L, -1);
+	}
+	lua_pop(L, 1);
+	// todo: type, render_target, num_slices, num_mipmaps, pixel_format, etc
+	struct image * p = (struct image *)lua_newuserdatauv(L, sizeof(*p), 0);
+	memset(p, 0, sizeof(*p));
+	if (luaL_newmetatable(L, "SOKOL_IMAGE")) {
+		luaL_Reg l[] = {
+			{ "__index", NULL },
+			{ "update", limage_update },
+			{ "id", limage_id },	// todo
+			{ NULL, NULL },
+		};
+		luaL_setfuncs(L, l, 0);
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+	p->img = sg_make_image(&img);
+	p->width = img.width;
+	p->height = img.height;
+	return 1;
+}
+
 int
 luaopen_render(lua_State *L) {
 	luaL_checkversion(L);
@@ -381,6 +448,7 @@ luaopen_render(lua_State *L) {
 		{ "pass", lpass_new },
 		{ "submit", lsubmit },
 		{ "pipeline", lpipeline },
+		{ "image", limage },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

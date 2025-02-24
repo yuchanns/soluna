@@ -25,7 +25,7 @@ struct instance_t {
 };
 
 static void
-draw_state_init(struct draw_state *state, int w, int h) {
+draw_state_init(struct draw_state *state, int image_id) {
 	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc) {
 		.size = 2 * sizeof(struct instance_t),
 		.type = SG_BUFFERTYPE_VERTEXBUFFER,
@@ -50,6 +50,8 @@ draw_state_init(struct draw_state *state, int w, int h) {
         .label = "texquad-sampler"
     });
 	
+	state->bind.images[IMG_tex].id = image_id;
+
 	srbuffer_init(&state->srb_mem);
 }
 
@@ -106,10 +108,9 @@ draw_state_commit(struct draw_state *state, struct sprite_rect *rect) {
 
 static int
 render_init(lua_State *L) {
-	int w = luaL_checkinteger(L, 1);
-	int h = luaL_checkinteger(L, 2);
 	struct draw_state * S = (struct draw_state *)lua_newuserdatauv(L, sizeof(*S), 0);
-	draw_state_init(S, w, h);
+	int image_id = luaL_checkinteger(L, 1);
+	draw_state_init(S, image_id);
 	return 1;
 }
 
@@ -127,30 +128,12 @@ render_commit(lua_State *L) {
 	return 0;
 }
 
-static int
-render_make_image(lua_State *L) {
-	struct draw_state *S = lua_touserdata(L, 1);
-	void * buffer = lua_touserdata(L, 2);
-	int width = luaL_checkinteger(L, 3);
-	int height = luaL_checkinteger(L, 4);
-	
-	S->bind.images[IMG_tex] = sg_make_image(&(sg_image_desc){
-		.width = width,
-        .height = height,
-        .data.subimage[0][0].ptr = buffer,
-        .data.subimage[0][0].size = width * height * 4,
-        .label = "texquad-texture"
-    });
-	return 0;
-}
-
 int
 luaopen_draw(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "init", render_init },
 		{ "commit", render_commit },
-		{ "make_image", render_make_image },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

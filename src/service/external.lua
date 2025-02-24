@@ -46,14 +46,23 @@ end
 
 function S.init(arg)
 	assert(STATE == nil)
-	local S = draw.init(arg.width, arg.height)
+	
+	local img_width = 1024
+	local img_height = 1024
+	
+	local img = render.image {
+		width = img_width,
+		height = img_height,
+	}
+	
+	local S = draw.init(img:id())
 	
 	-- todo: don't load texture here
 	local id = ltask.call(loader, "load", "asset/avatar.png", -0.5, -1)
-	local rect = ltask.call(loader, "pack", 1024)
+	local rect = ltask.call(loader, "pack", img_width)
 
-	local img = image.new(1024, 1024)
-	local canvas = img:canvas()
+	local imgmem = image.new(img_width, img_height)
+	local canvas = imgmem:canvas()
 	local r
 	for id, v in pairs(rect) do
 		local src = image.canvas(v.data, v.w, v.h, v.stride)
@@ -68,7 +77,7 @@ function S.init(arg)
 		w = r.w,
 		h = r.h,
 	}
-	draw.make_image(S, img, 1024, 1024)
+	img:update(imgmem)
 	
 	STATE = {
 		bindings = S,
@@ -93,8 +102,8 @@ function S.init(arg)
 		},
 	}
 	STATE.uniform.framesize = { 2/arg.width, -2/arg.height }
-	STATE.uniform.tex_width = 1/1024
-	STATE.uniform.tex_height = 1/1024
+	STATE.uniform.tex_width = 1/img_width
+	STATE.uniform.tex_height = 1/img_height
 end
 
 return S
