@@ -441,6 +441,153 @@ limage(lua_State *L) {
 	return 1;
 }
 
+struct buffer {
+	sg_buffer handle;
+	int type;
+};
+
+static int
+get_buffer_type(lua_State *L, int index) {
+	if (lua_getfield(L, index, "type") != LUA_TSTRING) {
+		return luaL_error(L, "Need .type");
+	}
+	const char * str = lua_tostring(L, -1);
+	int t = 0;
+	if (strcmp(str, "vertex") == 0) {
+		t = SG_BUFFERTYPE_VERTEXBUFFER;
+	} else if (strcmp(str, "index") == 0) {
+		t = SG_BUFFERTYPE_INDEXBUFFER;
+	} else if (strcmp(str, "storage") == 0) {
+		t = SG_BUFFERTYPE_STORAGEBUFFER;
+	} else {
+		return luaL_error(L, "Invalid buffer .type = %s", str);
+	}
+	lua_pop(L, 1);
+	return t;
+}
+
+static int
+get_buffer_usage(lua_State *L, int index) {
+	if (lua_getfield(L, index, "usage") != LUA_TSTRING) {
+		if (lua_isnil(L, -1)) {
+			lua_pop(L, 1);
+			return SG_USAGE_IMMUTABLE;
+		}
+		return luaL_error(L, "Invalid .usage");
+	}
+	const char * str = lua_tostring(L, -1);
+	int t = 0;
+	if (strcmp(str, "stream") == 0) {
+		t = SG_USAGE_STREAM;
+	} else if (strcmp(str, "dynamic") == 0) {
+		t = SG_USAGE_DYNAMIC;
+	} else if (strcmp(str, "immutable") == 0) {
+		t = SG_USAGE_IMMUTABLE;
+	} else {
+		return luaL_error(L, "Invalid buffer .usage = %s", str);
+	}
+	lua_pop(L, 1);
+	return t;
+}
+
+static const void *
+get_buffer_data(lua_State *L, int index, size_t *sz) {
+	int t = lua_getfield(L, index, "data");
+	if (t == LUA_TNIL) {
+		// no ptr
+		lua_pop(L, 1);
+		if (lua_getfield(L, index, "size") != LUA_TNUMBER) {
+			luaL_error(L, "No .data and .size");
+		}
+		*sz = luaL_checkinteger(L, -1);
+		lua_pop(L, 1);
+		return NULL;
+	}
+	size_t size = 0;
+	if (lua_getfield(L, index, "size") == LUA_TNUMBER) {
+		size = luaL_checkinteger(L, -1);
+	}
+	lua_pop(L, 1);
+	if (t == LUA_TLIGHTUSERDATA) {
+		if (size == 0) {
+			luaL_error(L, "lightuserdata for .data without .size");
+		}
+		*sz = size;
+		const void * ptr = lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		return ptr;
+	}
+	else if (t == LUA_TUSERDATA) {
+		size_t rawlen = lua_rawlen(L, -1);
+		if (size > 0 && size != rawlen)
+			luaL_error(L, "size of userdata %d != %d", rawlen, size);
+		const void * ptr = lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		*sz = size;
+		return ptr;
+	} else if (t == LUA_TSTRING) {
+		size_t rawlen;
+		const void * ptr = (const void *)lua_tolstring(L, -1, &rawlen);
+		if (size > 0 && size != rawlen)
+			luaL_error(L, "size of string %d != %d", rawlen, size);
+		lua_pop(L, 1);
+		*sz = size;
+		return ptr;
+	}
+	luaL_error(L, "Invalid .data type = %s", lua_typename(L, t));
+	*sz = 0;
+	return NULL;
+}
+
+static int
+lbuffer_id(lua_State *L) {
+	struct buffer *p = (struct buffer *)luaL_checkudata(L, 1, "SOKOL_BUFFER");
+	lua_pushinteger(L, p->handle.id);
+	return 1;
+}
+
+static int
+lbuffer(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	struct buffer * p = (struct buffer *)lua_newuserdatauv(L, sizeof(*p), 0);
+	p->type = get_buffer_type(L, 1);
+	int usage = get_buffer_usage(L, 1);
+	size_t sz;
+	const void *ptr = get_buffer_data(L, 1, &sz);
+	if (usage == SG_USAGE_IMMUTABLE && ptr == NULL) {
+		return luaL_error(L, "immutable buffer needs init data");
+	}
+	const char *label = NULL;
+	if (lua_getfield(L, 1, "label") == LUA_TSTRING) {
+		label = lua_tostring(L, -1);
+	}
+	lua_pop(L, 1);
+	p->handle = sg_make_buffer(&(sg_buffer_desc) {
+		.size = sz,
+		.type = p->type,
+		.usage = usage,
+		.label = label,
+	    .data.ptr = ptr,
+		.data.size = sz,
+	});
+		
+	if (luaL_newmetatable(L, "SOKOL_BUFFER")) {
+		luaL_Reg l[] = {
+			{ "__index", NULL },
+//			{ "update", lbuffer_update },
+			{ "id", lbuffer_id },	// todo
+			{ NULL, NULL },
+		};
+		luaL_setfuncs(L, l, 0);
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+
+	return 1;
+}
+
 int
 luaopen_render(lua_State *L) {
 	luaL_checkversion(L);
@@ -449,6 +596,7 @@ luaopen_render(lua_State *L) {
 		{ "submit", lsubmit },
 		{ "pipeline", lpipeline },
 		{ "image", limage },
+		{ "buffer", lbuffer },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

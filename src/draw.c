@@ -25,25 +25,10 @@ struct instance_t {
 };
 
 static void
-draw_state_init(struct draw_state *state, int image_id) {
-	state->bind.vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc) {
-		.size = 2 * sizeof(struct instance_t),
-		.type = SG_BUFFERTYPE_VERTEXBUFFER,
-		.usage = SG_USAGE_STREAM,
-		.label = "texquad-instance"
-    });
-	state->bind.storage_buffers[SBUF_sr_lut] = sg_make_buffer(&(sg_buffer_desc) {
-		.size = sizeof(state->srb_mem.data),
-		.type = SG_BUFFERTYPE_STORAGEBUFFER,
-		.usage = SG_USAGE_DYNAMIC,
-		.label = "texquad-scalerot"
-	});
-	state->bind.storage_buffers[SBUF_sprite_buffer] = sg_make_buffer(&(sg_buffer_desc) {
-		.size = sizeof(struct vertex_t) * MAX_SPRITE_VERTEX,
-		.type = SG_BUFFERTYPE_STORAGEBUFFER,
-		.usage = SG_USAGE_STREAM,
-		.label = "texquad-sprite"
-	});
+draw_state_init(struct draw_state *state, int image_id, int inst_id, int sr_id, int sprite_id) {
+	state->bind.vertex_buffers[0].id = inst_id;
+	state->bind.storage_buffers[SBUF_sr_lut].id = sr_id;
+	state->bind.storage_buffers[SBUF_sprite_buffer].id = sprite_id;
 
 	// create a default sampler object with default attributes
     state->bind.samplers[SMP_smp] = sg_make_sampler(&(sg_sampler_desc){
@@ -110,7 +95,10 @@ static int
 render_init(lua_State *L) {
 	struct draw_state * S = (struct draw_state *)lua_newuserdatauv(L, sizeof(*S), 0);
 	int image_id = luaL_checkinteger(L, 1);
-	draw_state_init(S, image_id);
+	int inst_id = luaL_checkinteger(L, 2);
+	int sr_id = luaL_checkinteger(L, 3);
+	int sprite_id = luaL_checkinteger(L, 4);
+	draw_state_init(S, image_id, inst_id, sr_id, sprite_id);
 	return 1;
 }
 

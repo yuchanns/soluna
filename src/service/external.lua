@@ -55,7 +55,26 @@ function S.init(arg)
 		height = img_height,
 	}
 	
-	local S = draw.init(img:id())
+	local inst_buffer = render.buffer {
+		type = "vertex",
+		usage = "stream",
+		label = "texquad-instance",
+		size = 24,	-- 2 * sizeof(float) * 3
+	}
+	local sr_buffer = render.buffer {
+		type = "storage",
+		usage = "dynamic",
+		label = "texquad-scalerot",
+		size = 4096 * 4 * 4,	-- 4096 float * 4
+	}
+	local sprite_buffer = render.buffer {
+		type = "storage",
+		usage = "stream",
+		label =  "texquad-scalerot",
+		size = 128 * 3 * 4, -- 128 int32 * 3
+	}
+
+	local S = draw.init(img:id(), inst_buffer:id(), sr_buffer:id(), sprite_buffer:id())
 	
 	-- todo: don't load texture here
 	local id = ltask.call(loader, "load", "asset/avatar.png", -0.5, -1)
