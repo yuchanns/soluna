@@ -3,7 +3,6 @@
 
 #include "draw.h"
 #include "sokol/sokol_gfx.h"
-#include "sokol/sokol_glue.h"
 #include "sokol/sokol_app.h"
 #include "sprite_submit.h"
 #include "texquad.glsl.h"
@@ -74,10 +73,6 @@ draw_state_init(struct draw_state *state, int w, int h) {
 		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .label = "texquad-pipeline"
     });
-    // default pass action
-	state->pass_action = (sg_pass_action) {
-		.colors[0] = { .load_action = SG_LOADACTION_CLEAR, .clear_value = { 0.25f, 0.5f, 0.75f, 1.0f } }
-	};
 	srbuffer_init(&state->srb_mem);
 }
 
@@ -132,13 +127,10 @@ draw_state_commit(struct draw_state *state, struct sprite_rect *rect) {
 	vs_params_t vs_params;
 	memcpy(vs_params.texsize, state->texsize, sizeof(state->texsize));
 	memcpy(vs_params.framesize, state->frame, sizeof(state->frame));
-	sg_begin_pass(&(sg_pass) { .action = state->pass_action, .swapchain = sglue_swapchain() });
 	sg_apply_pipeline(state->pip);
 	sg_apply_bindings(&state->bind);
 	sg_apply_uniforms(UB_vs_params, &SG_RANGE(vs_params));
 	sg_draw(0, 4, sizeof(inst)/sizeof(inst[0]));
-	sg_end_pass();
-	sg_commit();	
 }
 
 static int
@@ -185,7 +177,7 @@ render_make_image(lua_State *L) {
 }
 
 int
-luaopen_render(lua_State *L) {
+luaopen_draw(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "init", render_init },
