@@ -140,7 +140,7 @@ app_init() {
 
 static void
 app_frame() {
-	send_app_message(message_create("frame", 0, 0));
+	send_app_message(message_create64("frame", sapp_frame_count()));
 }
 
 static int

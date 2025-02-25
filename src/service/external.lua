@@ -13,15 +13,8 @@ ltask.send(1, "external_forward", ltask.self(), "external")
 
 local command = {}
 
-local count = 0
-
-local function pack2(a, b)
-	return a << 16 | b
-end
-
-function command.frame()
+function command.frame(_, _, count)
 	if STATE then
-		count = count + 1
 		local rad = count * 3.1415927 / 180
 		local scale = math.sin(rad) + 1.2
 		STATE.batch:reset()
