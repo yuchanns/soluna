@@ -27,10 +27,9 @@ function command.frame()
 			STATE.pipeline:apply()
 			STATE.uniform:apply()
 			-- update buffers
-			STATE.srbuffer_mem:reset()
 			local rad = count * 3.1415927 / 180
 			local scale = math.sin(rad) + 1.2
-			local index = STATE.srbuffer_mem:add(scale, rad)
+			local index = assert(STATE.srbuffer_mem:add(scale, rad))
 			STATE.inst:update(string.pack("fff", 256, 256, index))
 			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 			STATE.sprite:update(string.pack("LLL", 

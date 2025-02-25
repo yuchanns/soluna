@@ -4,6 +4,10 @@
 void
 srbuffer_init(struct sr_buffer *SR) {
 	SR->n = 1;
+	SR->dirty = 1;
+	SR->current_frame = 0;
+	SR->current_n = 1;
+	SR->frame[0] = 0;
 	SR->key[0] = 0;
 	SR->cache[0] = 0;
 	float *v = SR->data[0].v;
@@ -16,6 +20,10 @@ srbuffer_add(struct sr_buffer *SR, uint32_t v) {
 	int index = v % (MAX_SR - 1);
 	int slot = SR->cache[index];
 	if (slot < SR->n && v == SR->key[slot]) {
+		if (SR->frame[slot] != SR->current_frame) {
+			SR->frame[slot] = SR->current_frame;
+			++SR->current_n;
+		}
 		return slot;
 	}
 	if (SR->n >= MAX_SR) {
@@ -23,12 +31,35 @@ srbuffer_add(struct sr_buffer *SR, uint32_t v) {
 		for (i=1;i<MAX_SR;i++) {
 			if (SR->key[i] == v) {
 				SR->cache[index] = i;
+				SR->frame[index] = SR->current_frame;
 				return i;
 			}
 		}
 		return -1;	// full
 	}
-	slot = SR->n++;
+	int new_slot = 1;
+	if (SR->current_n * 2 < SR->n) {
+		// find an exist slot
+		slot = v % SR->n;
+		int i;
+		for (i=0;i<SR->n;i++) {
+			if (SR->frame[slot] != SR->current_frame) {
+				SR->frame[slot] = SR->current_frame;
+				++SR->current_n;
+				new_slot = 0;
+				break;
+			}
+			++slot;
+			if (slot > SR->n)
+				slot -= SR->n;
+		}
+	}
+	if (new_slot) {
+		slot = SR->n++;
+		SR->frame[slot] = SR->current_frame;
+		++SR->current_n;
+	}
+	SR->dirty = 1;
 	SR->cache[index] = slot;
 	SR->key[slot] = v;
 	float *mat = SR->data[slot].v;
@@ -54,6 +85,20 @@ srbuffer_add(struct sr_buffer *SR, uint32_t v) {
 		mat[2] = sinr; mat[3] = cosr;
 	}
 	return slot;
+}
+
+void *
+srbuffer_commit(struct sr_buffer *SR, int *sz) {
+	if (SR->dirty) {
+		*sz = SR->n * sizeof(SR->data[0]);
+		SR->dirty = 0;
+		SR->current_n = 1;
+		++SR->current_frame;
+		SR->frame[0] = SR->current_frame;
+		return SR->data;
+	}
+	*sz = 0;
+	return NULL;
 }
 
 #ifdef TEST_SRBUFFER_MAIN

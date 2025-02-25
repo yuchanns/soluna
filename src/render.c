@@ -122,14 +122,9 @@ get_buffer_data(lua_State *L, int index, size_t *sz) {
 }
 
 static int
-lbuffer_id(lua_State *L) {
-	struct buffer *p = (struct buffer *)luaL_checkudata(L, 1, "SOKOL_BUFFER");
-	lua_pushinteger(L, p->handle.id);
-	return 1;
-}
-
-static int
 lbuffer_update(lua_State *L) {
+	if (lua_gettop(L) == 1)
+		return 0;
 	struct buffer *p = (struct buffer *)luaL_checkudata(L, 1, "SOKOL_BUFFER");
 	size_t sz;
 	const void *ptr;
@@ -187,7 +182,6 @@ lbuffer(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "update", lbuffer_update },
-			{ "id", lbuffer_id },	// todo
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
@@ -707,13 +701,6 @@ limage_update(lua_State *L) {
 }
 
 static int
-limage_id(lua_State *L) {
-	struct image *p = (struct image *)luaL_checkudata(L, 1, "SOKOL_IMAGE");
-	lua_pushinteger(L, p->img.id);
-	return 1;
-}
-
-static int
 limage(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	sg_image_desc img = { .usage = SG_USAGE_DYNAMIC };
@@ -738,7 +725,6 @@ limage(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "update", limage_update },
-			{ "id", limage_id },	// todo
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
@@ -794,16 +780,13 @@ lsrbuffer_add(lua_State *L) {
 static int
 lsrbuffer_ptr(lua_State *L) {
 	struct sr_buffer *b = (struct sr_buffer *)luaL_checkudata(L, 1, "SOLUNA_SRBUFFER");
-	lua_pushlightuserdata(L, b->data);
-	lua_pushinteger(L, b->n * sizeof(b->data[0]));
+	int sz;
+	void * ptr = srbuffer_commit(b, &sz);
+	if (ptr == NULL)
+		return 0;
+	lua_pushlightuserdata(L, ptr);
+	lua_pushinteger(L, sz);
 	return 2;
-}
-
-static int
-lsrbuffer_reset(lua_State *L) {
-	struct sr_buffer *b = (struct sr_buffer *)luaL_checkudata(L, 1, "SOLUNA_SRBUFFER");
-	srbuffer_init(b);
-	return 0;
 }
 
 static int
@@ -813,7 +796,6 @@ lsrbuffer(lua_State *L) {
 	if (luaL_newmetatable(L, "SOLUNA_SRBUFFER")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
-			{ "reset", lsrbuffer_reset },
 			{ "add", lsrbuffer_add },
 			{ "ptr", lsrbuffer_ptr },
 			{ NULL, NULL },
