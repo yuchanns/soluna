@@ -1,21 +1,27 @@
-local spritepack = require "soluna.spritepack"
+local spritemgr = require "soluna.spritemgr"
 
-local pack = spritepack.pack(128)
+-- texture size = 128
+local bank = spritemgr.newbank(65536, 128)
 
-local rects = {
-	{ 64, 32 },
-	{ 128, 128 },
+local ids = {
+	bank:add(32, 16),
+	bank:add(64, 32),
+	bank:add(96, 96),
+	bank:add(96, 96),
 }
 
-for i, v in ipairs(rects) do
-	pack:add(i, v[1], v[2])
+for _, id in ipairs(ids) do
+	bank:touch(id)
 end
 
-local r = pack:run(4096)
+local texid, n = bank:pack()
+print("Pack",n,"from",texid)
 
-for id,v in pairs(r) do
-	local x, y = v >> 32 , v & 0xffffffff
-	local r = rects[id]
-	print("id = ", id , "coord = ", x, y, "rect = ", r[1], r[2])
+for i = 1, n do
+	local r = bank:altas(texid + i - 1)
+	for k,v in pairs(r) do
+		r[k] = { x = v >> 32, y = v & 0xffffffff }
+	end
+	print_r(i, r)
 end
 

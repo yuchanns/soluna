@@ -1,5 +1,7 @@
 local image = require "soluna.image"
-local spritepack = require "soluna.spritepack"
+local spritemgr = require "soluna.spritemgr"
+
+local bank = spritemgr.newbank(65536, 1024)
 
 local missing = {}
 
@@ -55,6 +57,10 @@ function S.load(filename, offx, offy, x, y, w, h)
 	local cx, cy, cw, ch = image.crop(c.data, c.w, c.h, x, y, w, h)
 	offx = offx - cx
 	offy = offy - cy
+	
+	local id = bank:add(cw, ch, offx, offy)
+	bank:touch(id)
+	
 	local id = #sprite+1
 	sprite[id] = {
 		filename = filename,
@@ -72,13 +78,10 @@ end
 
 -- todo: packing should be out of loader 
 function S.pack(width)
-	local n = #sprite
-	local pack = spritepack.pack(n)
-	for i=1,n do
-		local s = sprite[i]
-		pack:add(i, s.cw, s.ch)
-	end
-	local r = pack:run(width)
+	assert(width == 1024)
+	local texid, n = bank:pack()
+
+	local r = bank:altas(texid)
 	for id,v in pairs(r) do
 		local x = v >> 32
 		local y = v & 0xffffffff

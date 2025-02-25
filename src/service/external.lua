@@ -2,7 +2,6 @@ local ltask = require "ltask"
 local message = require "soluna.appmessage"
 local render = require "soluna.render"
 local image = require "soluna.image"
-local spritepack = require "soluna.spritepack"
 
 local loader = ltask.uniqueservice "loader"
 
