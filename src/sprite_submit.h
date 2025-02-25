@@ -6,20 +6,6 @@
 #include <assert.h>
 #include <math.h>
 
-static inline struct draw_primitive *
-sprite_submit(struct draw_batch *B) {
-	struct draw_primitive * s = batch_reserve(B, B->n + 1);
-	if (s == NULL)
-		return NULL;
-	s += B->n;
-	++B->n;
-	s->x = 0;
-	s->y = 0;
-	s->sr = 0;
-	s->sprite = 0;
-	return s;
-}
-
 static inline int32_t
 to_fixpoint_(float v) {
 	v *= 256;

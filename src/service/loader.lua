@@ -94,6 +94,10 @@ function S.pack(width)
 	return r
 end
 
+function S.bank_ptr()
+	return bank:ptr()
+end
+
 function S.write(id, filename)
 	local obj = sprite[id]
 	assert(obj.cx)

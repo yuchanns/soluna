@@ -10,12 +10,7 @@ struct draw_primitive {
 	int32_t sprite;		// negative : material 
 };
 
-struct draw_batch {
-	int id;
-	int n;
-	int cap;
-	struct draw_primitive * stream;
-};
+struct draw_batch;
 
 struct draw_batch * batch_new(int size);
 struct draw_primitive * batch_reserve(struct draw_batch *, int size);

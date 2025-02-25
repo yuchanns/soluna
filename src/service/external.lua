@@ -2,10 +2,10 @@ local ltask = require "ltask"
 local message = require "soluna.appmessage"
 local render = require "soluna.render"
 local image = require "soluna.image"
+local spritemgr = require "soluna.spritemgr"
 
 local loader = ltask.uniqueservice "loader"
-
-local STATE, RECT
+local STATE
 
 local S = {}
 
@@ -22,20 +22,18 @@ end
 function command.frame()
 	if STATE then
 		count = count + 1
+		local rad = count * 3.1415927 / 180
+		local scale = math.sin(rad) + 1.2
+		STATE.batch:reset()
+		
 		STATE.pass:begin()
 			STATE.pipeline:apply()
 			STATE.uniform:apply()
-			-- update buffers
-			local rad = count * 3.1415927 / 180
-			local scale = math.sin(rad) + 1.2
-			local index = assert(STATE.srbuffer_mem:add(scale, rad))
-			STATE.inst:update(string.pack("fff", 256, 256, index))
+
+			STATE.batch:add(STATE.sprite_id, 256, 256, scale, rad)
+			local n, tex = render.submit_batch(STATE.inst, 128, STATE.sprite, 128, STATE.srbuffer_mem, STATE.bank_ptr, STATE.bank_sz, STATE.batch:ptr())
+			assert(n == 1 and tex == 0)
 			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
-			STATE.sprite:update(string.pack("LLL", 
-				pack2(RECT.dx + 0x8000, RECT.dy + 0x8000),
-				pack2(RECT.x, RECT.w),
-				pack2(RECT.y, RECT.h)
-				))
 
 			STATE.bindings:apply()
 			render.draw(0, 4, 1)
@@ -77,7 +75,7 @@ function S.init(arg)
 		type = "vertex",
 		usage = "stream",
 		label = "texquad-instance",
-		size = 24,	-- 2 * sizeof(float) * 3
+		size = 128 * 3 * 4,	-- 128 sizeof(float) * 3
 	}
 	local sr_buffer = render.buffer {
 		type = "storage",
@@ -98,20 +96,13 @@ function S.init(arg)
 
 	local imgmem = image.new(img_width, img_height)
 	local canvas = imgmem:canvas()
-	local r
 	for id, v in pairs(rect) do
 		local src = image.canvas(v.data, v.w, v.h, v.stride)
 		image.blit(canvas, src, v.x, v.y)
-		r = v
 	end
-	RECT = {
-		dx = r.dx,
-		dy = r.dy,
-		x = r.x,
-		y = r.y,
-		w = r.w,
-		h = r.h,
-	}
+	
+	local bank_ptr, bank_sz = ltask.call(loader, "bank_ptr")
+	
 	img:update(imgmem)
 	
 	STATE = {
@@ -119,6 +110,10 @@ function S.init(arg)
 			color0 = 0x4080c0,
 		},
 		pipeline = render.pipeline "default",
+		bank_ptr = bank_ptr,
+		bank_sz = bank_sz,
+		batch = spritemgr.newbatch(),
+		sprite_id = id,
 	}
 	local bindings = STATE.pipeline:bindings()
 	bindings.vbuffer0 = inst_buffer
@@ -127,10 +122,10 @@ function S.init(arg)
 	bindings.image_tex = img
 	bindings.sampler_smp = render.sampler { label = "texquad-sampler" }
 	
-	STATE.inst = inst_buffer
-	STATE.srbuffer = sr_buffer
-	STATE.sprite = sprite_buffer
-	
+	STATE.inst = assert(inst_buffer)
+	STATE.srbuffer = assert(sr_buffer)
+	STATE.sprite = assert(sprite_buffer)
+
 	STATE.srbuffer_mem = render.srbuffer()
 	STATE.bindings = bindings
 	

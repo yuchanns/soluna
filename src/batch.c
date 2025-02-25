@@ -6,6 +6,12 @@
 #define DEFAULT_SIZE 1024
 #define MAX_BATCH 1024
 
+struct draw_batch {
+	int id;
+	int cap;
+	struct draw_primitive * stream;
+};
+
 struct batch_ref {
 	int n;
 	int freelist;
@@ -74,7 +80,6 @@ batch_new(int size) {
 	if (batch == NULL)
 		return NULL;
 	batch->id = id;
-	batch->n = 0;
 	batch->cap = size;
 	batch->stream = (struct draw_primitive *)malloc(sizeof(struct draw_primitive) * size);
 	if (batch->stream == NULL) {

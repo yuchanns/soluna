@@ -1,4 +1,6 @@
 #include "spritemgr.h"
+#include "sprite_submit.h"
+#include "batch.h"
 
 #include <stdint.h>
 #include <lua.h>
@@ -152,6 +154,14 @@ lbank_altas(lua_State *L) {
 }
 
 static int
+lbank_ptr(lua_State *L) {
+	struct sprite_bank *b = (struct sprite_bank *)luaL_checkudata(L, 1, "SOLUNA_SPRITEBANK");
+	lua_pushlightuserdata(L, b->rect);
+	lua_pushinteger(L, b->n);
+	return 2;
+}
+
+static int
 lsprite_newbank(lua_State *L) {
 	int cap = luaL_checkinteger(L, 1);
 	int texture_size = luaL_optinteger(L, 2, DEFAULT_TEXTURE_SIZE);
@@ -170,6 +180,87 @@ lsprite_newbank(lua_State *L) {
 			{ "touch", lbank_touch },
 			{ "pack", lbank_pack },
 			{ "altas", lbank_altas },
+			{ "ptr", lbank_ptr },
+			{ NULL, NULL },
+		};
+		luaL_setfuncs(L, l, 0);
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+	
+	return 1;
+}
+
+struct batch {
+	int n;
+	struct draw_batch *b;
+};
+
+static int
+lbatch_reset(lua_State *L) {
+	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+	b->n = 0;
+	return 0;
+}
+
+static int
+lbatch_add(lua_State *L) {
+	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+	int n = b->n;
+	struct draw_primitive * p = batch_reserve(b->b, n + 1);
+	if (p == NULL)
+		return luaL_error(L, "Out of memory");
+	
+	p += n;
+	
+	int id = luaL_checkinteger(L, 2);
+	float x = luaL_checknumber(L, 3);
+	float y = luaL_checknumber(L, 4);
+	
+	sprite_set_xy(p, x, y);
+	p->sprite = id;
+	if (lua_gettop(L) > 4) {
+		float scale = luaL_optnumber(L, 5, 1);
+		float rot = luaL_optnumber(L, 6, 0);
+		sprite_set_sr(p, scale, rot);
+	} else {
+		p->sr = 0;
+	}
+	
+	b->n = n + 1;
+	return 0;
+}
+
+static int
+lbatch_ptr(lua_State *L) {
+	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+	int offset = luaL_optinteger(L, 2, 0);
+	struct draw_primitive * p = batch_reserve(b->b, 0);
+	if (offset >= b->n)
+		return 0;
+	p += offset;
+	int n = b->n - offset;
+	lua_pushlightuserdata(L, p);
+	lua_pushinteger(L, n);
+	return 2;
+}
+
+static int
+lsprite_newbatch(lua_State *L) {
+	struct batch *b = (struct batch *)lua_newuserdatauv(L, sizeof(*b), 0);
+	b->n = 0;
+	b->b = batch_new(0);
+	if (b->b == NULL)
+		return luaL_error(L, "Out of memory");
+
+	if (luaL_newmetatable(L, "SOLUNA_BATCH")) {
+		luaL_Reg l[] = {
+			{ "__index", NULL },
+			{ "reset", lbatch_reset },
+			{ "add", lbatch_add },
+			{ "ptr", lbatch_ptr },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
@@ -187,6 +278,7 @@ luaopen_spritemgr(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "newbank", lsprite_newbank },
+		{ "newbatch", lsprite_newbatch },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
