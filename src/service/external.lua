@@ -1,6 +1,5 @@
 local ltask = require "ltask"
 local message = require "soluna.appmessage"
-local draw = require "soluna.draw"
 local render = require "soluna.render"
 local image = require "soluna.image"
 local spritepack = require "soluna.spritepack"
@@ -15,12 +14,33 @@ ltask.send(1, "external_forward", ltask.self(), "external")
 
 local command = {}
 
+local count = 0
+
+local function pack2(a, b)
+	return a << 16 | b
+end
+
 function command.frame()
 	if STATE then
+		count = count + 1
 		STATE.pass:begin()
 			STATE.pipeline:apply()
 			STATE.uniform:apply()
-			draw.commit(STATE.bindings, RECT.dx, RECT.dy, RECT.x, RECT.y, RECT.w, RECT.h)
+			-- update buffers
+			STATE.srbuffer_mem:reset()
+			local rad = count * 3.1415927 / 180
+			local scale = math.sin(rad) + 1.2
+			local index = STATE.srbuffer_mem:add(scale, rad)
+			STATE.inst:update(string.pack("fff", 256, 256, index))
+			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
+			STATE.sprite:update(string.pack("LLL", 
+				pack2(RECT.dx + 0x8000, RECT.dy + 0x8000),
+				pack2(RECT.x, RECT.w),
+				pack2(RECT.y, RECT.h)
+				))
+
+			STATE.bindings:apply()
+			render.draw(0, 4, 1)
 		STATE.pass:finish()
 		render.submit()
 	end
@@ -74,8 +94,6 @@ function S.init(arg)
 		size = 128 * 3 * 4, -- 128 int32 * 3
 	}
 
-	local S = draw.init(img:id(), inst_buffer:id(), sr_buffer:id(), sprite_buffer:id())
-	
 	-- todo: don't load texture here
 	local id = ltask.call(loader, "load", "asset/avatar.png", -0.5, -1)
 	local rect = ltask.call(loader, "pack", img_width)
@@ -99,12 +117,25 @@ function S.init(arg)
 	img:update(imgmem)
 	
 	STATE = {
-		bindings = S,
 		pass = render.pass {
 			color0 = 0x4080c0,
 		},
 		pipeline = render.pipeline "default",
 	}
+	local bindings = STATE.pipeline:bindings()
+	bindings.vbuffer0 = inst_buffer
+	bindings.sbuffer_sr_lut = sr_buffer
+	bindings.sbuffer_sprite_buffer = sprite_buffer
+	bindings.image_tex = img
+	bindings.sampler_smp = render.sampler { label = "texquad-sampler" }
+	
+	STATE.inst = inst_buffer
+	STATE.srbuffer = sr_buffer
+	STATE.sprite = sprite_buffer
+	
+	STATE.srbuffer_mem = render.srbuffer()
+	STATE.bindings = bindings
+	
 	STATE.uniform = STATE.pipeline:uniform_slot(0):init {
 		tex_width = {
 			offset = 0,

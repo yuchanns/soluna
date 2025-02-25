@@ -9,7 +9,6 @@ int luaopen_appmessage(lua_State *L);
 int luaopen_applog(lua_State *L);
 int luaopen_image(lua_State *L);
 int luaopen_appinfo(lua_State *L);
-int luaopen_draw(lua_State *L);
 int luaopen_render(lua_State *L);
 int luaopen_spritepack(lua_State *L);
 
@@ -23,7 +22,6 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.log", luaopen_applog },
 		{ "soluna.image", luaopen_image },
 		{ "soluna.appinfo", luaopen_appinfo },
-		{ "soluna.draw", luaopen_draw },
 		{ "soluna.render", luaopen_render },
 		{ "soluna.spritepack", luaopen_spritepack },
 //		{ "luaforward", luaopen_luaforward },
