@@ -280,6 +280,7 @@ sokol_main(int argc, char* argv[]) {
 	d.win32_console_utf8 = 1;
 	d.win32_console_attach = 1;
 	d.window_title = "soluna";
+	d.alpha = 0;
 
 	return d;
 }

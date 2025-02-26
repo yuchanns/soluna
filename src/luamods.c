@@ -11,6 +11,8 @@ int luaopen_image(lua_State *L);
 int luaopen_appinfo(lua_State *L);
 int luaopen_render(lua_State *L);
 int luaopen_spritemgr(lua_State *L);
+int luaopen_datalist(lua_State *L);
+int luaopen_soluna_file(lua_State *L);
 
 void soluna_embed(lua_State* L) {
     static const luaL_Reg modules[] = {
@@ -24,6 +26,8 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.appinfo", luaopen_appinfo },
 		{ "soluna.render", luaopen_render },
 		{ "soluna.spritemgr", luaopen_spritemgr },
+		{ "soluna.datalist", luaopen_datalist },
+		{ "soluna.file", luaopen_soluna_file },
 //		{ "luaforward", luaopen_luaforward },
         { NULL, NULL },
     };

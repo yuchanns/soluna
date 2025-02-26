@@ -75,8 +75,13 @@ $(BUILD)/soluna_%.o : src/%.c
 	
 $(BUILD)/ltask_%.o : 3rd/ltask/src/%.c
 	$(COMPILE_C) $(LUAINC) -D_WIN32_WINNT=0x0601 -DLTASK_EXTERNAL_OPENLIBS=soluna_openlibs
+	
+DATALIST_O=$(BUILD)/datalist.o
 
-$(BIN)/$(APPNAME): $(MAIN_O) $(LTASK_O) $(LUA_O)
+$(DATALIST_O) : 3rd/datalist/datalist.c
+	$(COMPILE_C) $(LUAINC)
+
+$(BIN)/$(APPNAME): $(MAIN_O) $(LTASK_O) $(LUA_O) $(DATALIST_O)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	
 clean :
