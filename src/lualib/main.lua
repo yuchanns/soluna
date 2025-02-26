@@ -9,6 +9,20 @@ local init_func_temp = [=[
 	package.path = [[${lua_path}]]
 	package.cpath = [[${lua_cpath}]]
 	_G.print_r = load(embedsource.runtime.print_r(), "@src/lualib/print_r.lua")()
+	local function embedloader(name)
+		local ename = name:match "^soluna%.(.*)"
+		if ename then
+			local code = embedsource.lib[ename]
+			if code then
+				return function()
+					local f = load(code(), "@src/lualib/"..ename..".lua")
+					return f()
+				end
+			end
+			return "no embed soluna." .. ename
+		end
+	end
+	package.searchers[#package.searchers+1] = embedloader
 	local embedcode = embedsource.service[name]
 	if embedcode then
 		return load(embedcode(),"=("..name..")")

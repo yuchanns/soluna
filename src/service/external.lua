@@ -89,7 +89,7 @@ function S.init(arg)
 		texture_size = texture_size,
 	})
 	
-	local id = ltask.call(loader, "load", "asset/avatar.png", -0.5, -1)
+	local spr = ltask.call(loader, "loadbundle", "asset/sprites.dl")
 	local rect = ltask.call(loader, "pack")
 
 	local imgmem = image.new(texture_size, texture_size)
@@ -108,7 +108,7 @@ function S.init(arg)
 		pipeline = render.pipeline "default",
 		bank_ptr = bank_ptr,
 		batch = spritemgr.newbatch(),
-		sprite_id = id,
+		sprite_id = spr.avatar,
 	}
 	local bindings = STATE.pipeline:bindings()
 	bindings.vbuffer0 = inst_buffer

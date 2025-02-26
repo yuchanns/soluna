@@ -8,6 +8,7 @@
 #include "start.lua.h"
 #include "print_r.lua.h"
 #include "loader.lua.h"
+#include "spritebundle.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -35,6 +36,10 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(main)
 			REG_SOURCE(print_r)
 		lua_setfield(L, -2, "runtime");
+
+		lua_newtable(L);	// runtime
+			REG_SOURCE(spritebundle)
+		lua_setfield(L, -2, "lib");
 			
 		lua_newtable(L);	// service
 			REG_SOURCE(log)

@@ -1,37 +1,11 @@
 local image = require "soluna.image"
 local spritemgr = require "soluna.spritemgr"
-local file = require "soluna.file"
-local datalist = require "soluna.datalist"
+local spritebundle = require "soluna.spritebundle"
 
 local sprite_bank
 
-local missing = {}
-
-local function fetchfile(filecache, filename)
-	local content = file.loader(filename)
-	if not content then
-		if not missing[filename] then
-			missing[filename] = true
-			print("Missing file : " .. filename)
-		end
-		return
-	end
-	local data, w, h = image.load(content)
-	if data == nil then
-		if not missing[filename] then
-			missing[filename] = true
-			print("Invalid image : " .. filename .. "(" .. w .. ")")
-		end
-		return
-	end
-	local r = { data = data, w = w, h = h }
-	filecache[filename] = r
-	return r
-end
-
 -- todo: make weak table
---local filecache = setmetatable({} , { __mode = "kv", __index = fetchfile })
-local filecache = setmetatable({} , { __index = fetchfile })
+local filecache = setmetatable({ __missing = {}} , { __index = spritebundle.loadimage })
 
 local S = {}
 
@@ -40,45 +14,24 @@ function S.init(config)
 	return sprite_bank:ptr()
 end
 
+local bundle = {}
 local sprite = {}
 
-function S.load(filename, offx, offy, x, y, w, h)
-	local c = filecache[filename]
-	if c == nil then
-		return
+function S.loadbundle(filename)
+	local b = bundle[filename]
+	if not b then
+		local desc = spritebundle.load(filecache, filename)
+		b = {}
+		for _, item in ipairs(desc) do
+			local id = sprite_bank:add(item.cw, item.ch, item.x, item.y)
+			sprite_bank:touch(id)	-- todo: don't touch here
+			item.id = id
+			sprite[id] = item
+			b[item.name] = id
+		end
+		bundle[filename] = b
 	end
-	local index = image.makeindex(x, y, w, h)
-	if offx < 0 then
-		offx = - c.w * offx // 1 | 0
-	end
-	if offy < 0 then
-		offy = - c.h * offy // 1 | 0
-	end
-	local obj = c[index]
-	if obj then
-		assert(obj.x == offx and obj.y == offy)
-		return obj.id
-	end
-	local cx, cy, cw, ch = image.crop(c.data, c.w, c.h, x, y, w, h)
-	offx = offx - cx
-	offy = offy - cy
-	
-	local id = sprite_bank:add(cw, ch, offx, offy)
-	sprite_bank:touch(id)
-	
-	local id = #sprite+1
-	sprite[id] = {
-		filename = filename,
-		index = index,
-		id = id,
-		x = offx,
-		y = offy,
-		cx = cx + (x or 0),
-		cy = cy + (y or 0),
-		cw = cw,
-		ch = ch,
-	}
-	return id
+	return b
 end
 
 -- todo: packing should be out of loader 

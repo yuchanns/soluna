@@ -142,20 +142,12 @@ close_buffer(lua_State *L) {
 
 static int
 loader(lua_State *L) {
-	lua_pushvalue(L, lua_upvalueindex(2));
-	lua_pushvalue(L, lua_upvalueindex(3));
-	lua_pushvalue(L, lua_upvalueindex(1));
-	return 3;
-}
-
-static int
-lfile_loader(lua_State *L) {
-	const char *filename = luaL_checkstring(L, 1);
+	const char *filename = luaL_checkstring(L, lua_upvalueindex(1));
 	const char *mode = luaL_optstring(L, 2, "rb");
 	FILE *f = fopen_utf8(filename, mode);
 	if (f == NULL)
-		return 0;
-	
+		return luaL_error(L, "Can't open %s", filename);
+
 	struct file_buffer * buf = (struct file_buffer *)lua_newuserdatauv(L, sizeof(*buf), 0);
 	buf->ptr = NULL;
 	if (luaL_newmetatable(L, "SOLUNA_LOADER")) {
@@ -186,7 +178,14 @@ lfile_loader(lua_State *L) {
 	}
 	lua_pushlightuserdata(L, buf->ptr);
 	lua_pushinteger(L, sz);
-	lua_pushcclosure(L, loader, 3);
+	lua_pushvalue(L, -3);
+	return 3;
+}
+
+static int
+lfile_loader(lua_State *L) {
+	lua_settop(L, 1);
+	lua_pushcclosure(L, loader, 1);
 	return 1;
 }
 
