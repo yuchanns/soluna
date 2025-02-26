@@ -841,9 +841,11 @@ submit_inst(lua_State *L, struct buffer *inst, struct sr_buffer *srb, struct dra
 }
 
 static int
-submit_sprite(lua_State *L, struct buffer *sprite, struct sprite_rect * rect, int rect_n, struct draw_primitive *prim, int n, int *texid) {
+submit_sprite(lua_State *L, struct buffer *sprite, struct sprite_bank * bank, struct draw_primitive *prim, int n, int *texid) {
 	if (n == 0)
 		return 0;
+	struct sprite_rect * rect = bank->rect;
+	int rect_n = bank->n;
 	int index = prim[0].sprite - 1;
 	if (index < 0 || index >= rect_n)
 		return luaL_error(L, "Invalid sprite id %d", index);
@@ -877,10 +879,9 @@ lsubmit_batch(lua_State *L) {
 	struct buffer *sprite = (struct buffer *)luaL_checkudata(L, 3, "SOKOL_BUFFER");
 	int sprite_size = luaL_checkinteger(L, 4);
 	struct sr_buffer *srb = (struct sr_buffer *)luaL_checkudata(L, 5, "SOLUNA_SRBUFFER");
-	struct sprite_rect * rect = (struct sprite_rect *)lua_touserdata(L, 6);
-	int rect_n = luaL_checkinteger(L, 7);
-	struct draw_primitive *prim = (struct draw_primitive *)lua_touserdata(L, 8);
-	int prim_n = luaL_checkinteger(L, 9);
+	struct sprite_bank * bank = (struct sprite_bank *)lua_touserdata(L, 6);
+	struct draw_primitive *prim = (struct draw_primitive *)lua_touserdata(L, 7);
+	int prim_n = luaL_checkinteger(L, 8);
 	
 	if (inst_size > MAX_OBJECT) {
 		inst_size = MAX_OBJECT;
@@ -894,7 +895,7 @@ lsubmit_batch(lua_State *L) {
 	}
 	
 	int texid;
-	prim_n = submit_sprite(L, sprite, rect, rect_n, prim, prim_n, &texid);
+	prim_n = submit_sprite(L, sprite, bank, prim, prim_n, &texid);
 	submit_inst(L, inst, srb, prim, prim_n);
 
 	lua_pushinteger(L, prim_n);

@@ -24,7 +24,7 @@ function command.frame(_, _, count)
 			STATE.uniform:apply()
 
 			STATE.batch:add(STATE.sprite_id, 256, 256, scale, rad)
-			local n, tex = render.submit_batch(STATE.inst, 128, STATE.sprite, 128, STATE.srbuffer_mem, STATE.bank_ptr, STATE.bank_sz, STATE.batch:ptr())
+			local n, tex = render.submit_batch(STATE.inst, 128, STATE.sprite, 128, STATE.srbuffer_mem, STATE.bank_ptr, STATE.batch:ptr())
 			assert(n == 1 and tex == 0)
 			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 
@@ -56,12 +56,11 @@ end
 function S.init(arg)
 	assert(STATE == nil)
 	
-	local img_width = 1024
-	local img_height = 1024
+	local texture_size = 1024
 	
 	local img = render.image {
-		width = img_width,
-		height = img_height,
+		width = texture_size,
+		height = texture_size,
 	}
 	
 	local inst_buffer = render.buffer {
@@ -84,17 +83,21 @@ function S.init(arg)
 	}
 
 	-- todo: don't load texture here
+	
+	local bank_ptr = ltask.call(loader, "init", {
+		max_sprite = 65536,
+		texture_size = texture_size,
+	})
+	
 	local id = ltask.call(loader, "load", "asset/avatar.png", -0.5, -1)
-	local rect = ltask.call(loader, "pack", img_width)
+	local rect = ltask.call(loader, "pack")
 
-	local imgmem = image.new(img_width, img_height)
+	local imgmem = image.new(texture_size, texture_size)
 	local canvas = imgmem:canvas()
 	for id, v in pairs(rect) do
 		local src = image.canvas(v.data, v.w, v.h, v.stride)
 		image.blit(canvas, src, v.x, v.y)
 	end
-	
-	local bank_ptr, bank_sz = ltask.call(loader, "bank_ptr")
 	
 	img:update(imgmem)
 	
@@ -104,7 +107,6 @@ function S.init(arg)
 		},
 		pipeline = render.pipeline "default",
 		bank_ptr = bank_ptr,
-		bank_sz = bank_sz,
 		batch = spritemgr.newbatch(),
 		sprite_id = id,
 	}
@@ -138,8 +140,8 @@ function S.init(arg)
 		},
 	}
 	STATE.uniform.framesize = { 2/arg.width, -2/arg.height }
-	STATE.uniform.tex_width = 1/img_width
-	STATE.uniform.tex_height = 1/img_height
+	STATE.uniform.tex_width = 1/texture_size
+	STATE.uniform.tex_height = 1/texture_size
 end
 
 return S

@@ -156,9 +156,8 @@ lbank_altas(lua_State *L) {
 static int
 lbank_ptr(lua_State *L) {
 	struct sprite_bank *b = (struct sprite_bank *)luaL_checkudata(L, 1, "SOLUNA_SPRITEBANK");
-	lua_pushlightuserdata(L, b->rect);
-	lua_pushinteger(L, b->n);
-	return 2;
+	lua_pushlightuserdata(L, b);
+	return 1;
 }
 
 static int

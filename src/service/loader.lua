@@ -1,8 +1,9 @@
 local image = require "soluna.image"
 local spritemgr = require "soluna.spritemgr"
 local file = require "soluna.file"
+local datalist = require "soluna.datalist"
 
-local bank = spritemgr.newbank(65536, 1024)
+local sprite_bank
 
 local missing = {}
 
@@ -34,6 +35,11 @@ local filecache = setmetatable({} , { __index = fetchfile })
 
 local S = {}
 
+function S.init(config)
+	sprite_bank = spritemgr.newbank(config.max_sprite, config.texture_size)
+	return sprite_bank:ptr()
+end
+
 local sprite = {}
 
 function S.load(filename, offx, offy, x, y, w, h)
@@ -57,8 +63,8 @@ function S.load(filename, offx, offy, x, y, w, h)
 	offx = offx - cx
 	offy = offy - cy
 	
-	local id = bank:add(cw, ch, offx, offy)
-	bank:touch(id)
+	local id = sprite_bank:add(cw, ch, offx, offy)
+	sprite_bank:touch(id)
 	
 	local id = #sprite+1
 	sprite[id] = {
@@ -76,11 +82,10 @@ function S.load(filename, offx, offy, x, y, w, h)
 end
 
 -- todo: packing should be out of loader 
-function S.pack(width)
-	assert(width == 1024)
-	local texid, n = bank:pack()
+function S.pack()
+	local texid, n = sprite_bank:pack()
 
-	local r = bank:altas(texid)
+	local r = sprite_bank:altas(texid)
 	for id,v in pairs(r) do
 		local x = v >> 32
 		local y = v & 0xffffffff
@@ -91,10 +96,6 @@ function S.pack(width)
 		r[id] = { id = id, data = ptr, x = x, y = y, w = w, h = h, stride = c.w * 4, dx = obj.x, dy = obj.y }
 	end
 	return r
-end
-
-function S.bank_ptr()
-	return bank:ptr()
 end
 
 function S.write(id, filename)
