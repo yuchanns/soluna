@@ -8,7 +8,6 @@ int luaopen_embedsource(lua_State *L);
 int luaopen_appmessage(lua_State *L);
 int luaopen_applog(lua_State *L);
 int luaopen_image(lua_State *L);
-int luaopen_appinfo(lua_State *L);
 int luaopen_render(lua_State *L);
 int luaopen_spritemgr(lua_State *L);
 int luaopen_datalist(lua_State *L);
@@ -23,7 +22,6 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.appmessage", luaopen_appmessage},
 		{ "soluna.log", luaopen_applog },
 		{ "soluna.image", luaopen_image },
-		{ "soluna.appinfo", luaopen_appinfo },
 		{ "soluna.render", luaopen_render },
 		{ "soluna.spritemgr", luaopen_spritemgr },
 		{ "soluna.datalist", luaopen_datalist },

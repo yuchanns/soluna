@@ -83,13 +83,6 @@ if args.cpath then
 	package.cpath = args.cpath
 end
 
-local appinfo = require "soluna.appinfo"
-
-local app = {
-	width = appinfo.width(),
-	height = appinfo.height(),
-}
-
 start {
 	core = {
 		debuglog = "=", -- stdout
@@ -109,7 +102,7 @@ start {
 		},
         {
             name = "start",
-			args = { args, app },
+			args = { args, _G.app_info() },
         },
     },
 }

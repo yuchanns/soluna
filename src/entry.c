@@ -42,7 +42,18 @@ set_callback(lua_State *L) {
 	CTX->send_message_ud = lua_touserdata(L, 2);
 	CTX->send_log = lua_touserdata(L, 3);
 	CTX->send_log_ud = lua_touserdata(L, 4);
+
 	return 0;
+}
+
+static int
+get_appinfo(lua_State *L) {
+	lua_newtable(L);
+	lua_pushinteger(L, sapp_width());
+	lua_setfield(L, -2, "width");
+	lua_pushinteger(L, sapp_height());
+	lua_setfield(L, -2, "height");
+	return 1;
 }
 
 void soluna_openlibs(lua_State *L);
@@ -54,6 +65,8 @@ pmain(lua_State *L) {
 	soluna_openlibs(L);
 	lua_pushcfunction(L, set_callback);
 	lua_setglobal(L, "external_messsage");
+	lua_pushcfunction(L, get_appinfo);
+	lua_setglobal(L, "app_info");
 	int n = sargs_num_args();
 	luaL_checkstack(L, n+1, NULL);
 	int i;
@@ -233,30 +246,6 @@ app_event(const sapp_event* ev) {
 		send_app_message(message_create("message", ev->type, 0));
 		break;
 	}
-}
-
-static int
-lappinfo_width(lua_State *L) {
-	lua_pushinteger(L, sapp_width());
-	return 1;
-}
-
-static int
-lappinfo_height(lua_State *L) {
-	lua_pushinteger(L, sapp_height());
-	return 1;
-}
-
-int
-luaopen_appinfo(lua_State *L) {
-	lua_newtable(L);
-	luaL_Reg l[] = {
-		{ "width", lappinfo_width },
-		{ "height", lappinfo_height },
-		{ NULL , NULL },
-	};
-	luaL_newlib(L, l);
-	return 1;
 }
 
 sapp_desc
