@@ -16,8 +16,30 @@
 
 static stbi_uc const *
 get_buffer(lua_State *L, size_t *sz) {
-	const char *buffer = luaL_checklstring(L, 1, sz);
-	return (stbi_uc const *)buffer;
+	stbi_uc const * ret = NULL;
+	switch (lua_type(L, 1)) {
+	case LUA_TUSERDATA:
+		ret = (stbi_uc const *)lua_touserdata(L, 1);
+		*sz = lua_rawlen(L, 1);
+		break;
+	case LUA_TFUNCTION: {
+		lua_pushvalue(L, 1);
+		lua_call(L, 0, 3);
+		ret = (stbi_uc const*)lua_touserdata(L, -3);
+		*sz = (size_t)luaL_checkinteger(L, -2);
+		lua_copy(L, -1, 1);
+		int t = lua_type(L, 1);
+		if (t == LUA_TUSERDATA || t == LUA_TTABLE)
+			lua_toclose(L, 1);
+		lua_pop(L, 3);
+		break;
+	}
+	default:
+	case LUA_TSTRING:
+		ret = (stbi_uc const *)luaL_checklstring(L, 1, sz);
+		break;
+	}
+	return ret;
 }
 
 static int

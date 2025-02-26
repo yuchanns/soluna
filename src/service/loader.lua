@@ -1,21 +1,20 @@
 local image = require "soluna.image"
 local spritemgr = require "soluna.spritemgr"
+local file = require "soluna.file"
 
 local bank = spritemgr.newbank(65536, 1024)
 
 local missing = {}
 
 local function fetchfile(filecache, filename)
-	local f = io.open(filename, "rb")
-	if not f then
+	local content = file.loader(filename)
+	if not content then
 		if not missing[filename] then
 			missing[filename] = true
 			print("Missing file : " .. filename)
 		end
 		return
 	end
-	local content = f:read "a"
-	f:close()
 	local data, w, h = image.load(content)
 	if data == nil then
 		if not missing[filename] then

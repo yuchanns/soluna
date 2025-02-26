@@ -70,7 +70,7 @@ lfile_load(lua_State *L) {
 	const char *mode = luaL_optstring(L, 2, "rb");
 	FILE *f = fopen_utf8(filename, mode);
 	if (f == NULL)
-		return luaL_error(L, "Open %s failed", filename);
+		return 0;
 	fseek(f, 0, SEEK_END);
 	size_t sz = ftell(f);
 	fseek(f, 0, SEEK_SET);
@@ -95,7 +95,7 @@ lfile_load_string(lua_State *L) {
 	const char *mode = luaL_optstring(L, 2, "rb");
 	FILE *f = fopen_utf8(filename, mode);
 	if (f == NULL)
-		return luaL_error(L, "Open %s failed", filename);
+		return 0;
 	fseek(f, 0, SEEK_END);
 	size_t sz = ftell(f);
 	fseek(f, 0, SEEK_SET);
@@ -135,6 +135,8 @@ close_buffer(lua_State *L) {
 	struct file_buffer *buf = lua_touserdata(L, 1);
 	free(buf->ptr);
 	buf->ptr = NULL;
+	lua_pushnil(L);
+	lua_setmetatable(L, 1);
 	return 0;
 }
 
@@ -152,7 +154,7 @@ lfile_loader(lua_State *L) {
 	const char *mode = luaL_optstring(L, 2, "rb");
 	FILE *f = fopen_utf8(filename, mode);
 	if (f == NULL)
-		return luaL_error(L, "Open %s failed", filename);
+		return 0;
 	
 	struct file_buffer * buf = (struct file_buffer *)lua_newuserdatauv(L, sizeof(*buf), 0);
 	buf->ptr = NULL;
