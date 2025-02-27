@@ -20,7 +20,7 @@ local sprites = ltask.call(loader, "loadbundle", "asset/sprites.dl")
 local batch = spritemgr.newbatch()
 
 local batch_id = ltask.call(render, "register_batch", ltask.self())
-local quit
+local quit = false
 
 local function mainloop()
 	local count = 0
@@ -32,14 +32,23 @@ local function mainloop()
 		batch:add(sprites.avatar, 256, 256, scale, rad)
 		ltask.call(render, "submit_batch", batch_id, batch:ptr())
 	end
+	if quit ~= "finish" then
+		ltask.wakeup(quit)
+	end
+	quit = "finish"
 end
 
-ltask.fork(mainloop)
+local token = ltask.fork(mainloop)
 
 local S = {}
 
 function S.quit()
-	quit = true
+	if not quit then
+		quit = true
+	elseif quit ~= "finish" then
+		quit = {}
+		ltask.wait(quit)
+	end
 end
 
 return S

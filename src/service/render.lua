@@ -121,6 +121,10 @@ function S.quit()
 			ltask.wakeup((resp()))
 		end
 	end
+	-- double check
+	for addr in pairs(workers) do
+		ltask.call(addr, "quit")
+	end
 end
 
 function S.init(arg)
