@@ -824,84 +824,110 @@ struct sprite_object {
 
 #define MAX_OBJECT 32768
 
-static void
-submit_inst(lua_State *L, struct buffer *inst, struct sr_buffer *srb, struct draw_primitive *prim, int n) {
-	struct inst_object tmp[MAX_OBJECT];
-	int i;
-	for (i=0;i<n;i++) {
-		struct draw_primitive *p = &prim[i];
-		int index = srbuffer_add(srb, p->sr);
-		if (index < 0)
-			luaL_error(L, "sr buffer is full");
-		tmp[i].x = (float)p->x / 256.0f;
-		tmp[i].y = (float)p->y / 256.0f;
-		tmp[i].sr_index = (float)index;
-	}
-	sg_update_buffer(inst->handle, &(sg_range) { tmp, n * sizeof(tmp[0]) });
-}
+struct draw_buffer {
+	int n;
+	struct inst_object inst[MAX_OBJECT];
+	struct sprite_object spr[MAX_OBJECT];
+	struct sprite_bank * bank;
+	struct sr_buffer *srb;
+};
 
 static int
-submit_sprite(lua_State *L, struct buffer *sprite, struct sprite_bank * bank, struct draw_primitive *prim, int n, int *texid) {
-	if (n == 0)
-		return 0;
-	struct sprite_rect * rect = bank->rect;
-	int rect_n = bank->n;
+drawbuffer_append(lua_State *L) {
+	struct draw_buffer *db = (struct draw_buffer *)luaL_checkudata(L, 1, "SOLUNA_DRAWBUFFER");
+	struct draw_primitive *prim = (struct draw_primitive *)lua_touserdata(L, 2);
+	int prim_n = luaL_checkinteger(L, 3);
+	
+	// todo : append apart
+	if (prim_n > MAX_OBJECT) {
+		return luaL_error(L, "Too many sprite");
+	}
+	db->n = prim_n;
+	
+	struct sprite_rect * rect = db->bank->rect;
+	int rect_n = db->bank->n;
 	int index = prim[0].sprite - 1;
 	if (index < 0 || index >= rect_n)
 		return luaL_error(L, "Invalid sprite id %d", index);
+	
+	// todo : support more than one texture
+	
 	int tex = rect[index].texid;
-	*texid = tex;
 
-	struct sprite_object tmp[MAX_OBJECT];
 	int i;
-	for (i=0;i<n;i++) {
+	for (i=0;i<prim_n;i++) {
 		struct draw_primitive *p = &prim[i];
 		int index = p->sprite - 1;
 		if (index < 0 || index >= rect_n)
 			return luaL_error(L, "Invalid sprite id %d", index);
 		struct sprite_rect *r = &rect[index];
-		if (r->texid != tex)
-			break;
-		tmp[i].off = r->off;
-		tmp[i].u = r->u;
-		tmp[i].v = r->v;
+		if (r->texid != tex) {
+			// todo
+			return luaL_error(L, "More than one texture");
+		}
+		db->spr[i].off = r->off;
+		db->spr[i].u = r->u;
+		db->spr[i].v = r->v;
+		
+		int sr_index = srbuffer_add(db->srb, p->sr);
+		if (sr_index < 0)
+			luaL_error(L, "sr buffer is full");
+		db->inst[i].x = (float)p->x / 256.0f;
+		db->inst[i].y = (float)p->y / 256.0f;
+		db->inst[i].sr_index = (float)sr_index;
 	}
 
-	sg_update_buffer(sprite->handle, &(sg_range) { tmp, i * sizeof(tmp[0]) });
-
-	return i;
+	lua_pushinteger(L, tex);
+	return 1;
 }
 
 static int
-lsubmit_batch(lua_State *L) {
-	struct buffer *inst = (struct buffer *)luaL_checkudata(L, 1, "SOKOL_BUFFER");
-	int inst_size = luaL_checkinteger(L, 2);
-	struct buffer *sprite = (struct buffer *)luaL_checkudata(L, 3, "SOKOL_BUFFER");
-	int sprite_size = luaL_checkinteger(L, 4);
-	struct sr_buffer *srb = (struct sr_buffer *)luaL_checkudata(L, 5, "SOLUNA_SRBUFFER");
-	struct sprite_bank * bank = (struct sprite_bank *)lua_touserdata(L, 6);
-	struct draw_primitive *prim = (struct draw_primitive *)lua_touserdata(L, 7);
-	int prim_n = luaL_checkinteger(L, 8);
+drawbuffer_submit(lua_State *L) {
+	struct draw_buffer *db = (struct draw_buffer *)luaL_checkudata(L, 1, "SOLUNA_DRAWBUFFER");
 	
-	if (inst_size > MAX_OBJECT) {
-		inst_size = MAX_OBJECT;
-	}
-	if (sprite_size < inst_size) {
-		inst_size = sprite_size;
-	}
-
-	if (prim_n > inst_size) {
-		prim_n = inst_size;
-	}
+	struct buffer *inst = (struct buffer *)luaL_checkudata(L, 2, "SOKOL_BUFFER");
+	int inst_size = luaL_checkinteger(L, 3);
+	struct buffer *sprite = (struct buffer *)luaL_checkudata(L, 4, "SOKOL_BUFFER");
+	int sprite_size = luaL_checkinteger(L, 5);
 	
-	int texid;
-	prim_n = submit_sprite(L, sprite, bank, prim, prim_n, &texid);
-	submit_inst(L, inst, srb, prim, prim_n);
+	// todo
+	if (inst_size < db->n)
+		return luaL_error(L, "inst buffer is too small");
+	if (sprite_size < db->n)
+		return luaL_error(L, "sprite buffer is too small");
 
-	lua_pushinteger(L, prim_n);
-	lua_pushinteger(L, texid);
+	sg_update_buffer(sprite->handle, &(sg_range) { db->spr , db->n * sizeof(db->spr[0]) });
+	sg_update_buffer(inst->handle, &(sg_range) { db->inst, db->n * sizeof(db->inst[0]) });
+	
+	db->n = 0;
+	
+	return 0;
+}
 
-	return 2;
+static int
+ldrawbuffer(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	struct draw_buffer *db = (struct draw_buffer *)lua_newuserdatauv(L, sizeof(*db), 1);
+	db->n = 0;
+	db->bank = lua_touserdata(L, 1);
+	db->srb = luaL_checkudata(L, 2, "SOLUNA_SRBUFFER");
+	lua_pushvalue(L, 2);
+	lua_setiuservalue(L, -2, 1);
+	
+	if (luaL_newmetatable(L, "SOLUNA_DRAWBUFFER")) {
+		luaL_Reg l[] = {
+			{ "__index", NULL },
+			{ "append", drawbuffer_append },
+			{ "submit", drawbuffer_submit },
+			{ NULL, NULL },
+		};
+		luaL_setfuncs(L, l, 0);
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+	return 1;
 }
 
 int
@@ -916,7 +942,7 @@ luaopen_render(lua_State *L) {
 		{ "sampler", lsampler },
 		{ "draw", ldraw },
 		{ "srbuffer", lsrbuffer },
-		{ "submit_batch", lsubmit_batch },
+		{ "drawbuffer", ldrawbuffer },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

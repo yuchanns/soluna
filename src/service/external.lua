@@ -14,6 +14,7 @@ function command.frame(_, _, count)
 end
 
 function command.cleanup()
+	ltask.call(render, "quit")
 	ltask.send(1, "quit_ltask")
 end
 

@@ -1,7 +1,6 @@
 local ltask = require "ltask"
 local render = require "soluna.render"
 local image = require "soluna.image"
-local spritemgr = require "soluna.spritemgr"
 
 local barrier = {} ; do
 	local thread
@@ -29,32 +28,100 @@ local barrier = {} ; do
 	end
 end
 
+local batch = {} ; do
+	local thread
+	local submit_n = 0
+	function batch.register(addr)
+		local n = #batch + 1
+		batch[n] = {
+			source = addr
+		}
+		return n
+	end
+	function batch.wait()
+		if submit_n ~= #batch then
+			thread = ltask.current_token()
+			ltask.wait()
+		end
+		submit_n = 0
+	end
+	function batch.submit(id, ptr, size)
+		local q = batch[id]
+		local token = ltask.current_token()
+		local function func ()
+			return token, ptr, size
+		end
+		if q[1] == nil then
+			submit_n = submit_n + 1
+			if thread and submit_n == #batch then
+				ltask.wakeup(thread)
+				thread = nil
+			end
+			q[1] = func
+		else
+			q[#q+1] = func
+		end
+		ltask.wait()
+	end
+	function batch.consume(id)
+		local q = batch[id]
+		local r = assert(q[1])
+		local n = #q
+		for i = 1, n - 1 do
+			q[i] = q[i+1]
+		end
+		q[n] = nil
+		return r()
+	end
+end
+
 local function mainloop(STATE)
 	while true do
-		local rad = barrier.count * 3.1415927 / 180
-		local scale = math.sin(rad) + 1.2
-		STATE.batch:reset()
-		
-		STATE.pass:begin()
-			STATE.pipeline:apply()
-			STATE.uniform:apply()
-
-			STATE.batch:add(STATE.sprite_id, 256, 256, scale, rad)
-			local n, tex = render.submit_batch(STATE.inst, 128, STATE.sprite, 128, STATE.srbuffer_mem, STATE.bank_ptr, STATE.batch:ptr())
-			assert(n == 1 and tex == 0)
-			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
-
-			STATE.bindings:apply()
-			render.draw(0, 4, 1)
-		STATE.pass:finish()
-		render.submit()
+		-- todo: do not wait all batch commits
+		local batch_n = #batch
+		if batch_n > 0 then
+			batch.wait()
+			STATE.pass:begin()
+				STATE.pipeline:apply()
+				STATE.uniform:apply()
+				
+				for i = 1, batch_n do
+					local co, ptr, size = batch.consume(i)
+					local tex = STATE.drawbuffer:append(ptr, size)
+					assert(tex == 0)
+					ltask.wakeup(co)
+				end
+				STATE.drawbuffer:submit(STATE.inst, 128, STATE.sprite, 128)
+				STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
+				STATE.bindings:apply()
+				render.draw(0, 4, 1)
+			STATE.pass:finish()
+			render.submit()
+		end
 		barrier.wait()
 	end
 end
 
 local S = {}
 
-S.frame = barrier.trigger
+S.frame = assert(barrier.trigger)
+S.register_batch = assert(batch.register)
+S.submit_batch = assert(batch.submit)
+
+function S.quit()
+	local workers = {}
+	for _, v in ipairs(batch) do
+		workers[v.source] = true
+	end
+	for addr in pairs(workers) do
+		ltask.call(addr, "quit")
+	end
+	for _, v in ipairs(batch) do
+		for _, resp in ipairs(v) do
+			ltask.wakeup((resp()))
+		end
+	end
+end
 
 function S.init(arg)
 	local loader = ltask.uniqueservice "loader"
@@ -109,9 +176,9 @@ function S.init(arg)
 			color0 = 0x4080c0,
 		},
 		pipeline = render.pipeline "default",
-		bank_ptr = bank_ptr,
-		batch = spritemgr.newbatch(),
-		sprite_id = spr.avatar,
+--		bank_ptr = bank_ptr,
+--		batch = spritemgr.newbatch(),
+--		sprite_id = spr.avatar,
 	}
 	local bindings = STATE.pipeline:bindings()
 	bindings.vbuffer0 = inst_buffer
@@ -126,6 +193,8 @@ function S.init(arg)
 
 	STATE.srbuffer_mem = render.srbuffer()
 	STATE.bindings = bindings
+	
+	STATE.drawbuffer = render.drawbuffer(bank_ptr, STATE.srbuffer_mem)
 	
 	STATE.uniform = STATE.pipeline:uniform_slot(0):init {
 		tex_width = {
