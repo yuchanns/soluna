@@ -9,6 +9,7 @@
 #include "print_r.lua.h"
 #include "loader.lua.h"
 #include "spritebundle.lua.h"
+#include "render.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -48,6 +49,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(external)
 			REG_SOURCE(start)
 			REG_SOURCE(loader)
+			REG_SOURCE(render)
 		lua_setfield(L, -2, "service");
 	return 1;
 }
