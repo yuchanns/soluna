@@ -10,6 +10,8 @@
 #include "loader.lua.h"
 #include "spritebundle.lua.h"
 #include "render.lua.h"
+#include "settingdefault.dl.h"
+#include "setting.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -20,12 +22,25 @@
 	lua_pushcclosure(L, get_string, 2);	\
 	lua_setfield(L, -2, #name);
 
+#define REG_DATALIST(name) \
+	lua_pushlightuserdata(L, (void *)dl_##name);	\
+	lua_pushinteger(L, sizeof(dl_##name));	\
+	lua_pushcclosure(L, get_stringloader, 2);	\
+	lua_setfield(L, -2, #name);
+
 static int
 get_string(lua_State *L) {
 	const char * s = (const char *)lua_touserdata(L, lua_upvalueindex(1));
 	size_t sz = (size_t)lua_tointeger(L, lua_upvalueindex(2));
 	lua_pushlstring(L, s, sz);
 	return 1;
+}
+
+static int
+get_stringloader(lua_State *L) {
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_pushvalue(L, lua_upvalueindex(2));
+	return 2;
 }
 
 int
@@ -40,8 +55,9 @@ luaopen_embedsource(lua_State *L) {
 
 		lua_newtable(L);	// runtime
 			REG_SOURCE(spritebundle)
+			REG_SOURCE(setting)
 		lua_setfield(L, -2, "lib");
-			
+
 		lua_newtable(L);	// service
 			REG_SOURCE(log)
 			REG_SOURCE(root)
@@ -51,5 +67,9 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(loader)
 			REG_SOURCE(render)
 		lua_setfield(L, -2, "service");
+
+		lua_newtable(L);	// data list
+			REG_DATALIST(settingdefault)
+		lua_setfield(L, -2, "data");
 	return 1;
 }

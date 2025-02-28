@@ -3,24 +3,24 @@
 
 #include <stdint.h>
 
-#define MAX_SR 4096
-
 struct sr_mat {
 	float v[4];
 };
 
 struct sr_buffer {
 	int n;
-	int dirty;
+	int cap;
 	int current_n;
+	uint8_t dirty;
 	uint8_t current_frame;
-	uint8_t frame[MAX_SR];
-	uint16_t cache[MAX_SR];
-	uint32_t key[MAX_SR];
-	struct sr_mat data[MAX_SR];
+	uint8_t *frame;
+	uint16_t *cache;
+	uint32_t *key;
+	struct sr_mat *data;
 };
 
-void srbuffer_init(struct sr_buffer *SR);
+size_t srbuffer_size(int n);
+void srbuffer_init(struct sr_buffer *SR, int n);
 int srbuffer_add(struct sr_buffer *SR, uint32_t sr);
 void * srbuffer_commit(struct sr_buffer *SR, int *sz);
 

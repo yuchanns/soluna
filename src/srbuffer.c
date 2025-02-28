@@ -1,8 +1,39 @@
 #include "srbuffer.h"
 #include <math.h>
 
+static inline int
+pow2(int n) {
+	int m = 1 << 5;
+	while (m < n) {
+		m *= 2;
+	}
+	return m;
+}
+
+size_t
+srbuffer_size(int n) {
+	struct sr_buffer *dummy = NULL;
+	n = pow2(n);
+	size_t sz = sizeof(*dummy->frame) +
+		sizeof(*dummy->cache) +
+		sizeof(*dummy->key) +
+		sizeof(*dummy->data);
+	return sizeof(*dummy) + sz * n;
+}
+
 void
-srbuffer_init(struct sr_buffer *SR) {
+srbuffer_init(struct sr_buffer *SR, int n) {
+	n = pow2(n);
+	uint8_t *ptr = (uint8_t *)(SR + 1);
+	SR->data = (struct sr_mat *)ptr;
+	ptr += n * sizeof(SR->data[0]);
+	SR->key = (uint32_t *)ptr;
+	ptr += n * sizeof(SR->key[0]);
+	SR->cache = (uint16_t *)ptr;
+	ptr += n * sizeof(SR->cache[0]);
+	SR->frame = ptr;
+
+	SR->cap = n;
 	SR->n = 1;
 	SR->dirty = 1;
 	SR->current_frame = 0;
@@ -17,7 +48,7 @@ srbuffer_init(struct sr_buffer *SR) {
 
 int
 srbuffer_add(struct sr_buffer *SR, uint32_t v) {
-	int index = v % (MAX_SR - 1);
+	int index = v % (SR->cap - 1);
 	int slot = SR->cache[index];
 	if (slot < SR->n && v == SR->key[slot]) {
 		if (SR->frame[slot] != SR->current_frame) {
@@ -26,9 +57,9 @@ srbuffer_add(struct sr_buffer *SR, uint32_t v) {
 		}
 		return slot;
 	}
-	if (SR->n >= MAX_SR) {
+	if (SR->n >= SR->cap) {
 		int i;
-		for (i=1;i<MAX_SR;i++) {
+		for (i=1;i<SR->cap;i++) {
 			if (SR->key[i] == v) {
 				SR->cache[index] = i;
 				SR->frame[index] = SR->current_frame;
@@ -104,6 +135,7 @@ srbuffer_commit(struct sr_buffer *SR, int *sz) {
 #ifdef TEST_SRBUFFER_MAIN
 
 #include <stdio.h>
+#include <assert.h>
 #include "sprite_submit.h"
 
 static void
@@ -111,10 +143,14 @@ test(float x, float y, float scale, float rad, uint32_t *sr, float *ox, float *o
 	struct draw_primitive tmp;
 	const float pi = 3.1415927f;
 	sprite_set_sr(&tmp, scale, rad * pi / 180.0f);
-	struct sr_buffer buffer;
-	srbuffer_init(&buffer);
-	int index = srbuffer_add(&buffer, tmp.sr);
-	const float *mat = buffer.data[index].v;
+	union {
+		struct sr_buffer buffer;
+		uint8_t tmp[65535];
+	} u;
+	assert(srbuffer_size(1024) < sizeof(u.tmp));
+	srbuffer_init(&u.buffer, 1024);
+	int index = srbuffer_add(&u.buffer, tmp.sr);
+	const float *mat = u.buffer.data[index].v;
 	*ox = x * mat[0] + y * mat[1];
 	*oy = x * mat[2] + y * mat[3];
 	*sr = tmp.sr;

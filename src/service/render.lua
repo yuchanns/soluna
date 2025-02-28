@@ -1,6 +1,7 @@
 local ltask = require "ltask"
 local render = require "soluna.render"
 local image = require "soluna.image"
+local setting = require "soluna.setting"
 
 local barrier = {} ; do
 	local thread
@@ -76,6 +77,7 @@ local batch = {} ; do
 end
 
 local function mainloop(STATE)
+	local batch_size = setting.batch_size
 	while true do
 		-- todo: do not wait all batch commits
 		local batch_n = #batch
@@ -91,10 +93,10 @@ local function mainloop(STATE)
 					assert(tex == 0)
 					ltask.wakeup(co)
 				end
-				STATE.drawbuffer:submit(STATE.inst, 128, STATE.sprite, 128)
+				local n= STATE.drawbuffer:submit(STATE.inst, batch_size, STATE.sprite, batch_size)
 				STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 				STATE.bindings:apply()
-				render.draw(0, 4, 1)
+				render.draw(0, 4, n)
 			STATE.pass:finish()
 			render.submit()
 		end
@@ -130,7 +132,7 @@ end
 function S.init(arg)
 	local loader = ltask.uniqueservice "loader"
 
-	local texture_size = 1024
+	local texture_size = setting.texture_size
 	
 	local img = render.image {
 		width = texture_size,
@@ -141,25 +143,25 @@ function S.init(arg)
 		type = "vertex",
 		usage = "stream",
 		label = "texquad-instance",
-		size = 128 * 3 * 4,	-- 128 sizeof(float) * 3
+		size = render.buffer_size("inst", setting.batch_size),
 	}
 	local sr_buffer = render.buffer {
 		type = "storage",
 		usage = "dynamic",
 		label = "texquad-scalerot",
-		size = 4096 * 4 * 4,	-- 4096 float * 4
+		size = render.buffer_size("srbuffer", setting.srbuffer_size),
 	}
 	local sprite_buffer = render.buffer {
 		type = "storage",
 		usage = "stream",
 		label =  "texquad-scalerot",
-		size = 128 * 3 * 4, -- 128 int32 * 3
+		size = render.buffer_size("sprite", setting.batch_size),
 	}
 
 	-- todo: don't load texture here
 	
 	local bank_ptr = ltask.call(loader, "init", {
-		max_sprite = 65536,
+		max_sprite = setting.batch_size,
 		texture_size = texture_size,
 	})
 	
@@ -180,9 +182,6 @@ function S.init(arg)
 			color0 = 0x4080c0,
 		},
 		pipeline = render.pipeline "default",
---		bank_ptr = bank_ptr,
---		batch = spritemgr.newbatch(),
---		sprite_id = spr.avatar,
 	}
 	local bindings = STATE.pipeline:bindings()
 	bindings.vbuffer0 = inst_buffer
@@ -195,7 +194,7 @@ function S.init(arg)
 	STATE.srbuffer = assert(sr_buffer)
 	STATE.sprite = assert(sprite_buffer)
 
-	STATE.srbuffer_mem = render.srbuffer()
+	STATE.srbuffer_mem = render.srbuffer(setting.srbuffer_size)
 	STATE.bindings = bindings
 	
 	STATE.drawbuffer = render.drawbuffer(bank_ptr, STATE.srbuffer_mem)

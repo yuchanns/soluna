@@ -793,8 +793,10 @@ lsrbuffer_ptr(lua_State *L) {
 
 static int
 lsrbuffer(lua_State *L) {
-	struct sr_buffer *b = (struct sr_buffer *)lua_newuserdatauv(L, sizeof(*b), 0);
-	srbuffer_init(b);
+	int n = luaL_checkinteger(L, 1);
+	size_t sz = srbuffer_size(n);
+	struct sr_buffer *b = (struct sr_buffer *)lua_newuserdatauv(L, sz, 0);
+	srbuffer_init(b, n);
 	if (luaL_newmetatable(L, "SOLUNA_SRBUFFER")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
@@ -831,6 +833,24 @@ struct draw_buffer {
 	struct sprite_bank * bank;
 	struct sr_buffer *srb;
 };
+
+static int
+lbuffer_size(lua_State *L) {
+	const char * name = luaL_checkstring(L, 1);
+	int n = luaL_checkinteger(L, 2);
+	size_t sz = 0;
+	if (strcmp(name, "srbuffer") == 0) {
+		sz = sizeof(struct sr_mat);
+	} else if (strcmp(name, "inst") == 0) {
+		sz = sizeof(struct inst_object);
+	} else if (strcmp(name, "sprite") == 0) {
+		sz = sizeof(struct sprite_object);
+	} else {
+		return luaL_error(L, "Invalid buffer type %s", name);
+	}
+	lua_pushinteger(L, sz * n);
+	return 1;
+}
 
 static int
 drawbuffer_append(lua_State *L) {
@@ -899,9 +919,10 @@ drawbuffer_submit(lua_State *L) {
 	sg_update_buffer(sprite->handle, &(sg_range) { db->spr , db->n * sizeof(db->spr[0]) });
 	sg_update_buffer(inst->handle, &(sg_range) { db->inst, db->n * sizeof(db->inst[0]) });
 	
+	lua_pushinteger(L, db->n);
 	db->n = 0;
 	
-	return 0;
+	return 1;
 }
 
 static int
@@ -942,6 +963,7 @@ luaopen_render(lua_State *L) {
 		{ "sampler", lsampler },
 		{ "draw", ldraw },
 		{ "srbuffer", lsrbuffer },
+		{ "buffer_size", lbuffer_size },
 		{ "drawbuffer", ldrawbuffer },
 		{ NULL, NULL },
 	};

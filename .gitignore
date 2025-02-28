@@ -1,4 +1,5 @@
 bin/*.exe
 build/*.o
 build/*.lua.h
+build/*.dl.h
 build/*.exe

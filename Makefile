@@ -21,6 +21,7 @@ $(LUA_EXE) : $(LUASRC)
 
 COMPILE_C=$(CC) $(CFLAGS) -c -o $@ $<
 COMPILE_LUA=$(LUA_EXE) script/lua2c.lua $< $@
+COMPILE_DATALIST=$(LUA_EXE) script/datalist2c.lua $< $@
 
 LUA_O=$(BUILD)/onelua.o
 
@@ -53,7 +54,11 @@ LTASK_LUASRC=\
 
 LTASK_LUACODE=$(patsubst %.lua, $(BUILD)/%.lua.h, $(notdir $(LTASK_LUASRC)))
 
-$(LTASK_LUACODE) : | $(LUA_EXE)
+DATALIST_SRC=$(wildcard src/data/*.dl)
+
+DATALIST_CODE=$(patsubst %.dl, $(BUILD)/%.dl.h, $(notdir $(DATALIST_SRC)))
+
+$(LTASK_LUACODE) $(DATALIST_CODE) : | $(LUA_EXE)
 
 $(BUILD)/%.lua.h : 3rd/ltask/service/%.lua
 	$(COMPILE_LUA)
@@ -67,7 +72,10 @@ $(BUILD)/%.lua.h : src/lualib/%.lua
 $(BUILD)/%.lua.h : src/service/%.lua
 	$(COMPILE_LUA)
 
-$(BUILD)/soluna_embedlua.o : src/embedlua.c $(LTASK_LUACODE)
+$(BUILD)/%.dl.h : src/data/%.dl
+	$(COMPILE_DATALIST)
+
+$(BUILD)/soluna_embedlua.o : src/embedlua.c $(LTASK_LUACODE) $(DATALIST_CODE)
 	$(COMPILE_C) -I$(BUILD) $(LUAINC)
 
 $(BUILD)/soluna_%.o : src/%.c
