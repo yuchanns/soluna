@@ -143,7 +143,7 @@ function S.init(arg)
 		type = "vertex",
 		usage = "stream",
 		label = "texquad-instance",
-		size = render.buffer_size("inst", setting.batch_size),
+		size = render.buffer_size("inst", setting.draw_instance),
 	}
 	local sr_buffer = render.buffer {
 		type = "storage",
@@ -155,13 +155,13 @@ function S.init(arg)
 		type = "storage",
 		usage = "stream",
 		label =  "texquad-scalerot",
-		size = render.buffer_size("sprite", setting.batch_size),
+		size = render.buffer_size("sprite", setting.draw_instance),
 	}
 
 	-- todo: don't load texture here
 	
 	local bank_ptr = ltask.call(loader, "init", {
-		max_sprite = setting.batch_size,
+		max_sprite = setting.sprite_max,
 		texture_size = texture_size,
 	})
 	
