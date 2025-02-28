@@ -860,46 +860,114 @@ drawbuffer_append(lua_State *L) {
 	int prim_n = luaL_checkinteger(L, 3);
 	
 	// todo : append apart
-	if (prim_n > db->cap) {
+	if (db->n + prim_n > db->cap) {
 		return luaL_error(L, "Too many sprite");
 	}
-	db->n = prim_n;
-	
+	int base = db->n;
+
 	struct sprite_rect * rect = db->bank->rect;
 	int rect_n = db->bank->n;
-	int index = prim[0].sprite - 1;
-	if (index < 0 || index >= rect_n)
-		return luaL_error(L, "Invalid sprite id %d", index);
-	
-	// todo : support more than one texture
-	
-	int tex = rect[index].texid;
 
 	int i;
 	for (i=0;i<prim_n;i++) {
 		struct draw_primitive *p = &prim[i];
-		int index = p->sprite - 1;
-		if (index < 0 || index >= rect_n)
-			return luaL_error(L, "Invalid sprite id %d", index);
-		struct sprite_rect *r = &rect[index];
-		if (r->texid != tex) {
-			// todo
-			return luaL_error(L, "More than one texture");
-		}
-		db->spr[i].off = r->off;
-		db->spr[i].u = r->u;
-		db->spr[i].v = r->v;
 		
+		// calc scale/rot index
 		int sr_index = srbuffer_add(db->srb, p->sr);
-		if (sr_index < 0)
+		if (sr_index < 0) {
+			// todo: support multiply srbuffer
 			luaL_error(L, "sr buffer is full");
-		db->inst[i].x = (float)p->x / 256.0f;
-		db->inst[i].y = (float)p->y / 256.0f;
-		db->inst[i].sr_index = (float)sr_index;
+		}
+		db->inst[base].x = (float)p->x / 256.0f;
+		db->inst[base].y = (float)p->y / 256.0f;
+		db->inst[base].sr_index = (float)sr_index;
+		
+		int index = p->sprite;
+		if (index <= 0) {
+			// external material, skip next
+			db->spr[base].off = 0;
+			db->spr[base].u = 0;
+			db->spr[base].v = 0;
+			++i;
+		} else {
+			--index;
+			if (index >= rect_n)
+				return luaL_error(L, "Invalid sprite id %d", index);
+			struct sprite_rect *r = &rect[index];
+			db->spr[base].off = r->off;
+			db->spr[base].u = r->u;
+			db->spr[base].v = r->v;
+		}
+		++base;
 	}
+	
+	db->n = base;
 
-	lua_pushinteger(L, tex);
-	return 1;
+	return 0;
+}
+
+// 1 : self
+// 2 : prim_ptr
+// 3 : prim_offset
+// 4 : prim_n
+// ret 1 : texid
+// ret 2 : n
+static int
+drawbuffer_material(lua_State *L) {
+	struct draw_buffer *db = (struct draw_buffer *)luaL_checkudata(L, 1, "SOLUNA_DRAWBUFFER");
+	struct draw_primitive *prim = (struct draw_primitive *)lua_touserdata(L, 2);
+	int prim_offset = luaL_checkinteger(L, 3);
+	int prim_n = luaL_checkinteger(L, 4);
+	
+	if (prim_offset >= prim_n)
+		return 0;
+	
+	int first_index = prim[prim_offset].sprite;
+	int i;
+	int n = 1;
+	if (first_index <= 0) {
+		// external material
+		for (i=prim_offset+1;i<prim_n;i++) {
+			int index = prim[i].sprite;
+			if (index != first_index) {
+				break;
+			}
+			++n;
+		}
+		lua_pushinteger(L, first_index - 1);
+		lua_pushinteger(L, n);
+		return 2;
+	}
+	
+	struct sprite_rect * rect = db->bank->rect;
+	int rect_n = db->bank->n;
+	
+	if (first_index > rect_n)
+		return luaL_error(L, "Invalid sprite id %d", first_index);
+
+	int texid = rect[first_index-1].texid;
+
+	for (i=prim_offset+1;i<prim_n;i++) {
+		struct draw_primitive *p = &prim[i];
+		
+		int index = p->sprite;
+		if (index <= 0) {
+			// external material
+			break;
+		}
+		if (index > rect_n)
+			return luaL_error(L, "Invalid sprite id %d", index);
+		--index;
+		struct sprite_rect *r = &rect[index];
+		if (r->texid != texid)
+			break;
+		++n;
+	}
+	
+	lua_pushinteger(L, texid);
+	lua_pushinteger(L, n);
+
+	return 2;
 }
 
 static int
@@ -922,7 +990,7 @@ drawbuffer_submit(lua_State *L) {
 	
 	lua_pushinteger(L, db->n);
 	db->n = 0;
-	
+
 	return 1;
 }
 
@@ -947,6 +1015,7 @@ ldrawbuffer(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "append", drawbuffer_append },
+			{ "material", drawbuffer_material },
 			{ "submit", drawbuffer_submit },
 			{ NULL, NULL },
 		};

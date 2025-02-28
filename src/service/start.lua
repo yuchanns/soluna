@@ -27,9 +27,11 @@ local function mainloop()
 	while not quit do
 		count = count + 1
 		local rad = count * 3.1415927 / 180
-		local scale = math.sin(rad) + 1.2
+		local scale = math.sin(rad)
 		batch:reset()
-		batch:add(sprites.avatar, 256, 256, scale, rad)
+		batch:add(sprites.avatar, 256, 200, scale + 1.2, rad)
+		batch:add(sprites.avatar, 256, 400, scale + 1.2, -rad)
+		batch:add(sprites.avatar, 256, 600, - scale + 1.2, rad)
 		ltask.call(render, "submit_batch", batch_id, batch:ptr())
 	end
 	if quit ~= "finish" then

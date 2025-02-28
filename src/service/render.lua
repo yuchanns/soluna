@@ -50,7 +50,7 @@ local batch = {} ; do
 		local q = batch[id]
 		local token = ltask.current_token()
 		local function func ()
-			return token, ptr, size
+			return ptr, size, token
 		end
 		if q[1] == nil then
 			submit_n = submit_n + 1
@@ -83,20 +83,36 @@ local function mainloop(STATE)
 		local batch_n = #batch
 		if batch_n > 0 then
 			batch.wait()
+			for i = 1, batch_n do
+				local ptr, size = batch[i][1]()
+				STATE.drawbuffer:append(ptr, size)
+			end
+			
+			STATE.drawbuffer:submit(STATE.inst, batch_size, STATE.sprite, batch_size)
+			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 			STATE.pass:begin()
-				STATE.pipeline:apply()
-				STATE.uniform:apply()
-				
 				for i = 1, batch_n do
-					local co, ptr, size = batch.consume(i)
-					local tex = STATE.drawbuffer:append(ptr, size)
-					assert(tex == 0)
-					ltask.wakeup(co)
+					local ptr, size, token = batch.consume(i)
+					local offset = 0
+					local draw_n = 0
+					while true do
+						local tex, n = STATE.drawbuffer:material(ptr, offset, size)
+						if tex == nil then
+							break
+						elseif tex >= 0 then
+							assert(tex == 0)	-- todo : support multiple textures
+							offset = offset + n
+							STATE.pipeline:apply()
+							STATE.uniform:apply()
+							STATE.bindings:apply()
+							render.draw(draw_n, 4, n)
+							draw_n = draw_n + n
+						else
+							offset = offset + n * 2
+						end
+					end
+					ltask.wakeup(token)
 				end
-				local n= STATE.drawbuffer:submit(STATE.inst, batch_size, STATE.sprite, batch_size)
-				STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
-				STATE.bindings:apply()
-				render.draw(0, 4, n)
 			STATE.pass:finish()
 			render.submit()
 		end
@@ -120,7 +136,8 @@ function S.quit()
 	end
 	for _, v in ipairs(batch) do
 		for _, resp in ipairs(v) do
-			ltask.wakeup((resp()))
+			local _,_, token = resp()
+			ltask.wakeup(token)
 		end
 	end
 	-- double check

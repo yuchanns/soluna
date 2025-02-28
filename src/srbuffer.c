@@ -81,7 +81,7 @@ srbuffer_add(struct sr_buffer *SR, uint32_t v) {
 				break;
 			}
 			++slot;
-			if (slot > SR->n)
+			if (slot >= SR->n)
 				slot -= SR->n;
 		}
 	}
