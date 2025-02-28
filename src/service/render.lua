@@ -197,7 +197,7 @@ function S.init(arg)
 	STATE.srbuffer_mem = render.srbuffer(setting.srbuffer_size)
 	STATE.bindings = bindings
 	
-	STATE.drawbuffer = render.drawbuffer(bank_ptr, STATE.srbuffer_mem)
+	STATE.drawbuffer = render.drawbuffer(setting.draw_instance, bank_ptr, STATE.srbuffer_mem)
 	
 	STATE.uniform = STATE.pipeline:uniform_slot(0):init {
 		tex_width = {

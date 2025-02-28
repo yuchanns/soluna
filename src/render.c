@@ -824,12 +824,13 @@ struct sprite_object {
 	uint32_t v;
 };
 
-#define MAX_OBJECT 32768
+//#define MAX_OBJECT 32768
 
 struct draw_buffer {
 	int n;
-	struct inst_object inst[MAX_OBJECT];
-	struct sprite_object spr[MAX_OBJECT];
+	int cap;
+	struct inst_object *inst;
+	struct sprite_object *spr;
 	struct sprite_bank * bank;
 	struct sr_buffer *srb;
 };
@@ -859,7 +860,7 @@ drawbuffer_append(lua_State *L) {
 	int prim_n = luaL_checkinteger(L, 3);
 	
 	// todo : append apart
-	if (prim_n > MAX_OBJECT) {
+	if (prim_n > db->cap) {
 		return luaL_error(L, "Too many sprite");
 	}
 	db->n = prim_n;
@@ -927,12 +928,19 @@ drawbuffer_submit(lua_State *L) {
 
 static int
 ldrawbuffer(lua_State *L) {
-	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
-	struct draw_buffer *db = (struct draw_buffer *)lua_newuserdatauv(L, sizeof(*db), 1);
+	int cap = luaL_checkinteger(L, 1);
+	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
+	size_t sz = sizeof(struct draw_buffer) + cap * (sizeof(struct inst_object) + sizeof(struct sprite_object));
+	struct draw_buffer *db = (struct draw_buffer *)lua_newuserdatauv(L, sz, 1);
+	db->cap = cap;
 	db->n = 0;
-	db->bank = lua_touserdata(L, 1);
-	db->srb = luaL_checkudata(L, 2, "SOLUNA_SRBUFFER");
-	lua_pushvalue(L, 2);
+	db->bank = lua_touserdata(L, 2);
+	db->srb = luaL_checkudata(L, 3, "SOLUNA_SRBUFFER");
+	uint8_t * ptr = (uint8_t *)(db + 1);
+	db->inst = (struct inst_object *)ptr;
+	ptr += cap * sizeof(struct inst_object);
+	db->spr = (struct sprite_object *)ptr;
+	lua_pushvalue(L, 3);
 	lua_setiuservalue(L, -2, 1);
 	
 	if (luaL_newmetatable(L, "SOLUNA_DRAWBUFFER")) {
