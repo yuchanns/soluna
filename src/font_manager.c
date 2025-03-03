@@ -74,6 +74,7 @@ struct font_manager {
 	struct truetype_font* ttf;
 	void *L;
 	int dpi_perinch;
+	int dirty;
 	mutex_t mutex;
 	uint8_t texture_buffer[FONT_MANAGER_TEXSIZE*FONT_MANAGER_TEXSIZE];
 };
@@ -223,7 +224,7 @@ touch_slot(struct font_manager *F, int slotid) {
 }
 
 // 1 exist in cache. 0 not exist in cache , call font_manager_update. -1 failed.
-int
+static int
 font_manager_touch_unsafe(struct font_manager *F, int font, int codepoint, struct font_glyph *glyph) {
 	int cp = codepoint_key(font, codepoint);
 	int slot = hash_lookup(F, cp);
@@ -273,11 +274,13 @@ font_manager_touch_unsafe(struct font_manager *F, int font, int codepoint, struc
 
 	if (last_node->version == F->version)	// full ?
 		return -1;
+		
+	F->dirty = 1;
 
 	return 0;
 }
 
-int
+static int
 font_manager_touch(struct font_manager *F, int font, int codepoint, struct font_glyph *glyph) {
 	lock(F);
 	int r = font_manager_touch_unsafe(F, font, codepoint, glyph);
@@ -358,28 +361,13 @@ font_manager_scale(struct font_manager *F, struct font_glyph *glyph, int size) {
 	uscale(&glyph->h, size);
 }
 
-const char *
-font_manager_glyph(struct font_manager *F, int fontid, int codepoint, int size, struct font_glyph *g, struct font_glyph *og) {
-	int updated = font_manager_touch(F, fontid, codepoint, g);
-	*og = *g;
-	if (is_space_codepoint(codepoint)){
-		updated = 1;	// not need update
-		og->w = og->h = 0;
-	}
-	font_manager_scale(F, g, size);
-	if (updated == 0) {
-		const char * err = font_manager_update(F, fontid, codepoint, og, F->texture_buffer, FONT_MANAGER_TEXSIZE);
-		if (err) {
-			return err;
-		}
-	}
-	return NULL;
-}
-
 static const char *
-font_manager_update_unsafe(struct font_manager *F, int fontid, int codepoint, struct font_glyph *glyph, uint8_t *buffer, int stride) {
+font_manager_update(struct font_manager *F, int fontid, int codepoint, struct font_glyph *glyph, uint8_t *buffer, int stride) {
 	if (fontid <= 0)
 		return "Invalid font";
+
+	lock(F);
+	
 	int cp = codepoint_key(fontid, codepoint);
 	int slot = hash_lookup(F, cp);
 	if (slot < 0) {
@@ -387,6 +375,7 @@ font_manager_update_unsafe(struct font_manager *F, int fontid, int codepoint, st
 		slot = F->priority[F->list_head].prev;
 		struct priority_list *last_node = &F->priority[slot];
 		if (last_node->version == F->version) {	// full ?
+			unlock(F);
 			return "Too many glyph";
 		}
 		last_node->version = F->version;
@@ -398,13 +387,6 @@ font_manager_update_unsafe(struct font_manager *F, int fontid, int codepoint, st
 	const struct stbtt_fontinfo *fi = get_ttf_unsafe(F, fontid);
 	float scale = stbtt_ScaleForMappingEmToPixels(fi, ORIGINAL_SIZE);
 
-	int width, height, xoff, yoff;
-
-	unsigned char *tmp = stbtt_GetCodepointSDF(fi, scale, codepoint, DISTANCE_OFFSET, ONEDGE_VALUE, PIXEL_DIST_SCALE, &width, &height, &xoff, &yoff);
-	if (tmp == NULL) {
-		return NULL;
-	}
-
 	struct font_slot *s = &F->slots[slot];
 	s->codepoint_key = cp;
 	s->offset_x = glyph->offset_x;
@@ -414,6 +396,15 @@ font_manager_update_unsafe(struct font_manager *F, int fontid, int codepoint, st
 	s->w = glyph->w;
 	s->h = glyph->h;
 
+	unlock(F);
+	
+	int width, height, xoff, yoff;
+
+	unsigned char *tmp = stbtt_GetCodepointSDF(fi, scale, codepoint, DISTANCE_OFFSET, ONEDGE_VALUE, PIXEL_DIST_SCALE, &width, &height, &xoff, &yoff);
+	if (tmp == NULL) {
+		return NULL;
+	}
+	
 	glyph->u = (slot % FONT_MANAGER_SLOTLINE) * FONT_MANAGER_GLYPHSIZE;
 	glyph->v = (slot / FONT_MANAGER_SLOTLINE) * FONT_MANAGER_GLYPHSIZE;
 	
@@ -444,19 +435,32 @@ font_manager_update_unsafe(struct font_manager *F, int fontid, int codepoint, st
 }
 
 const char *
-font_manager_update(struct font_manager *F, int fontid, int codepoint, struct font_glyph *glyph, uint8_t *buffer, int stride) {
-	lock(F);
-	const char *r = font_manager_update_unsafe(F, fontid, codepoint, glyph, buffer, stride);
-	unlock(F);
-	return r;
+font_manager_glyph(struct font_manager *F, int fontid, int codepoint, int size, struct font_glyph *g, struct font_glyph *og) {
+	int updated = font_manager_touch(F, fontid, codepoint, g);
+	*og = *g;
+	if (is_space_codepoint(codepoint)){
+		updated = 1;	// not need update
+		og->w = og->h = 0;
+	}
+	font_manager_scale(F, g, size);
+	if (updated == 0) {
+		const char * err = font_manager_update(F, fontid, codepoint, og, F->texture_buffer, FONT_MANAGER_TEXSIZE);
+		if (err) {
+			return err;
+		}
+	}
+	return NULL;
 }
 
-void
+int
 font_manager_flush(struct font_manager *F) {
 	// todo : atomic inc
 	lock(F);
+	int dirty = F->dirty;
 	++F->version;
+	F->dirty = 0;
 	unlock(F);
+	return dirty;
 }
 
 static void
@@ -507,6 +511,7 @@ font_manager_init(struct font_manager *F, void *L) {
 	F->ttf = NULL;
 	F->L = NULL;
 	F->dpi_perinch = 0;
+	F->dirty = 0;
 // init priority list
 	int i;
 	for (i=0;i<FONT_MANAGER_SLOTS;i++) {

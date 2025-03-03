@@ -26,8 +26,9 @@ getF(lua_State *L) {
 static int
 lsubmit(lua_State *L){
 	struct font_manager *F = getF(L);
-	font_manager_flush(F);
-	return 0;
+	int dirty = font_manager_flush(F);
+	lua_pushboolean(L, dirty);
+	return 1;
 }
 
 static int

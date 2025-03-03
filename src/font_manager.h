@@ -17,9 +17,9 @@ int font_manager_addfont_with_family(struct font_manager *F, const char* family)
 void font_manager_fontheight(struct font_manager *F, int fontid, int size, int *ascent, int *descent, int *lineGap);
 int font_manager_pixelsize(struct font_manager *F, int fontid, int pointsize);
 const char* font_manager_glyph(struct font_manager *F, int fontid, int codepoint, int size, struct font_glyph *g, struct font_glyph *og);
-int font_manager_touch(struct font_manager *, int font, int codepoint, struct font_glyph *glyph);
-const char * font_manager_update(struct font_manager *, int font, int codepoint, struct font_glyph *glyph, uint8_t *buffer, int stride);
-void font_manager_flush(struct font_manager *);
+//int font_manager_touch(struct font_manager *, int font, int codepoint, struct font_glyph *glyph);
+//const char * font_manager_update(struct font_manager *, int font, int codepoint, struct font_glyph *glyph, uint8_t *buffer, int stride);
+int font_manager_flush(struct font_manager *);
 void font_manager_scale(struct font_manager *F, struct font_glyph *glyph, int size);
 int font_manager_underline(struct font_manager *F, int fontid, int size, float *underline_position, float *thickness);
 float font_manager_sdf_mask(struct font_manager *F);
