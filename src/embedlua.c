@@ -12,6 +12,7 @@
 #include "render.lua.h"
 #include "settingdefault.dl.h"
 #include "setting.lua.h"
+#include "fontmgr.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -51,6 +52,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(service)
 			REG_SOURCE(main)
 			REG_SOURCE(print_r)
+			REG_SOURCE(fontmgr)
 		lua_setfield(L, -2, "runtime");
 
 		lua_newtable(L);	// runtime

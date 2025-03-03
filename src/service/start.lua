@@ -7,12 +7,6 @@ local external = ltask.spawn "external"
 
 ltask.call(external, "init", app)
 
-local filename = arg[1]
-
-if filename then
-	dofile(filename)
-end
-
 local sprites
 local loader = ltask.uniqueservice "loader"
 local render = ltask.uniqueservice "render"
@@ -51,6 +45,14 @@ function S.quit()
 		quit = {}
 		ltask.wait(quit)
 	end
+end
+
+-- todo:
+
+local filename = arg[1]
+
+if filename then
+	dofile(filename)
 end
 
 return S

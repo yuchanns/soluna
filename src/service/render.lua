@@ -2,6 +2,19 @@ local ltask = require "ltask"
 local render = require "soluna.render"
 local image = require "soluna.image"
 local setting = require "soluna.setting"
+local embedsource = require "soluna.embedsource"
+
+local font = {} ;  do
+	local mgr = require "soluna.font.manager"
+
+	function font.init()
+		mgr.init(embedsource.runtime.fontmgr(), "@src/lualib/fontmgr.lua")
+	end
+	
+	function font.shutdown()
+		mgr.shutdown()
+	end
+end
 
 local barrier = {} ; do
 	local thread
@@ -144,9 +157,11 @@ function S.quit()
 	for addr in pairs(workers) do
 		ltask.call(addr, "quit")
 	end
+	font.shutdown()
 end
 
 function S.init(arg)
+	font.init()
 	local loader = ltask.uniqueservice "loader"
 
 	local texture_size = setting.texture_size

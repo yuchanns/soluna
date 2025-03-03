@@ -14,38 +14,12 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
 
-static stbi_uc const *
-get_buffer(lua_State *L, size_t *sz) {
-	stbi_uc const * ret = NULL;
-	switch (lua_type(L, 1)) {
-	case LUA_TUSERDATA:
-		ret = (stbi_uc const *)lua_touserdata(L, 1);
-		*sz = lua_rawlen(L, 1);
-		break;
-	case LUA_TFUNCTION: {
-		lua_pushvalue(L, 1);
-		lua_call(L, 0, 3);
-		ret = (stbi_uc const*)lua_touserdata(L, -3);
-		*sz = (size_t)luaL_checkinteger(L, -2);
-		lua_copy(L, -1, 1);
-		int t = lua_type(L, 1);
-		if (t == LUA_TUSERDATA || t == LUA_TTABLE)
-			lua_toclose(L, 1);
-		lua_pop(L, 3);
-		break;
-	}
-	default:
-	case LUA_TSTRING:
-		ret = (stbi_uc const *)luaL_checklstring(L, 1, sz);
-		break;
-	}
-	return ret;
-}
+#include "luabuffer.h"
 
 static int
 image_load(lua_State *L) {
 	size_t sz;
-	const stbi_uc *buffer = get_buffer(L, &sz);
+	const stbi_uc *buffer = luaL_getbuffer(L, &sz);
 	int x,y,c;
 	stbi_uc * img = stbi_load_from_memory(buffer, sz, &x, &y, &c, 4);
 	if (img == NULL) {
@@ -63,7 +37,7 @@ image_load(lua_State *L) {
 static int
 image_info(lua_State *L) {
 	size_t sz;
-	const stbi_uc* buffer = get_buffer(L, &sz);
+	const stbi_uc* buffer = luaL_getbuffer(L, &sz);
 	int x, y, c;
 	if (!stbi_info_from_memory(buffer, sz, &x, &y, &c)) {
 		lua_pushnil(L);
@@ -200,7 +174,7 @@ remove_right(struct rect *r) {
 static int
 image_crop(lua_State *L) {
 	size_t sz;
-	const uint8_t * image = get_buffer(L, &sz);
+	const uint8_t * image = luaL_getbuffer(L, &sz);
 	int x = luaL_checkinteger(L, 2);
 	int y = luaL_checkinteger(L, 3);
 	if (x * y * 4 != sz)
@@ -296,7 +270,41 @@ image_new(lua_State *L) {
 	int w = luaL_checkinteger(L, 1);
 	int h = luaL_checkinteger(L, 2);
 	uint8_t * buffer = (uint8_t *)lua_newuserdatauv(L, w * h * 4, 0);
-	memset(buffer, 0, w * h * 4);
+	
+	size_t sz = 0;
+	const char *data = NULL;
+	switch (lua_type(L, 3)) {
+	case LUA_TSTRING:
+		data = lua_tolstring(L, 3, &sz);
+		break;
+	case LUA_TLIGHTUSERDATA:
+		data = (const char *)lua_touserdata(L, 3);
+		sz = luaL_checkinteger(L, 4);
+		break;
+	case LUA_TUSERDATA:
+		data = (const char *)lua_touserdata(L, 3);
+		sz = lua_rawlen(L, 3);
+		break;
+	}
+	if (sz == 0) {
+		memset(buffer, 0, w * h * 4);
+	} else if (sz == w*h*4) {
+		memcpy(buffer, data, sz);
+	} else if (sz == w*h) {
+		int i,j;
+		uint8_t *dst = buffer;
+		const uint8_t *src = (const uint8_t *)data;
+		for (i=0;i<h;i++) {
+			for (j=0;j<w;j++) {
+				uint8_t alpha = *src;
+				dst[0] = dst[1] = dst[2] = dst[3] = alpha;
+				++src;
+				dst += 4;
+			}
+		}
+	} else {
+		return luaL_error(L, "Invalid image data size");
+	}
 
 	lua_newtable(L);
 
@@ -369,7 +377,7 @@ check_canvas(lua_State *L, int index) {
 	
 	int t = lua_getiuservalue(L, index, 1);
 	if (t != LUA_TSTRING && t != LUA_TUSERDATA && t != LUA_TLIGHTUSERDATA)
-		return luaL_error(L, "Invalid canvas");
+		return luaL_error(L, "Invalid canvas at %d", index);
 	lua_pop(L, 1);
 	return t;
 }
