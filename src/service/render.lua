@@ -91,6 +91,8 @@ end
 
 local function mainloop(STATE)
 	local batch_size = setting.batch_size
+	local inst_stride = render.buffer_size("inst")
+
 	while true do
 		-- todo: do not wait all batch commits
 		local batch_n = #batch
@@ -107,19 +109,21 @@ local function mainloop(STATE)
 				for i = 1, batch_n do
 					local ptr, size, token = batch.consume(i)
 					local offset = 0
-					local draw_n = 0
+					local baseinst = 0
 					while true do
 						local tex, n = STATE.drawbuffer:material(ptr, offset, size)
 						if tex == nil then
 							break
 						elseif tex >= 0 then
 							assert(tex == 0)	-- todo : support multiple textures
+							STATE.uniform.baseinst = baseinst
+							STATE.bindings.voffset0 = baseinst * inst_stride
 							offset = offset + n
 							STATE.pipeline:apply()
 							STATE.uniform:apply()
 							STATE.bindings:apply()
-							render.draw(draw_n, 4, n)
-							draw_n = draw_n + n
+							render.draw(0, 4, n)
+							baseinst = baseinst + n
 						else
 							offset = offset + n * 2
 						end
@@ -186,7 +190,7 @@ function S.init(arg)
 	local sprite_buffer = render.buffer {
 		type = "storage",
 		usage = "stream",
-		label =  "texquad-scalerot",
+		label =  "texquad-sprite",
 		size = render.buffer_size("sprite", setting.draw_instance),
 	}
 
@@ -232,13 +236,13 @@ function S.init(arg)
 	STATE.drawbuffer = render.drawbuffer(setting.draw_instance, bank_ptr, STATE.srbuffer_mem)
 	
 	STATE.uniform = STATE.pipeline:uniform_slot(0):init {
-		tex_width = {
+		tex_size = {
 			offset = 0,
 			type = "float",
 		},
-		tex_height = {
+		baseinst = {
 			offset = 4,
-			type = "float",
+			type = "int",
 		},
 		framesize = {
 			offset = 8,
@@ -247,8 +251,8 @@ function S.init(arg)
 		},
 	}
 	STATE.uniform.framesize = { 2/arg.width, -2/arg.height }
-	STATE.uniform.tex_width = 1/texture_size
-	STATE.uniform.tex_height = 1/texture_size
+	STATE.uniform.tex_size = 1/texture_size
+	STATE.uniform.baseinst = 0
 	
 	barrier.init(mainloop, STATE)
 end

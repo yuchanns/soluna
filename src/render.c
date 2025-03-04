@@ -365,6 +365,7 @@ struct uniform {
 };
 
 #define UNIFORM_TYPE_FLOAT 1
+#define UNIFORM_TYPE_INT 2
 
 static int
 luniform_apply(lua_State *L) {
@@ -398,6 +399,29 @@ set_uniform_float(lua_State *L, int index, struct uniform *p, int offset, int n)
 	}
 }
 
+static void
+set_uniform_int(lua_State *L, int index, struct uniform *p, int offset, int n) {
+	if (n <= 1) {
+		int v = luaL_checkinteger(L, index);
+		memcpy(p->buffer + offset, &v, sizeof(int));
+	} else {
+		luaL_checktype(L, index, LUA_TTABLE);
+		if (lua_rawlen(L, index) != n || n >= MAX_ARRAY_SIZE) {
+			luaL_error(L, "Need table size %d", n);
+		}
+		int v[MAX_ARRAY_SIZE];
+		int i;
+		for (i=0;i<n;i++) {
+			if (lua_rawgeti(L, index, i+1) != LUA_TNUMBER) {
+				luaL_error(L, "Invalid value in table[%d]", i+1);
+			}
+			v[i] = lua_tointeger(L, -1);
+			lua_pop(L, 1);
+		}
+		memcpy(p->buffer + offset, &v, sizeof(int) * n);
+	}
+}
+
 static int
 luniform_set(lua_State *L) {
 	struct uniform * p = (struct uniform *)lua_touserdata(L, 1);
@@ -415,6 +439,9 @@ luniform_set(lua_State *L) {
 	switch (type) {
 	case UNIFORM_TYPE_FLOAT:
 		set_uniform_float(L, 3, p, offset, n);
+		break;
+	case UNIFORM_TYPE_INT:
+		set_uniform_int(L, 3, p, offset, n);
 		break;
 	default:
 		return luaL_error(L, "Invalid uniform setter typeid %s (%d)", lua_tostring(L, 2), type);
@@ -453,6 +480,9 @@ set_key(lua_State *L, int index, struct uniform *u) {
 	if (strcmp(type, "float") == 0) {
 		tid = UNIFORM_TYPE_FLOAT;
 		typesize = sizeof(float);
+	} else if (strcmp(type, "int") == 0) {
+		tid = UNIFORM_TYPE_INT;
+		typesize = sizeof(int);
 	} else {
 		luaL_error(L, "Invalid .%s .type %s", key, type);
 	}
@@ -595,9 +625,20 @@ lbindings_set(lua_State *L) {
 			b->bind.vertex_buffers[n] = check_buffer(L, 3, SG_BUFFERTYPE_VERTEXBUFFER);
 			return 0;
 		}
+	} else if ((tail=cmphead(key, "voffset"))) {
+		int n = *tail - '0';
+		if (n >= 0 || n < b->desc->vertexbuffer) {
+			b->bind.vertex_buffer_offsets[n] = luaL_checkinteger(L, 3);
+			return 0;
+		}
 	} else if ((tail=cmphead(key, "ibuffer"))) {
 		if (*tail == 0 && b->desc->indexbuffer) {
 			b->bind.index_buffer = check_buffer(L, 3, SG_BUFFERTYPE_INDEXBUFFER);
+			return 0;
+		}
+	} else if ((tail=cmphead(key, "ivoffset"))) {
+		if (*tail == 0 && b->desc->indexbuffer) {
+			b->bind.index_buffer_offset = luaL_checkinteger(L, 3);
 			return 0;
 		}
 	} else if ((tail=cmphead(key, "sbuffer_"))) {
@@ -838,7 +879,7 @@ struct draw_buffer {
 static int
 lbuffer_size(lua_State *L) {
 	const char * name = luaL_checkstring(L, 1);
-	int n = luaL_checkinteger(L, 2);
+	int n = luaL_optinteger(L, 2, 1);
 	size_t sz = 0;
 	if (strcmp(name, "srbuffer") == 0) {
 		sz = sizeof(struct sr_mat);
@@ -949,7 +990,7 @@ drawbuffer_material(lua_State *L) {
 
 	for (i=prim_offset+1;i<prim_n;i++) {
 		struct draw_primitive *p = &prim[i];
-		
+
 		int index = p->sprite;
 		if (index <= 0) {
 			// external material

@@ -1,6 +1,7 @@
 @vs vs
 layout(binding=0) uniform vs_params {
-	vec2 texsize;
+	float texsize;
+	int baseinst;
 	vec2 framesize;
 };
 
@@ -27,7 +28,7 @@ in vec3 position;
 out vec2 uv;
 
 void main() {
-	sprite s = spr[gl_InstanceIndex]; 
+	sprite s = spr[gl_InstanceIndex+baseinst];
 	ivec2 u2 = ivec2(s.u >> 16 , s.u & 0xffff);
 	ivec2 v2 = ivec2(s.v >> 16 , s.v & 0xffff);
 	ivec2 off = ivec2(s.offset >> 16 , s.offset & 0xffff) - 0x8000;
