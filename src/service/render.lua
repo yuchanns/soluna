@@ -3,6 +3,8 @@ local render = require "soluna.render"
 local image = require "soluna.image"
 local setting = require "soluna.setting"
 local embedsource = require "soluna.embedsource"
+local drawmgr = require "soluna.drawmgr"
+local defmat = require "soluna.material.default"
 
 local font = {} ;  do
 	local mgr = require "soluna.font.manager"
@@ -91,47 +93,45 @@ end
 
 local function mainloop(STATE)
 	local batch_size = setting.batch_size
-	local inst_stride = render.buffer_size("inst")
 
 	while true do
 		-- todo: do not wait all batch commits
 		local batch_n = #batch
 		if batch_n > 0 then
 			batch.wait()
+			STATE.drawmgr:reset()
+			STATE.material:reset()
 			for i = 1, batch_n do
 				local ptr, size = batch[i][1]()
-				STATE.drawbuffer:append(ptr, size)
+				STATE.drawmgr:append(ptr, size)
 			end
-			
-			STATE.drawbuffer:submit(STATE.inst, batch_size, STATE.sprite, batch_size)
+			local draw_n = #STATE.drawmgr
+			for i = 1, draw_n do
+				local mat, ptr, n, tex = STATE.drawmgr(i)
+				if mat == 0 then
+					assert(tex == 0)
+					STATE.material:submit(ptr, n)
+				end
+				-- todo : external material
+			end
 			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 			STATE.pass:begin()
-				for i = 1, batch_n do
-					local ptr, size, token = batch.consume(i)
-					local offset = 0
-					local baseinst = 0
-					while true do
-						local tex, n = STATE.drawbuffer:material(ptr, offset, size)
-						if tex == nil then
-							break
-						elseif tex >= 0 then
-							assert(tex == 0)	-- todo : support multiple textures
-							STATE.uniform.baseinst = baseinst
-							STATE.bindings.voffset0 = baseinst * inst_stride
-							offset = offset + n
-							STATE.pipeline:apply()
-							STATE.uniform:apply()
-							STATE.bindings:apply()
-							render.draw(0, 4, n)
-							baseinst = baseinst + n
-						else
-							offset = offset + n * 2
-						end
+				for i = 1, draw_n do
+					local mat, ptr, n = STATE.drawmgr(i)
+					if mat == 0 then
+						STATE.material:update(ptr, n)
+						STATE.pipeline:apply()
+						STATE.uniform:apply()
+						STATE.bindings:apply()
+						render.draw(0, 4, n)
 					end
-					ltask.wakeup(token)
 				end
 			STATE.pass:finish()
 			render.submit()
+			for i = 1, batch_n do
+				local ptr, size, token = batch.consume(i)
+				ltask.wakeup(token)
+			end
 		end
 		barrier.wait()
 	end
@@ -233,7 +233,7 @@ function S.init(arg)
 	STATE.srbuffer_mem = render.srbuffer(setting.srbuffer_size)
 	STATE.bindings = bindings
 	
-	STATE.drawbuffer = render.drawbuffer(setting.draw_instance, bank_ptr, STATE.srbuffer_mem)
+	STATE.drawmgr = drawmgr.new(bank_ptr, setting.draw_instance)
 	
 	STATE.uniform = STATE.pipeline:uniform_slot(0):init {
 		tex_size = {
@@ -253,7 +253,16 @@ function S.init(arg)
 	STATE.uniform.framesize = { 2/arg.width, -2/arg.height }
 	STATE.uniform.tex_size = 1/texture_size
 	STATE.uniform.baseinst = 0
-	
+
+	STATE.material = defmat.new {
+		inst_buffer = inst_buffer,
+		sprite_buffer = sprite_buffer,
+		bindings = bindings,
+		uniform = STATE.uniform,
+		sr_buffer = STATE.srbuffer_mem,
+		sprite_bank = bank_ptr,
+	}
+
 	barrier.init(mainloop, STATE)
 end
 

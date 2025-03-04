@@ -14,9 +14,6 @@ struct draw_batch;
 
 struct draw_batch * batch_new(int size);
 struct draw_primitive * batch_reserve(struct draw_batch *, int size);
-//void batch_grab(struct draw_batch *);
-//int batch_release(struct draw_batch *);
-//int batch_busy(struct draw_batch *);
 void batch_delete(struct draw_batch *);
 
 #endif

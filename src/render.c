@@ -156,6 +156,15 @@ lbuffer_update(lua_State *L) {
 }
 
 static int
+lbuffer_ref(lua_State *L) {
+	struct buffer *p = (struct buffer *)luaL_checkudata(L, 1, "SOKOL_BUFFER");
+	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
+	sg_buffer *ref = (sg_buffer *)lua_touserdata(L, 2);
+	*ref = p->handle;
+	return 0;
+}
+
+static int
 lbuffer(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	struct buffer * p = (struct buffer *)lua_newuserdatauv(L, sizeof(*p), 0);
@@ -183,6 +192,7 @@ lbuffer(lua_State *L) {
 	if (luaL_newmetatable(L, "SOKOL_BUFFER")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
+			{ "__call", lbuffer_ref },
 			{ "update", lbuffer_update },
 			{ NULL, NULL },
 		};
@@ -370,7 +380,7 @@ struct uniform {
 static int
 luniform_apply(lua_State *L) {
 	struct uniform * p = (struct uniform *)luaL_checkudata(L, 1, "SOKOL_UNIFORM");
-	sg_apply_uniforms(UB_vs_params, &(sg_range){ p->buffer, p->size });
+	sg_apply_uniforms(p->slot, &(sg_range){ p->buffer, p->size });
 	return 0;
 }
 
@@ -540,6 +550,15 @@ luniform_init(lua_State *L) {
 }
 
 static int
+luniform_ref(lua_State *L) {
+	struct uniform * p = (struct uniform *)luaL_checkudata(L, 1, "SOKOL_UNIFORM");
+	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
+	uint8_t **ref = (uint8_t **)lua_touserdata(L, 2);
+	*ref = &p->buffer[0];
+	return 0;
+}
+
+static int
 create_uniform(lua_State *L, struct uniform_desc *desc) {
 	size_t sz = desc->size + sizeof(struct uniform) - 1;
 	struct uniform * u = (struct uniform *)lua_newuserdatauv(L, sz, 1);
@@ -549,6 +568,7 @@ create_uniform(lua_State *L, struct uniform_desc *desc) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "__newindex", luniform_set },
+			{ "__call", luniform_ref },
 			{ "apply", luniform_apply },
 			{ "init", luniform_init },
 			{ NULL, NULL },
@@ -678,6 +698,15 @@ lbindings_apply(lua_State *L) {
 }
 
 static int
+lbindings_ref(lua_State *L) {
+	struct bindings * b = (struct bindings *)luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
+	sg_bindings **ref = (sg_bindings **)lua_touserdata(L, 2);
+	*ref = &b->bind;
+	return 0;
+}
+
+static int
 lpipeline_bindings(lua_State *L) {
 	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
 	struct bindings * b = (struct bindings *)lua_newuserdatauv(L, sizeof(*b), 1);
@@ -689,6 +718,7 @@ lpipeline_bindings(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "__newindex", lbindings_set },
+			{ "__call", lbindings_ref },
 			{ "apply", lbindings_apply },
 			{ NULL, NULL },
 		};
@@ -894,181 +924,6 @@ lbuffer_size(lua_State *L) {
 	return 1;
 }
 
-static int
-drawbuffer_append(lua_State *L) {
-	struct draw_buffer *db = (struct draw_buffer *)luaL_checkudata(L, 1, "SOLUNA_DRAWBUFFER");
-	struct draw_primitive *prim = (struct draw_primitive *)lua_touserdata(L, 2);
-	int prim_n = luaL_checkinteger(L, 3);
-	
-	// todo : append apart
-	if (db->n + prim_n > db->cap) {
-		return luaL_error(L, "Too many sprite");
-	}
-	int base = db->n;
-
-	struct sprite_rect * rect = db->bank->rect;
-	int rect_n = db->bank->n;
-
-	int i;
-	for (i=0;i<prim_n;i++) {
-		struct draw_primitive *p = &prim[i];
-		
-		// calc scale/rot index
-		int sr_index = srbuffer_add(db->srb, p->sr);
-		if (sr_index < 0) {
-			// todo: support multiply srbuffer
-			luaL_error(L, "sr buffer is full");
-		}
-		db->inst[base].x = (float)p->x / 256.0f;
-		db->inst[base].y = (float)p->y / 256.0f;
-		db->inst[base].sr_index = (float)sr_index;
-		
-		int index = p->sprite;
-		if (index <= 0) {
-			// external material, skip next
-			db->spr[base].off = 0;
-			db->spr[base].u = 0;
-			db->spr[base].v = 0;
-			++i;
-		} else {
-			--index;
-			if (index >= rect_n)
-				return luaL_error(L, "Invalid sprite id %d", index);
-			struct sprite_rect *r = &rect[index];
-			db->spr[base].off = r->off;
-			db->spr[base].u = r->u;
-			db->spr[base].v = r->v;
-		}
-		++base;
-	}
-	
-	db->n = base;
-
-	return 0;
-}
-
-// 1 : self
-// 2 : prim_ptr
-// 3 : prim_offset
-// 4 : prim_n
-// ret 1 : texid
-// ret 2 : n
-static int
-drawbuffer_material(lua_State *L) {
-	struct draw_buffer *db = (struct draw_buffer *)luaL_checkudata(L, 1, "SOLUNA_DRAWBUFFER");
-	struct draw_primitive *prim = (struct draw_primitive *)lua_touserdata(L, 2);
-	int prim_offset = luaL_checkinteger(L, 3);
-	int prim_n = luaL_checkinteger(L, 4);
-	
-	if (prim_offset >= prim_n)
-		return 0;
-	
-	int first_index = prim[prim_offset].sprite;
-	int i;
-	int n = 1;
-	if (first_index <= 0) {
-		// external material
-		for (i=prim_offset+1;i<prim_n;i++) {
-			int index = prim[i].sprite;
-			if (index != first_index) {
-				break;
-			}
-			++n;
-		}
-		lua_pushinteger(L, first_index - 1);
-		lua_pushinteger(L, n);
-		return 2;
-	}
-	
-	struct sprite_rect * rect = db->bank->rect;
-	int rect_n = db->bank->n;
-	
-	if (first_index > rect_n)
-		return luaL_error(L, "Invalid sprite id %d", first_index);
-
-	int texid = rect[first_index-1].texid;
-
-	for (i=prim_offset+1;i<prim_n;i++) {
-		struct draw_primitive *p = &prim[i];
-
-		int index = p->sprite;
-		if (index <= 0) {
-			// external material
-			break;
-		}
-		if (index > rect_n)
-			return luaL_error(L, "Invalid sprite id %d", index);
-		--index;
-		struct sprite_rect *r = &rect[index];
-		if (r->texid != texid)
-			break;
-		++n;
-	}
-	
-	lua_pushinteger(L, texid);
-	lua_pushinteger(L, n);
-
-	return 2;
-}
-
-static int
-drawbuffer_submit(lua_State *L) {
-	struct draw_buffer *db = (struct draw_buffer *)luaL_checkudata(L, 1, "SOLUNA_DRAWBUFFER");
-	
-	struct buffer *inst = (struct buffer *)luaL_checkudata(L, 2, "SOKOL_BUFFER");
-	int inst_size = luaL_checkinteger(L, 3);
-	struct buffer *sprite = (struct buffer *)luaL_checkudata(L, 4, "SOKOL_BUFFER");
-	int sprite_size = luaL_checkinteger(L, 5);
-	
-	// todo
-	if (inst_size < db->n)
-		return luaL_error(L, "inst buffer is too small");
-	if (sprite_size < db->n)
-		return luaL_error(L, "sprite buffer is too small");
-
-	sg_update_buffer(sprite->handle, &(sg_range) { db->spr , db->n * sizeof(db->spr[0]) });
-	sg_update_buffer(inst->handle, &(sg_range) { db->inst, db->n * sizeof(db->inst[0]) });
-	
-	lua_pushinteger(L, db->n);
-	db->n = 0;
-
-	return 1;
-}
-
-static int
-ldrawbuffer(lua_State *L) {
-	int cap = luaL_checkinteger(L, 1);
-	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
-	size_t sz = sizeof(struct draw_buffer) + cap * (sizeof(struct inst_object) + sizeof(struct sprite_object));
-	struct draw_buffer *db = (struct draw_buffer *)lua_newuserdatauv(L, sz, 1);
-	db->cap = cap;
-	db->n = 0;
-	db->bank = lua_touserdata(L, 2);
-	db->srb = luaL_checkudata(L, 3, "SOLUNA_SRBUFFER");
-	uint8_t * ptr = (uint8_t *)(db + 1);
-	db->inst = (struct inst_object *)ptr;
-	ptr += cap * sizeof(struct inst_object);
-	db->spr = (struct sprite_object *)ptr;
-	lua_pushvalue(L, 3);
-	lua_setiuservalue(L, -2, 1);
-	
-	if (luaL_newmetatable(L, "SOLUNA_DRAWBUFFER")) {
-		luaL_Reg l[] = {
-			{ "__index", NULL },
-			{ "append", drawbuffer_append },
-			{ "material", drawbuffer_material },
-			{ "submit", drawbuffer_submit },
-			{ NULL, NULL },
-		};
-		luaL_setfuncs(L, l, 0);
-
-		lua_pushvalue(L, -1);
-		lua_setfield(L, -2, "__index");
-	}
-	lua_setmetatable(L, -2);
-	return 1;
-}
-
 int
 luaopen_render(lua_State *L) {
 	luaL_checkversion(L);
@@ -1082,7 +937,6 @@ luaopen_render(lua_State *L) {
 		{ "draw", ldraw },
 		{ "srbuffer", lsrbuffer },
 		{ "buffer_size", lbuffer_size },
-		{ "drawbuffer", ldrawbuffer },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

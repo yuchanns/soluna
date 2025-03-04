@@ -15,6 +15,8 @@ int luaopen_soluna_file(lua_State *L);
 int luaopen_font_truetype(lua_State *L);
 int luaopen_font_manager(lua_State *L);
 int luaopen_font(lua_State *L);
+int luaopen_drawmgr(lua_State *L);
+int luaopen_material_default(lua_State *L);
 
 void soluna_embed(lua_State* L) {
     static const luaL_Reg modules[] = {
@@ -27,6 +29,8 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.image", luaopen_image },
 		{ "soluna.render", luaopen_render },
 		{ "soluna.spritemgr", luaopen_spritemgr },
+		{ "soluna.drawmgr", luaopen_drawmgr },
+		{ "soluna.material.default", luaopen_material_default },
 		{ "soluna.datalist", luaopen_datalist },
 		{ "soluna.file", luaopen_soluna_file },
 		{ "soluna.font", luaopen_font },
