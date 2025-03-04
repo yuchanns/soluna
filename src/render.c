@@ -732,6 +732,15 @@ lpipeline_bindings(lua_State *L) {
 }
 
 static int
+lpipeline_ref(lua_State *L) {
+	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
+	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
+	sg_pipeline *ref = (sg_pipeline *)lua_touserdata(L, 2);
+	*ref = p->pip;
+	return 0;
+}
+
+static int
 lpipeline(lua_State *L) {
 	const char * name = luaL_checkstring(L, 1);
 	struct pipeline * pip = (struct pipeline *)lua_newuserdatauv(L, sizeof(*pip), 0);
@@ -745,6 +754,7 @@ lpipeline(lua_State *L) {
 	if (luaL_newmetatable(L, "SOKOL_PIPELINE")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
+			{ "__call", lpipeline_ref },
 			{ "apply", lpipeline_apply },
 			{ "uniform_slot", lpipe_uniform_slot },
 			{ "bindings", lpipeline_bindings },

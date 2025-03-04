@@ -21,6 +21,7 @@ struct buffer_data {
 };
 
 struct material_default {
+	sg_pipeline pip;
 	sg_buffer inst;
 	sg_buffer sprite;
 	sg_bindings *bind;
@@ -83,14 +84,21 @@ lmateraial_default_submit(lua_State *L) {
 }
 
 static int
-lmateraial_default_update(lua_State *L) {
+lmateraial_default_draw(lua_State *L) {
 	struct material_default *m = (struct material_default *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_DEFAULT");
 //	struct draw_primitive *prim = lua_touserdata(L, 2);
 	int prim_n = luaL_checkinteger(L, 3);
+//	int tex_id = luaL_checkinteger(L, 4);
 	int draw_n = m->draw_n;
 	m->uniform->baseinst = draw_n;
 	m->bind->vertex_buffer_offsets[0] += draw_n * sizeof(struct inst_object);
 	m->draw_n += prim_n;
+
+	sg_apply_pipeline(m->pip);
+	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
+	sg_apply_bindings(m->bind);
+	sg_draw(0, 4, prim_n);
+
 	return 0;
 }
 
@@ -115,12 +123,13 @@ ref_object(lua_State *L, void *ptr, int uv_index, const char *key, const char *l
 static int
 lnew_material_default(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	struct material_default *m = (struct material_default *)lua_newuserdatauv(L, sizeof(*m), 4);
+	struct material_default *m = (struct material_default *)lua_newuserdatauv(L, sizeof(*m), 6);
 	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->sprite, 2, "sprite_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->bind, 3, "bindings", "SOKOL_BINDINGS", 0);
 	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 0);
-	ref_object(L, &m->srbuffer, 5, "sr_buffer", "SOLUNA_SRBUFFER", 1);
+	ref_object(L, &m->pip, 5, "pipeline", "SOKOL_PIPELINE", 0);
+	ref_object(L, &m->srbuffer, 6, "sr_buffer", "SOLUNA_SRBUFFER", 1);
 	if (lua_getfield(L, 1, "sprite_bank") != LUA_TLIGHTUSERDATA) {
 		return luaL_error(L, "Missing .sprite_bank");
 	}
@@ -133,7 +142,7 @@ lnew_material_default(lua_State *L) {
 			{ "__index", NULL },
 			{ "reset", lmateraial_default_reset },
 			{ "submit", lmateraial_default_submit },
-			{ "update", lmateraial_default_update },
+			{ "draw", lmateraial_default_draw },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);

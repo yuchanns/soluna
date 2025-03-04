@@ -117,13 +117,9 @@ local function mainloop(STATE)
 			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 			STATE.pass:begin()
 				for i = 1, draw_n do
-					local mat, ptr, n = STATE.drawmgr(i)
+					local mat, ptr, n, tex = STATE.drawmgr(i)
 					if mat == 0 then
-						STATE.material:update(ptr, n)
-						STATE.pipeline:apply()
-						STATE.uniform:apply()
-						STATE.bindings:apply()
-						render.draw(0, 4, n)
+						STATE.material:draw(ptr, n, tex)
 					end
 				end
 			STATE.pass:finish()
@@ -261,6 +257,7 @@ function S.init(arg)
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
 		sprite_bank = bank_ptr,
+		pipeline = STATE.pipeline,
 	}
 
 	barrier.init(mainloop, STATE)
