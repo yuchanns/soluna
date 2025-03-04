@@ -28,7 +28,6 @@ struct material_default {
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
 	struct sprite_bank *bank;
-	int draw_n;
 };
 
 static int
@@ -36,7 +35,6 @@ lmateraial_default_reset(lua_State *L) {
 	struct material_default *m = (struct material_default *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_DEFAULT");
 	m->uniform->baseinst = 0;
 	m->bind->vertex_buffer_offsets[0] = 0;
-	m->draw_n = 0;
 	return 0;
 }
 
@@ -89,15 +87,14 @@ lmateraial_default_draw(lua_State *L) {
 //	struct draw_primitive *prim = lua_touserdata(L, 2);
 	int prim_n = luaL_checkinteger(L, 3);
 //	int tex_id = luaL_checkinteger(L, 4);
-	int draw_n = m->draw_n;
-	m->uniform->baseinst = draw_n;
-	m->bind->vertex_buffer_offsets[0] += draw_n * sizeof(struct inst_object);
-	m->draw_n += prim_n;
 
 	sg_apply_pipeline(m->pip);
 	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
 	sg_apply_bindings(m->bind);
 	sg_draw(0, 4, prim_n);
+	
+	m->uniform->baseinst += prim_n;
+	m->bind->vertex_buffer_offsets[0] += prim_n * sizeof(struct inst_object);
 
 	return 0;
 }
@@ -134,7 +131,6 @@ lnew_material_default(lua_State *L) {
 		return luaL_error(L, "Missing .sprite_bank");
 	}
 	m->bank = lua_touserdata(L, -1);
-	m->draw_n = 0;
 	lua_pop(L, 1);
 	
 	if (luaL_newmetatable(L, "SOLUNA_MATERIAL_DEFAULT")) {
