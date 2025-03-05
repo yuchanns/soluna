@@ -30,14 +30,6 @@ struct material_default {
 	struct sprite_bank *bank;
 };
 
-static int
-lmateraial_default_reset(lua_State *L) {
-	struct material_default *m = (struct material_default *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_DEFAULT");
-	m->uniform->baseinst = 0;
-	m->bind->vertex_buffer_offsets[0] = 0;
-	return 0;
-}
-
 static void
 submit(lua_State *L, struct material_default *m, struct draw_primitive *prim, int n) {
 	struct sprite_rect *rect = m->bank->rect;
@@ -136,7 +128,6 @@ lnew_material_default(lua_State *L) {
 	if (luaL_newmetatable(L, "SOLUNA_MATERIAL_DEFAULT")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
-			{ "reset", lmateraial_default_reset },
 			{ "submit", lmateraial_default_submit },
 			{ "draw", lmateraial_default_draw },
 			{ NULL, NULL },

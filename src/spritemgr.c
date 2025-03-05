@@ -3,6 +3,7 @@
 #include "batch.h"
 
 #include <stdint.h>
+#include <string.h>
 #include <lua.h>
 #include <lauxlib.h>
 
@@ -204,22 +205,70 @@ lbatch_reset(lua_State *L) {
 	return 0;
 }
 
-static int
-lbatch_add(lua_State *L) {
-	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+static struct draw_primitive *
+batch_add_sprite(lua_State *L, struct batch *b) {
 	int n = b->n;
 	struct draw_primitive * p = batch_reserve(b->b, n + 1);
 	if (p == NULL)
-		return luaL_error(L, "Out of memory");
+		luaL_error(L, "Out of memory");
 	
 	p += n;
 	
 	int id = luaL_checkinteger(L, 2);
+	if (id <= 0)
+		luaL_error(L, "Invalid sprite id %d", id);
+
+	p->sprite = id;
+	b->n = n + 1;
+
+	return p;
+}
+
+static struct draw_primitive *
+batch_add_material(lua_State *L, struct batch *b) {
+	int n = b->n;
+	struct draw_primitive * p = batch_reserve(b->b, n + 2);
+	if (p == NULL)
+		luaL_error(L, "Out of memory");
+
+	p += n;
+	
+	if (lua_getiuservalue(L, 2, 1) != LUA_TNUMBER)
+		luaL_error(L, "Invalid material object");
+	int matid = lua_tointeger(L, -1);
+	if (matid <= 0)
+		luaL_error(L, "Invalid material id %d", matid);
+	lua_pop(L, 1);
+	
+	p->sprite = -matid;
+	
+	int sz = lua_rawlen(L, 2);
+	if (sz > sizeof(struct draw_primitive))
+		luaL_error(L, "Invalid material object size (%d > %d)", sz, sizeof(struct draw_primitive));
+	
+	memcpy(p+1, lua_touserdata(L, 2), sz);
+
+	return p;
+}
+
+static int
+lbatch_add(lua_State *L) {
+	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+	struct draw_primitive *p;
+	switch (lua_type(L, 2)) {
+	case LUA_TNUMBER:
+		p = batch_add_sprite(L, b);
+		break;
+	case LUA_TUSERDATA:
+		p = batch_add_material(L, b);
+		break;
+	default:
+		return luaL_error(L, "Invalid type %s", lua_typename(L, lua_type(L, 2)));
+	}
 	float x = luaL_checknumber(L, 3);
 	float y = luaL_checknumber(L, 4);
 	
 	sprite_set_xy(p, x, y);
-	p->sprite = id;
 	if (lua_gettop(L) > 4) {
 		float scale = luaL_optnumber(L, 5, 1);
 		float rot = luaL_optnumber(L, 6, 0);
@@ -228,7 +277,6 @@ lbatch_add(lua_State *L) {
 		p->sr = 0;
 	}
 	
-	b->n = n + 1;
 	return 0;
 }
 

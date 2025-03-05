@@ -100,7 +100,8 @@ local function mainloop(STATE)
 		if batch_n > 0 then
 			batch.wait()
 			STATE.drawmgr:reset()
-			STATE.material:reset()
+			STATE.bindings.voffset0 = 0
+			STATE.uniform.baseinst = 0
 			for i = 1, batch_n do
 				local ptr, size = batch[i][1]()
 				STATE.drawmgr:append(ptr, size)
