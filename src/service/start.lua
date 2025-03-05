@@ -1,11 +1,20 @@
 local ltask = require "ltask"
 local spritemgr = require "soluna.spritemgr"
+local mattext = require "soluna.material.text"
+local font = require "soluna.font"
+local file = require "soluna.file"
 
 local arg, app = ...
 
 local external = ltask.spawn "external"
 
 ltask.call(external, "init", app)
+
+local function font_init()
+	local loader = file.loader "msyh.ttc"
+	font.import(loader)
+	return font.name ""
+end
 
 local sprites
 local loader = ltask.uniqueservice "loader"
@@ -14,7 +23,13 @@ local sprites = ltask.call(loader, "loadbundle", "asset/sprites.dl")
 local batch = spritemgr.newbatch()
 
 local batch_id = ltask.call(render, "register_batch", ltask.self())
+local font_id = font_init()
 local quit = false
+
+local function text(c)
+	local cp = utf8.codepoint(c)
+	return mattext.char(cp, font_id, 24, 0xffffff)
+end
 
 local function mainloop()
 	local count = 0
@@ -24,7 +39,9 @@ local function mainloop()
 		local scale = math.sin(rad)
 		batch:reset()
 		batch:add(sprites.avatar, 256, 200, scale + 1.2, rad)
+		batch:add(text "你", 10, 30)
 		batch:add(sprites.avatar, 256, 400, scale + 1.2, -rad)
+		batch:add(text "好", 40, 60)
 		batch:add(sprites.avatar, 256, 600, - scale + 1.2, rad)
 		ltask.call(render, "submit_batch", batch_id, batch:ptr())
 	end

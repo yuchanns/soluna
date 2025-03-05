@@ -5,16 +5,29 @@ local setting = require "soluna.setting"
 local embedsource = require "soluna.embedsource"
 local drawmgr = require "soluna.drawmgr"
 local defmat = require "soluna.material.default"
+local textmat = require "soluna.material.text"
+local app = require "soluna.app"
 
 local font = {} ;  do
 	local mgr = require "soluna.font.manager"
+	local fontapi = require "soluna.font"
+	local texture_ptr
 
 	function font.init()
 		mgr.init(embedsource.runtime.fontmgr(), "@src/lualib/fontmgr.lua")
+		font.texture_size = fontapi.texture_size
+		font.cobj = fontapi.cobj()
+		texture_ptr = fontapi.texture()
 	end
 	
 	function font.shutdown()
 		mgr.shutdown()
+	end
+	
+	function font.submit(img)
+		if fontapi.submit() then
+			img:update(texture_ptr)
+		end
 	end
 end
 
@@ -112,15 +125,24 @@ local function mainloop(STATE)
 				if mat == 0 then
 					assert(tex == 0)
 					STATE.material:submit(ptr, n)
+				else
+					assert(mat == 1)
+					-- text
+					STATE.material_text:submit(ptr, n)
 				end
-				-- todo : external material
 			end
 			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 			STATE.pass:begin()
+			font.submit(STATE.font_texture)
 				for i = 1, draw_n do
 					local mat, ptr, n, tex = STATE.drawmgr(i)
 					if mat == 0 then
+						STATE.bindings.image_tex = STATE.textures[tex+1]
 						STATE.material:draw(ptr, n, tex)
+					else
+						assert(mat == 1)
+						STATE.bindings.image_tex = STATE.font_texture
+						STATE.material_text:draw(ptr, n)
 					end
 				end
 			STATE.pass:finish()
@@ -130,6 +152,7 @@ local function mainloop(STATE)
 				ltask.wakeup(token)
 			end
 		end
+		app.nextframe()
 		barrier.wait()
 	end
 end
@@ -159,9 +182,12 @@ function S.quit()
 		ltask.call(addr, "quit")
 	end
 	font.shutdown()
+	app.frameready(false)
+	app.nextframe()
 end
 
 function S.init(arg)
+	app.frameready(true)
 	font.init()
 	local loader = ltask.uniqueservice "loader"
 
@@ -223,6 +249,13 @@ function S.init(arg)
 	bindings.image_tex = img
 	bindings.sampler_smp = render.sampler { label = "texquad-sampler" }
 	
+	STATE.textures = { img }
+	STATE.font_texture = render.image {
+		width = font.texture_size,
+		height = font.texture_size,
+		pixel_format = "R8",
+	}
+	
 	STATE.inst = assert(inst_buffer)
 	STATE.srbuffer = assert(sr_buffer)
 	STATE.sprite = assert(sprite_buffer)
@@ -252,13 +285,23 @@ function S.init(arg)
 	STATE.uniform.baseinst = 0
 
 	STATE.material = defmat.new {
-		inst_buffer = inst_buffer,
-		sprite_buffer = sprite_buffer,
-		bindings = bindings,
+		inst_buffer = STATE.inst,
+		sprite_buffer = STATE.sprite,
+		bindings = STATE.bindings,
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
 		sprite_bank = bank_ptr,
 		pipeline = STATE.pipeline,
+	}
+	
+	STATE.material_text = textmat.normal {
+		inst_buffer = STATE.inst,
+		sprite_buffer = STATE.sprite,
+		bindings = STATE.bindings,
+		uniform = STATE.uniform,
+		sr_buffer = STATE.srbuffer_mem,
+		pipeline = STATE.pipeline,
+		font_manager = font.cobj,
 	}
 
 	barrier.init(mainloop, STATE)

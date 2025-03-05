@@ -239,14 +239,16 @@ batch_add_material(lua_State *L, struct batch *b) {
 	if (matid <= 0)
 		luaL_error(L, "Invalid material id %d", matid);
 	lua_pop(L, 1);
-	
+
 	p->sprite = -matid;
-	
+
 	int sz = lua_rawlen(L, 2);
 	if (sz > sizeof(struct draw_primitive))
 		luaL_error(L, "Invalid material object size (%d > %d)", sz, sizeof(struct draw_primitive));
 	
 	memcpy(p+1, lua_touserdata(L, 2), sz);
+
+	b->n = n + 2;
 
 	return p;
 }

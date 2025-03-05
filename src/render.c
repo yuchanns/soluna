@@ -22,8 +22,7 @@ struct buffer {
 
 struct image {
 	sg_image img;
-	int width;
-	int height;
+	int size;
 };
 
 struct sampler {
@@ -560,7 +559,7 @@ luniform_ref(lua_State *L) {
 
 static int
 create_uniform(lua_State *L, struct uniform_desc *desc) {
-	size_t sz = desc->size + sizeof(struct uniform) - 1;
+	size_t sz = desc->size + offsetof(struct uniform, buffer);
 	struct uniform * u = (struct uniform *)lua_newuserdatauv(L, sz, 1);
 	u->slot = desc->slot;
 	u->size = desc->size;
@@ -773,14 +772,27 @@ static int
 limage_update(lua_State *L) {
 	struct image *p = (struct image *)luaL_checkudata(L, 1, "SOKOL_IMAGE");
 	// todo: support subimage
-	luaL_checktype(L, 2, LUA_TUSERDATA);
 	void *buffer = lua_touserdata(L, 2);
+	if (buffer == NULL)
+		return luaL_error(L, "Need data");
 	sg_image_data data = {
 		.subimage[0][0].ptr = buffer,
-		.subimage[0][0].size = p->width * p->height * 4,
+		.subimage[0][0].size = p->size,
 	};
 	sg_update_image(p->img, &data);
 	return 0;
+}
+
+static int
+get_pixel_format(lua_State *L, const char * type, int *pixel_size) {
+	if (strcmp(type, "RGBA8") == 0) {
+		*pixel_size = 4;
+		return SG_PIXELFORMAT_RGBA8;
+	} else if (strcmp(type, "R8") == 0) {
+		*pixel_size = 1;
+		return SG_PIXELFORMAT_R8;
+	}
+	return luaL_error(L, "Invalid pixel format %s", type);
 }
 
 static int
@@ -801,6 +813,14 @@ limage(lua_State *L) {
 		img.label = lua_tostring(L, -1);
 	}
 	lua_pop(L, 1);
+	int pixel_size = 4;
+	if (lua_getfield(L, 1, "pixel_format") == LUA_TSTRING) {
+		img.pixel_format = get_pixel_format(L, lua_tostring(L, -1), &pixel_size);
+	} else {
+		img.pixel_format = SG_PIXELFORMAT_RGBA8;
+		pixel_size = 4;
+	}
+	lua_pop(L, 1);
 	// todo: type, render_target, num_slices, num_mipmaps, pixel_format, etc
 	struct image * p = (struct image *)lua_newuserdatauv(L, sizeof(*p), 0);
 	memset(p, 0, sizeof(*p));
@@ -817,8 +837,7 @@ limage(lua_State *L) {
 	}
 	lua_setmetatable(L, -2);
 	p->img = sg_make_image(&img);
-	p->width = img.width;
-	p->height = img.height;
+	p->size = img.width * img.height * pixel_size;
 	return 1;
 }
 

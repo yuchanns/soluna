@@ -59,4 +59,20 @@ sprite_set_sr(struct draw_primitive *p, float scale, float rot) {
 	p->sr = convert_scale_(scale) << 12 | convert_rot_(rot);
 }
 
+static inline void
+sprite_mul_scale(struct draw_primitive *p, float scale) {
+	uint32_t scale_fix = p->sr >> 12;
+	if (scale_fix == 0) {
+		p->sr |= convert_scale_(scale) << 12;
+	} else {
+		if (scale_fix >= 0xff000) {
+			scale *= (float)(scale_fix & 0xfff) * (1.0f / 4096.0f);
+		} else {
+			scale *= (float)scale_fix * (1.0f / 256.0f) + 1.0f;
+		}
+		uint32_t sr = p->sr & 0xfff;
+		p->sr = sr | (convert_scale_(scale) << 12);
+	}
+}
+
 #endif

@@ -1,5 +1,5 @@
 local ltask = require "ltask"
-local message = require "soluna.appmessage"
+local app = require "soluna.app"
 
 local S = {}
 
@@ -29,7 +29,7 @@ local function dispatch(type, ...)
 end
 
 function S.external(p)
-	dispatch(message.unpack(p))
+	dispatch(app.unpackmessage(p))
 end
 
 function S.init(arg)

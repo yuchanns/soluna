@@ -72,6 +72,13 @@ ltouch(lua_State *L) {
 	return 0;
 }
 
+static int
+lcobj(lua_State *L) {
+	struct font_manager *F = getF(L);
+	lua_pushlightuserdata(L, (void *)F);
+	return 1;
+}
+
 int
 luaopen_font(lua_State *L) {
 	luaL_checkversion(L);
@@ -82,14 +89,15 @@ luaopen_font(lua_State *L) {
 		{ "import",				limport },
 		{ "name",				lname },
 		{ "submit",				lsubmit },
-		{ "fonttexture_size",	NULL },
+		{ "cobj",				lcobj },
+		{ "texture_size",		NULL },
 		{ NULL, 				NULL },
 	};
 	
 	luaL_newlib(L, l);
 
 	lua_pushinteger(L, FONT_MANAGER_TEXSIZE);
-	lua_setfield(L, -2, "fonttexture_size");
+	lua_setfield(L, -2, "texture_size");
 
 	return 1;
 }
@@ -165,5 +173,6 @@ luaopen_font_manager(lua_State *L) {
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
+
 	return 1;
 }

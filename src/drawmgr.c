@@ -67,9 +67,9 @@ append_external_material(struct drawmgr * d, struct draw_primitive *base, int n,
 	}
 	struct draw_element *e = &d->data[d->n++];
 	e->base = base;
-	e->n = n;
+	e->n = i;
 	e->material = matid;
-	return n;
+	return i;
 }
 
 static int
@@ -88,9 +88,9 @@ append_default_material(struct drawmgr * d, struct draw_primitive *base, int n, 
 	}
 	struct draw_element *e = &d->data[d->n++];
 	e->base = base;
-	e->n = n;
+	e->n = i;
 	e->material = texid;
-	return n;
+	return i;
 }
 
 static int
@@ -105,14 +105,13 @@ ldrawmgr_append(lua_State *L) {
 
 	int i;
 	struct draw_primitive *end_ptr = &prim[prim_n];
-	for (i=0;i<prim_n;i++) {
+	for (i=0;i<prim_n;) {
 		struct draw_primitive *p = &prim[i];
 		int index = p->sprite;
 		if (d->n >= d->cap) {
 			return luaL_error(L, "Too many draw");
 		}
 		if (index <= 0) {
-			++i;
 			if (i == prim_n || index == 0)
 				return luaL_error(L, "Invalid batch stream");
 			i += append_external_material(d, p, (end_ptr - p)/2, index) * 2;

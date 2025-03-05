@@ -14,6 +14,7 @@
 #include "sokol/sokol_args.h"
 #include "message.h"
 #include "loginfo.h"
+#include "ltask/src/cond.h"
 
 struct app_context {
 	lua_State *L;
@@ -21,6 +22,8 @@ struct app_context {
 	void *send_message_ud;
 	int (*send_log)(void *ud, unsigned int id, void *data, uint32_t sz);
 	void *send_log_ud;
+	struct cond frame_sync;
+	int frame_ready;
 };
 
 static struct app_context *CTX = NULL;
@@ -140,6 +143,8 @@ app_init() {
 	app.send_message_ud = NULL;
 	app.send_log = NULL;
 	app.send_log_ud = NULL;
+	cond_create(&app.frame_sync);
+	app.frame_ready = 0;
 	
 	CTX = &app;
 	
@@ -153,7 +158,51 @@ app_init() {
 
 static void
 app_frame() {
-	send_app_message(message_create64("frame", sapp_frame_count()));
+	if (CTX->frame_ready) {
+		cond_wait_begin(&CTX->frame_sync);
+		send_app_message(message_create64("frame", sapp_frame_count()));
+		cond_wait(&CTX->frame_sync);
+		cond_wait_end(&CTX->frame_sync);
+	}
+}
+
+static int
+lframeready(lua_State *L) {
+	int ready = lua_toboolean(L, 1);
+	CTX->frame_ready = ready;
+	return 0;
+}
+
+static int
+lnextframe(lua_State *L) {
+	cond_trigger_begin(&CTX->frame_sync);
+	cond_trigger_end(&CTX->frame_sync, 1);
+	return 0;
+}
+
+static int
+lmessage_unpack(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	struct soluna_message *m = (struct soluna_message *)lua_touserdata(L,1);
+	lua_pushstring(L, m->type);
+	lua_pushinteger(L, m->v.p[0]);
+	lua_pushinteger(L, m->v.p[1]);
+	lua_pushinteger(L, m->v.u64);
+	message_release(m);
+	return 4;
+}
+
+int
+luaopen_soluna_app(lua_State *L) {
+	luaL_checkversion(L);
+	luaL_Reg l[] = {
+		{ "frameready", lframeready },
+		{ "nextframe", lnextframe },
+		{ "unpackmessage", lmessage_unpack },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, l);
+	return 1;
 }
 
 static int
@@ -175,6 +224,7 @@ app_cleanup() {
 		fprintf(stderr, "Error: %s", lua_tostring(L, -1));
 	}
 	lua_close(L);
+	cond_release(&CTX->frame_sync);
 	memset(CTX, 0, sizeof(*CTX));
 	sg_shutdown();
 }

@@ -17,20 +17,23 @@ int luaopen_font_manager(lua_State *L);
 int luaopen_font(lua_State *L);
 int luaopen_drawmgr(lua_State *L);
 int luaopen_material_default(lua_State *L);
+int luaopen_material_text(lua_State *L);
+int luaopen_soluna_app(lua_State *L);
 
 void soluna_embed(lua_State* L) {
     static const luaL_Reg modules[] = {
         { "ltask", luaopen_ltask},
         { "ltask.root", luaopen_ltask_root},
         { "ltask.bootstrap", luaopen_ltask_bootstrap},
+		{ "soluna.app", luaopen_soluna_app },
 		{ "soluna.embedsource", luaopen_embedsource},
-		{ "soluna.appmessage", luaopen_appmessage},
 		{ "soluna.log", luaopen_applog },
 		{ "soluna.image", luaopen_image },
 		{ "soluna.render", luaopen_render },
 		{ "soluna.spritemgr", luaopen_spritemgr },
 		{ "soluna.drawmgr", luaopen_drawmgr },
 		{ "soluna.material.default", luaopen_material_default },
+		{ "soluna.material.text", luaopen_material_text },
 		{ "soluna.datalist", luaopen_datalist },
 		{ "soluna.file", luaopen_soluna_file },
 		{ "soluna.font", luaopen_font },
