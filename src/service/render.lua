@@ -6,7 +6,6 @@ local embedsource = require "soluna.embedsource"
 local drawmgr = require "soluna.drawmgr"
 local defmat = require "soluna.material.default"
 local textmat = require "soluna.material.text"
-local app = require "soluna.app"
 
 local font = {} ;  do
 	local mgr = require "soluna.font.manager"
@@ -28,32 +27,6 @@ local font = {} ;  do
 		if fontapi.submit() then
 			img:update(texture_ptr)
 		end
-	end
-end
-
-local barrier = {} ; do
-	local thread
-	local status
-	function barrier.init(func, ...)
-		status = "running"
-		barrier.count = 0
-		thread = ltask.fork(func, ...)
-	end
-	
-	function barrier.trigger(count)
-		barrier.count = count
-		if status == "sleeping" then
-			ltask.wakeup(thread)
-		end
-		status = "wakeup"
-	end
-	
-	function barrier.wait()
-		if status == "running" then
-			status = "sleeping"
-			ltask.wait()
-		end
-		status = "running"
 	end
 end
 
@@ -104,62 +77,60 @@ local batch = {} ; do
 	end
 end
 
-local function mainloop(STATE)
-	local batch_size = setting.batch_size
-
-	while true do
-		-- todo: do not wait all batch commits
-		local batch_n = #batch
-		if batch_n > 0 then
-			batch.wait()
-			STATE.drawmgr:reset()
-			STATE.bindings.voffset0 = 0
-			STATE.uniform.baseinst = 0
-			for i = 1, batch_n do
-				local ptr, size = batch[i][1]()
-				STATE.drawmgr:append(ptr, size)
-			end
-			local draw_n = #STATE.drawmgr
-			for i = 1, draw_n do
-				local mat, ptr, n, tex = STATE.drawmgr(i)
-				if mat == 0 then
-					assert(tex == 0)
-					STATE.material:submit(ptr, n)
-				else
-					assert(mat == 1)
-					-- text
-					STATE.material_text:submit(ptr, n)
-				end
-			end
-			STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
-			STATE.pass:begin()
-			font.submit(STATE.font_texture)
-				for i = 1, draw_n do
-					local mat, ptr, n, tex = STATE.drawmgr(i)
-					if mat == 0 then
-						STATE.bindings.image_tex = STATE.textures[tex+1]
-						STATE.material:draw(ptr, n, tex)
-					else
-						assert(mat == 1)
-						STATE.bindings.image_tex = STATE.font_texture
-						STATE.material_text:draw(ptr, n)
-					end
-				end
-			STATE.pass:finish()
-			render.submit()
-			for i = 1, batch_n do
-				local ptr, size, token = batch.consume(i)
-				ltask.wakeup(token)
-			end
-		end
-		app.nextframe()
-		barrier.wait()
-	end
-end
+local STATE
 
 local S = {}
 
-S.frame = assert(barrier.trigger)
+function S.frame(count)
+	local batch_size = setting.batch_size
+
+	-- todo: do not wait all batch commits
+	local batch_n = #batch
+	if batch_n == 0 then
+		return
+	end
+	batch.wait()
+	STATE.drawmgr:reset()
+	STATE.bindings.voffset0 = 0
+	STATE.uniform.baseinst = 0
+	for i = 1, batch_n do
+		local ptr, size = batch[i][1]()
+		STATE.drawmgr:append(ptr, size)
+	end
+	local draw_n = #STATE.drawmgr
+	for i = 1, draw_n do
+		local mat, ptr, n, tex = STATE.drawmgr(i)
+		if mat == 0 then
+			assert(tex == 0)
+			STATE.material:submit(ptr, n)
+		else
+			assert(mat == 1)
+			-- text
+			STATE.material_text:submit(ptr, n)
+		end
+	end
+	STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
+	STATE.pass:begin()
+	font.submit(STATE.font_texture)
+		for i = 1, draw_n do
+			local mat, ptr, n, tex = STATE.drawmgr(i)
+			if mat == 0 then
+				STATE.bindings.image_tex = STATE.textures[tex+1]
+				STATE.material:draw(ptr, n, tex)
+			else
+				assert(mat == 1)
+				STATE.bindings.image_tex = STATE.font_texture
+				STATE.material_text:draw(ptr, n)
+			end
+		end
+	STATE.pass:finish()
+	render.submit()
+	for i = 1, batch_n do
+		local ptr, size, token = batch.consume(i)
+		ltask.wakeup(token)
+	end
+end
+
 S.register_batch = assert(batch.register)
 S.submit_batch = assert(batch.submit)
 
@@ -182,12 +153,9 @@ function S.quit()
 		ltask.call(addr, "quit")
 	end
 	font.shutdown()
-	app.frameready(false)
-	app.nextframe()
 end
 
 function S.init(arg)
-	app.frameready(true)
 	font.init()
 	local loader = ltask.uniqueservice "loader"
 
@@ -303,8 +271,6 @@ function S.init(arg)
 		pipeline = STATE.pipeline,
 		font_manager = font.cobj,
 	}
-
-	barrier.init(mainloop, STATE)
 end
 
 return S

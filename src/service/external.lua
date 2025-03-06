@@ -10,10 +10,13 @@ ltask.send(1, "external_forward", ltask.self(), "external")
 local command = {}
 
 function command.frame(_, _, count)
-	ltask.send(render, "frame", count)
+	ltask.call(render, "frame", count)
+	app.nextframe()
 end
 
 function command.cleanup()
+	app.frameready(false)
+	app.nextframe()
 	ltask.call(render, "quit")
 	ltask.send(1, "quit_ltask")
 end
@@ -34,6 +37,7 @@ end
 
 function S.init(arg)
 	ltask.call(render, "init", arg)
+	app.frameready(true)
 end
 
 return S
