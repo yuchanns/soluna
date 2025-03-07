@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 #include "sokol/sokol_gfx.h"
-#include "texquad.glsl.h"
+#include "sdftext.glsl.h"
 #include "srbuffer.h"
 #include "batch.h"
 #include "spritemgr.h"
@@ -40,18 +40,8 @@ struct material_text {
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
 	struct font_manager *font;
+	fs_params_t fs_uniform;
 };
-
-static void
-dump(const char *prefix, void *buf, int n) {
-	printf("%s:", prefix);
-	int i;
-	uint8_t *p = (uint8_t *)buf;
-	for (i=0;i<n;i++) {
-		printf("%02x ", p[i]);
-	}
-	printf("\n");
-}
 
 static void
 submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n) {
@@ -106,32 +96,51 @@ lmateraial_text_submit(lua_State *L) {
 	return 0;
 }
 
+static void
+draw_text(struct material_text *m, uint32_t color, int count) {
+	m->fs_uniform.color = color;
+	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
+	sg_apply_uniforms(UB_fs_params, &(sg_range){ &m->fs_uniform, sizeof(fs_params_t) });
+	sg_apply_bindings(m->bind);
+	sg_draw(0, 4, count);
+	
+	m->uniform->baseinst += count;
+	m->bind->vertex_buffer_offsets[0] += count * sizeof(struct inst_object);
+}
+
 static int
 lmateraial_text_draw(lua_State *L) {
 	struct material_text *m = (struct material_text *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_TEXT");
 	struct draw_primitive *prim = lua_touserdata(L, 2);
 	int prim_n = luaL_checkinteger(L, 3);
+	if (prim_n <= 0)
+		return 0;
 	
-	int count = 0;
 	int i;
+	float texsize = m->uniform->texsize;
+	m->uniform->texsize = 1.0f / FONT_MANAGER_TEXSIZE;
+	sg_apply_pipeline(m->pip);
+	
+	int count = -1;
+	uint32_t color = 0;
 	for (i=0;i<prim_n;i++) {
 		struct text * t = (struct text *)&prim[i*2+1];
-		if (t->codepoint >= 0)
-			++count;
+		if (t->codepoint >= 0) {
+			if (count < 0) {
+				color = t->color;
+				count = 1;
+			} else if (t->color != color) {
+				draw_text(m, color, count);
+				color = t->color;
+				count = 1;
+			} else {
+				++count;
+			}
+		}
 	}
-	
-	if (count > 0) {
-		float texsize = m->uniform->texsize;
-		m->uniform->texsize = 1.0f / FONT_MANAGER_TEXSIZE;
-		sg_apply_pipeline(m->pip);
-		sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
-		sg_apply_bindings(m->bind);
-		sg_draw(0, 4, count);
-		
-		m->uniform->texsize = texsize;
-		m->uniform->baseinst += count;
-		m->bind->vertex_buffer_offsets[0] += count * sizeof(struct inst_object);
-	}
+	draw_text(m, color, count);
+
+	m->uniform->texsize = texsize;
 
 	return 0;
 }
@@ -154,16 +163,40 @@ ref_object(lua_State *L, void *ptr, int uv_index, const char *key, const char *l
 	}
 }
 
+static void
+init_pipeline(struct material_text *m) {
+	sg_shader shd = sg_make_shader(texquad_shader_desc(sg_query_backend()));
+
+	m->pip = sg_make_pipeline(&(sg_pipeline_desc) {
+		.layout = {
+			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+			.attrs = {
+					[ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT3,
+				}
+        },
+		.colors[0].blend = (sg_blend_state) {
+			.enabled = true,
+			.src_factor_rgb = SG_BLENDFACTOR_ONE,
+			.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+			.src_factor_alpha = SG_BLENDFACTOR_ONE,
+			.dst_factor_alpha = SG_BLENDFACTOR_ZERO
+		},
+        .shader = shd,
+		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+        .label = "text-pipeline"
+    });
+}
+
 static int
 lnew_material_text_normal(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	struct material_text *m = (struct material_text *)lua_newuserdatauv(L, sizeof(*m), 6);
+	struct material_text *m = (struct material_text *)lua_newuserdatauv(L, sizeof(*m), 5);
 	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->sprite, 2, "sprite_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->bind, 3, "bindings", "SOKOL_BINDINGS", 0);
 	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 0);
-	ref_object(L, &m->pip, 5, "pipeline", "SOKOL_PIPELINE", 0);
-	ref_object(L, &m->srbuffer, 6, "sr_buffer", "SOLUNA_SRBUFFER", 1);
+	ref_object(L, &m->srbuffer, 5, "sr_buffer", "SOLUNA_SRBUFFER", 1);
+	init_pipeline(m);
 
 	if (lua_getfield(L, 1, "font_manager") != LUA_TLIGHTUSERDATA) {
 		return luaL_error(L, "Missing .font_manager");
@@ -171,6 +204,12 @@ lnew_material_text_normal(lua_State *L) {
 	m->font = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
+	m->fs_uniform = (fs_params_t) {
+		.edge_mask = font_manager_sdf_mask(m->font),
+		.dist_multiplier = 1.0f,
+		.color= 0xff000000,
+	};
+
 	if (luaL_newmetatable(L, "SOLUNA_MATERIAL_TEXT")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
@@ -194,7 +233,7 @@ lchar_for_batch(lua_State *L) {
 	t->font = luaL_checkinteger(L, 2);
 	t->size = luaL_checkinteger(L, 3);
 	t->color = luaL_checkinteger(L, 4);
-	if (!(t->color & 0xffffff))
+	if (!(t->color & 0xff000000))
 		t->color |= 0xff000000;
 	lua_pushvalue(L, lua_upvalueindex(1));
 	return 1;

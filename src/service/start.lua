@@ -26,9 +26,9 @@ local batch_id = ltask.call(render, "register_batch", ltask.self())
 local font_id = font_init()
 local quit = false
 
-local function text(c)
+local function text(c, color)
 	local cp = utf8.codepoint(c)
-	return mattext.char(cp, font_id, 24, 0xffffff)
+	return mattext.char(cp, font_id, 24, color)
 end
 
 local function mainloop()
@@ -39,9 +39,9 @@ local function mainloop()
 		local scale = math.sin(rad)
 		batch:reset()
 		batch:add(sprites.avatar, 256, 200, scale + 1.2, rad)
-		batch:add(text "你", 10, 30)
+		batch:add(text ("你", 0xff0000), 10, 30)
 		batch:add(sprites.avatar, 256, 400, scale + 1.2, -rad)
-		batch:add(text "好", 40, 60)
+		batch:add(text ("好", 0x0000ff), 40, 60)
 		batch:add(sprites.avatar, 256, 600, - scale + 1.2, rad)
 		ltask.call(render, "submit_batch", batch_id, batch:ptr())
 	end

@@ -582,6 +582,15 @@ create_uniform(lua_State *L, struct uniform_desc *desc) {
 }
 
 static int
+lcreate_uniform(lua_State *L) {
+	struct uniform_desc desc = {
+		.slot = luaL_checkinteger(L, 1),
+		.size = luaL_checkinteger(L, 2),
+	};
+	return create_uniform(L, &desc);
+}
+
+static int
 lpipe_uniform_slot(lua_State *L) {
 	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
 	int idx = luaL_optinteger(L, 2, 0);
@@ -960,6 +969,7 @@ luaopen_render(lua_State *L) {
 		{ "pass", lpass_new },
 		{ "submit", lsubmit },
 		{ "pipeline", lpipeline },
+		{ "uniform", lcreate_uniform },
 		{ "image", limage },
 		{ "buffer", lbuffer },
 		{ "sampler", lsampler },

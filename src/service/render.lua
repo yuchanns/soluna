@@ -268,7 +268,6 @@ function S.init(arg)
 		bindings = STATE.bindings,
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
-		pipeline = STATE.pipeline,
 		font_manager = font.cobj,
 	}
 end
