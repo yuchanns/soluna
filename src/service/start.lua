@@ -2,7 +2,6 @@ local ltask = require "ltask"
 local spritemgr = require "soluna.spritemgr"
 local mattext = require "soluna.material.text"
 local font = require "soluna.font"
-local file = require "soluna.file"
 
 local arg, app = ...
 
@@ -11,8 +10,8 @@ local external = ltask.spawn "external"
 ltask.call(external, "init", app)
 
 local function font_init()
-	local loader = file.loader "msyh.ttc"
-	font.import(loader)
+	local sysfont = require "soluna.font.system"
+	font.import(assert(sysfont.ttfdata "微软雅黑"))
 	return font.name ""
 end
 
