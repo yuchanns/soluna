@@ -91,7 +91,7 @@ function S.frame(count)
 	end
 	batch.wait()
 	STATE.drawmgr:reset()
-	STATE.bindings.voffset0 = 0
+	STATE.bindings:voffset(0, 0)
 	STATE.uniform.baseinst = 0
 	for i = 1, batch_n do
 		local ptr, size = batch[i][1]()
@@ -115,11 +115,11 @@ function S.frame(count)
 		for i = 1, draw_n do
 			local mat, ptr, n, tex = STATE.drawmgr(i)
 			if mat == 0 then
-				STATE.bindings.image_tex = STATE.textures[tex+1]
+				STATE.bindings:image(0, STATE.textures[tex+1])
 				STATE.material:draw(ptr, n, tex)
 			else
 				assert(mat == 1)
-				STATE.bindings.image_tex = STATE.font_texture
+				STATE.bindings:image(0, STATE.font_texture)
 				STATE.material_text:draw(ptr, n)
 			end
 		end
@@ -210,12 +210,12 @@ function S.init(arg)
 		},
 		pipeline = render.pipeline "default",
 	}
-	local bindings = STATE.pipeline:bindings()
-	bindings.vbuffer0 = inst_buffer
-	bindings.sbuffer_sr_lut = sr_buffer
-	bindings.sbuffer_sprite_buffer = sprite_buffer
-	bindings.image_tex = img
-	bindings.sampler_smp = render.sampler { label = "texquad-sampler" }
+	local bindings = render.bindings()
+	bindings:vbuffer(0, inst_buffer)
+	bindings:sbuffer(0, sr_buffer)
+	bindings:sbuffer(1, sprite_buffer)
+	bindings:image(0, img)
+	bindings:sampler(0, render.sampler { label = "texquad-sampler" })	-- todo : ref this sampler
 	
 	STATE.textures = { img }
 	STATE.font_texture = render.image {

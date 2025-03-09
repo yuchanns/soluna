@@ -156,7 +156,7 @@ lbuffer_update(lua_State *L) {
 
 static int
 lbuffer_ref(lua_State *L) {
-	struct buffer *p = (struct buffer *)luaL_checkudata(L, 1, "SOKOL_BUFFER");
+	struct buffer *p = (struct buffer *)lua_touserdata(L, 1);
 	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
 	sg_buffer *ref = (sg_buffer *)lua_touserdata(L, 2);
 	*ref = p->handle;
@@ -315,18 +315,9 @@ struct uniform_desc {
 	int size;
 };
 
-struct bindings_desc {
-	int vertexbuffer;
-	int indexbuffer;
-	char storagebuffer_name[SG_MAX_STORAGEBUFFER_BINDSLOTS][BINDINGNAME_MAX];
-	char sampler_name[SG_MAX_SAMPLER_BINDSLOTS][BINDINGNAME_MAX];
-	char image_name[SG_MAX_IMAGE_BINDSLOTS][BINDINGNAME_MAX];
-};
-
 struct pipeline {
 	sg_pipeline pip;
 	struct uniform_desc uniform[UNIFORM_MAX];
-	struct bindings_desc bindings;
 };
 
 static void
@@ -352,12 +343,6 @@ default_pipeline(struct pipeline *p) {
         .label = "default-pipeline"
     });
 	p->uniform[0] = (struct uniform_desc){ UB_vs_params , sizeof(vs_params_t) };
-	p->bindings.vertexbuffer = 1;
-	p->bindings.indexbuffer = 0;
-	strcpy(p->bindings.storagebuffer_name[SBUF_sr_lut], "sr_lut");
-	strcpy(p->bindings.storagebuffer_name[SBUF_sprite_buffer], "sprite_buffer");
-	strcpy(p->bindings.sampler_name[SMP_smp], "smp");
-	strcpy(p->bindings.image_name[IMG_tex], "tex");
 }
 
 static int
@@ -605,138 +590,11 @@ lpipe_uniform_slot(lua_State *L) {
 	return 1;
 }
 
-struct bindings {
-	sg_bindings bind;
-	struct bindings_desc *desc;
-};
-
 static inline const char *
 cmphead_(const char *key, const char *name, size_t sz) {
 	if (memcmp(key, name, sz))
 		return NULL;
 	return key+sz;
-}
-
-#define cmphead(key, name) cmphead_(key, name, sizeof(name "")-1)
-
-static sg_buffer
-check_buffer(lua_State *L, int index, int type) {
-	struct buffer *p = (struct buffer *)luaL_checkudata(L, index, "SOKOL_BUFFER");
-	if (p->type != type) {
-		luaL_error(L, "Invalid buffer type %d != %d", type, p->type);
-	}
-	return p->handle;
-}
-
-static sg_image
-check_image(lua_State *L, int index) {
-	struct image *p = (struct image *)luaL_checkudata(L, index, "SOKOL_IMAGE");
-	return p->img;
-}
-
-static sg_sampler
-check_sampler(lua_State *L, int index) {
-	struct sampler *p = (struct sampler *)lua_touserdata(L, index);
-	if (p == NULL)
-		luaL_error(L, "Invalid sampler");
-	return p->handle;
-}
-
-static int
-lbindings_set(lua_State *L) {
-	struct bindings * b = (struct bindings *)luaL_checkudata(L, 1, "SOKOL_BINDINGS");
-	const char * key = luaL_checkstring(L, 2);
-	const char * tail;
-	if ((tail=cmphead(key, "vbuffer"))) {
-		int n = *tail - '0';
-		if (n >= 0 || n < b->desc->vertexbuffer) {
-			b->bind.vertex_buffers[n] = check_buffer(L, 3, SG_BUFFERTYPE_VERTEXBUFFER);
-			return 0;
-		}
-	} else if ((tail=cmphead(key, "voffset"))) {
-		int n = *tail - '0';
-		if (n >= 0 || n < b->desc->vertexbuffer) {
-			b->bind.vertex_buffer_offsets[n] = luaL_checkinteger(L, 3);
-			return 0;
-		}
-	} else if ((tail=cmphead(key, "ibuffer"))) {
-		if (*tail == 0 && b->desc->indexbuffer) {
-			b->bind.index_buffer = check_buffer(L, 3, SG_BUFFERTYPE_INDEXBUFFER);
-			return 0;
-		}
-	} else if ((tail=cmphead(key, "ivoffset"))) {
-		if (*tail == 0 && b->desc->indexbuffer) {
-			b->bind.index_buffer_offset = luaL_checkinteger(L, 3);
-			return 0;
-		}
-	} else if ((tail=cmphead(key, "sbuffer_"))) {
-		int i;
-		for (i=0;i<SG_MAX_STORAGEBUFFER_BINDSLOTS;i++) {
-			if (strcmp(tail, b->desc->storagebuffer_name[i])==0) {
-				b->bind.storage_buffers[i] = check_buffer(L, 3, SG_BUFFERTYPE_STORAGEBUFFER);
-				return 0;
-			}
-		}
-	} else if ((tail=cmphead(key, "image_"))) {
-		int i;
-		for (i=0;i<SG_MAX_IMAGE_BINDSLOTS;i++) {
-			if (strcmp(tail, b->desc->image_name[i])==0) {
-				b->bind.images[i] = check_image(L, 3);
-				return 0;
-			}
-		}
-	} else if ((tail=cmphead(key, "sampler_"))) {
-		int i;
-		for (i=0;i<SG_MAX_SAMPLER_BINDSLOTS;i++) {
-			if (strcmp(tail, b->desc->sampler_name[i])==0) {
-				b->bind.samplers[i] = check_sampler(L, 3);
-				return 0;
-			}
-		}
-	}
-
-	return luaL_error(L, "Invalid key .%s", key);
-}
-
-static int
-lbindings_apply(lua_State *L) {
-	struct bindings * b = (struct bindings *)luaL_checkudata(L, 1, "SOKOL_BINDINGS");
-	sg_apply_bindings(&b->bind);
-	return 0;
-}
-
-static int
-lbindings_ref(lua_State *L) {
-	struct bindings * b = (struct bindings *)luaL_checkudata(L, 1, "SOKOL_BINDINGS");
-	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
-	sg_bindings **ref = (sg_bindings **)lua_touserdata(L, 2);
-	*ref = &b->bind;
-	return 0;
-}
-
-static int
-lpipeline_bindings(lua_State *L) {
-	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
-	struct bindings * b = (struct bindings *)lua_newuserdatauv(L, sizeof(*b), 1);
-	lua_pushvalue(L, 1);
-	lua_setiuservalue(L, -2, 1);
-	memset(&b->bind, 0, sizeof(b->bind));
-	b->desc = &p->bindings;
-	if (luaL_newmetatable(L, "SOKOL_BINDINGS")) {
-		luaL_Reg l[] = {
-			{ "__index", NULL },
-			{ "__newindex", lbindings_set },
-			{ "__call", lbindings_ref },
-			{ "apply", lbindings_apply },
-			{ NULL, NULL },
-		};
-		luaL_setfuncs(L, l, 0);
-
-		lua_pushvalue(L, -1);
-		lua_setfield(L, -2, "__index");
-	}
-	lua_setmetatable(L, -2);
-	return 1;
 }
 
 static int
@@ -765,7 +623,6 @@ lpipeline(lua_State *L) {
 			{ "__call", lpipeline_ref },
 			{ "apply", lpipeline_apply },
 			{ "uniform_slot", lpipe_uniform_slot },
-			{ "bindings", lpipeline_bindings },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
@@ -805,6 +662,15 @@ get_pixel_format(lua_State *L, const char * type, int *pixel_size) {
 }
 
 static int
+limage_ref(lua_State *L) {
+	struct image *p = (struct image *)lua_touserdata(L, 1);
+	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
+	sg_image *ref = (sg_image *)lua_touserdata(L, 2);
+	*ref = p->img;
+	return 0;
+}
+
+static int
 limage(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	sg_image_desc img = { .usage = SG_USAGE_DYNAMIC };
@@ -836,6 +702,7 @@ limage(lua_State *L) {
 	if (luaL_newmetatable(L, "SOKOL_IMAGE")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
+			{ "__call", limage_ref },
 			{ "update", limage_update },
 			{ NULL, NULL },
 		};
@@ -851,6 +718,15 @@ limage(lua_State *L) {
 }
 
 static int
+lsampler_ref(lua_State *L) {
+	struct sampler *p = (struct sampler *)lua_touserdata(L, 1);
+	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
+	sg_sampler *ref = (sg_sampler *)lua_touserdata(L, 2);
+	*ref = p->handle;
+	return 0;
+}
+
+static int
 lsampler(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	struct sampler * s = (struct sampler *)lua_newuserdatauv(L, sizeof(*s), 0);
@@ -861,6 +737,13 @@ lsampler(lua_State *L) {
 	lua_pop(L, 1);
 	// todo : set filter , etc
 	s->handle = sg_make_sampler(&desc);
+	
+	if (luaL_newmetatable(L, "SOKOL_SAMPLER")) {
+		lua_pushcfunction(L, lsampler_ref ),
+		lua_setfield(L, -2, "__call");
+	}
+	lua_setmetatable(L, -2);
+	
 	return 1;
 }
 
@@ -962,6 +845,8 @@ lbuffer_size(lua_State *L) {
 	return 1;
 }
 
+int lbindings_new(lua_State *L);
+
 int
 luaopen_render(lua_State *L) {
 	luaL_checkversion(L);
@@ -976,6 +861,7 @@ luaopen_render(lua_State *L) {
 		{ "draw", ldraw },
 		{ "srbuffer", lsrbuffer },
 		{ "buffer_size", lbuffer_size },
+		{ "bindings", lbindings_new },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
