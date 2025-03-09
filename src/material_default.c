@@ -116,7 +116,7 @@ lnew_material_default(lua_State *L) {
 	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->sprite, 2, "sprite_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->bind, 3, "bindings", "SOKOL_BINDINGS", 1);
-	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 0);
+	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 1);
 	ref_object(L, &m->pip, 5, "pipeline", "SOKOL_PIPELINE", 0);
 	ref_object(L, &m->srbuffer, 6, "sr_buffer", "SOLUNA_SRBUFFER", 1);
 	if (lua_getfield(L, 1, "sprite_bank") != LUA_TLIGHTUSERDATA) {

@@ -310,14 +310,8 @@ lsubmit(lua_State *L) {
 	return 0;
 }
 
-struct uniform_desc {
-	int slot;
-	int size;
-};
-
 struct pipeline {
 	sg_pipeline pip;
-	struct uniform_desc uniform[UNIFORM_MAX];
 };
 
 static void
@@ -342,7 +336,6 @@ default_pipeline(struct pipeline *p) {
 		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .label = "default-pipeline"
     });
-	p->uniform[0] = (struct uniform_desc){ UB_vs_params , sizeof(vs_params_t) };
 }
 
 static int
@@ -350,251 +343,6 @@ lpipeline_apply(lua_State *L) {
 	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
 	sg_apply_pipeline(p->pip);
 	return 0;
-}
-
-struct uniform {
-	int slot;
-	int size;
-	uint8_t buffer[1];
-};
-
-#define UNIFORM_TYPE_FLOAT 1
-#define UNIFORM_TYPE_INT 2
-
-static int
-luniform_apply(lua_State *L) {
-	struct uniform * p = (struct uniform *)luaL_checkudata(L, 1, "SOKOL_UNIFORM");
-	sg_apply_uniforms(p->slot, &(sg_range){ p->buffer, p->size });
-	return 0;
-}
-
-#define MAX_ARRAY_SIZE 0x4fff
-
-static void
-set_uniform_float(lua_State *L, int index, struct uniform *p, int offset, int n) {
-	if (n <= 1) {
-		float v = luaL_checknumber(L, index);
-		memcpy(p->buffer + offset, &v, sizeof(float));
-	} else {
-		luaL_checktype(L, index, LUA_TTABLE);
-		if (lua_rawlen(L, index) != n || n >= MAX_ARRAY_SIZE) {
-			luaL_error(L, "Need table size %d", n);
-		}
-		float v[MAX_ARRAY_SIZE];
-		int i;
-		for (i=0;i<n;i++) {
-			if (lua_rawgeti(L, index, i+1) != LUA_TNUMBER) {
-				luaL_error(L, "Invalid value in table[%d]", i+1);
-			}
-			v[i] = lua_tonumber(L, -1);
-			lua_pop(L, 1);
-		}
-		memcpy(p->buffer + offset, &v, sizeof(float) * n);
-	}
-}
-
-static void
-set_uniform_int(lua_State *L, int index, struct uniform *p, int offset, int n) {
-	if (n <= 1) {
-		int v = luaL_checkinteger(L, index);
-		memcpy(p->buffer + offset, &v, sizeof(int));
-	} else {
-		luaL_checktype(L, index, LUA_TTABLE);
-		if (lua_rawlen(L, index) != n || n >= MAX_ARRAY_SIZE) {
-			luaL_error(L, "Need table size %d", n);
-		}
-		int v[MAX_ARRAY_SIZE];
-		int i;
-		for (i=0;i<n;i++) {
-			if (lua_rawgeti(L, index, i+1) != LUA_TNUMBER) {
-				luaL_error(L, "Invalid value in table[%d]", i+1);
-			}
-			v[i] = lua_tointeger(L, -1);
-			lua_pop(L, 1);
-		}
-		memcpy(p->buffer + offset, &v, sizeof(int) * n);
-	}
-}
-
-static int
-luniform_set(lua_State *L) {
-	struct uniform * p = (struct uniform *)lua_touserdata(L, 1);
-	if (p == NULL || lua_getiuservalue(L, 1, 1) != LUA_TTABLE)
-		return luaL_error(L, "Invalid uniform setter, call init first");
-	lua_pushvalue(L, 2);	// key
-	if (lua_rawget(L, -2) != LUA_TNUMBER)
-		return luaL_error(L, "No uniform %s", lua_tostring(L, 2));
-	// ud key value desc meta
-	uint32_t meta = lua_tointeger(L, -1);
-	lua_pop(L, 2);
-	int type = meta >> 28;
-	int offset = (meta >> 14) & 0x3fff;
-	int n = meta & 0x3fff;
-	switch (type) {
-	case UNIFORM_TYPE_FLOAT:
-		set_uniform_float(L, 3, p, offset, n);
-		break;
-	case UNIFORM_TYPE_INT:
-		set_uniform_int(L, 3, p, offset, n);
-		break;
-	default:
-		return luaL_error(L, "Invalid uniform setter typeid %s (%d)", lua_tostring(L, 2), type);
-	}
-	return 0;
-}
-
-static void
-set_key(lua_State *L, int index, struct uniform *u) {
-	const char * key = lua_tostring(L, -2);
-	if (lua_getfield(L, -1, "offset") != LUA_TNUMBER) {
-		luaL_error(L, "Missing .%s .offset", key);
-	}
-	int offset = luaL_checkinteger(L, -1);
-	lua_pop(L, 1);
-	if (offset < 0 || offset > 0x3fff)
-		luaL_error(L, "Invalid .%s offset = %d", key, offset);
-	
-	int t = lua_getfield(L, -1, "n");
-	int n = 1;
-	if (t != LUA_TNUMBER && t != LUA_TNIL) {
-		luaL_error(L, "Invalid type .%s .n (%s)", key, lua_typename(L, t));
-	}
-	if (t == LUA_TNUMBER) {
-		n = luaL_checkinteger(L, -1);
-	}
-	if (n < 1 || n > 0x3fff)
-		luaL_error(L, "Invalid .%s n = %d", key, n);
-	lua_pop(L, 1);
-	if (lua_getfield(L, -1, "type") != LUA_TSTRING) {
-		luaL_error(L, "Missing .%s .type", key);
-	}
-	const char *type = lua_tostring(L, -1);
-	int tid = 0;
-	int typesize = 0;
-	if (strcmp(type, "float") == 0) {
-		tid = UNIFORM_TYPE_FLOAT;
-		typesize = sizeof(float);
-	} else if (strcmp(type, "int") == 0) {
-		tid = UNIFORM_TYPE_INT;
-		typesize = sizeof(int);
-	} else {
-		luaL_error(L, "Invalid .%s .type %s", key, type);
-	}
-	lua_pop(L, 1);
-	int offset_end = offset + n * typesize;
-	if (offset_end > u->size)
-		luaL_error(L, "Invalid uniform .%s (offset %d,n %d)", key, offset, n);
-	int i;
-	for (i=offset;i<offset_end;i++) {
-		if (u->buffer[i] != 0)
-			luaL_error(L, "Overlap uniform .%s (offset %d,n %d)", key, offset, n);
-		u->buffer[i] = 1;
-	}
-	uint32_t info = (tid << 28) | (offset << 14) | n;
-	lua_pushvalue(L, -2);
-	lua_pushinteger(L, info);
-	lua_rawset(L, index);
-}
-
-static void
-check_uniform(lua_State *L, struct uniform *u) {
-	int i;
-	for (i=0;i<u->size;i++) {
-		if (u->buffer[i] == 0)
-			luaL_error(L, "Uniform is not complete");
-	}
-}
-
-static int
-luniform_init(lua_State *L) {
-	struct uniform * p = (struct uniform *)luaL_checkudata(L, 1, "SOKOL_UNIFORM");
-	luaL_checktype(L, 2, LUA_TTABLE);
-	memset(p->buffer, 0, p->size);
-	lua_newtable(L);	// typeinfo for uniform
-	int typeinfo = lua_gettop(L);
-	
-	// iter desc table 2
-	lua_pushnil(L);
-	while (lua_next(L, 2) != 0) {
-		if (lua_type(L, -2) != LUA_TSTRING) {
-			return luaL_error(L, "Init error : none string key");
-		}
-		if (lua_type(L, -1) != LUA_TTABLE) {
-			return luaL_error(L, "Init error : invalid .%s", lua_tostring(L, -2));
-		}
-		set_key(L, typeinfo, p);
-		lua_pop(L, 1);
-	}
-	check_uniform(L, p);
-	memset(p->buffer, 0, p->size);
-	lua_settop(L, typeinfo);
-	lua_setiuservalue(L, 1, 1);
-	lua_settop(L, 1);
-	return 1;
-}
-
-static int
-luniform_ref(lua_State *L) {
-	struct uniform * p = (struct uniform *)luaL_checkudata(L, 1, "SOKOL_UNIFORM");
-	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
-	uint8_t **ref = (uint8_t **)lua_touserdata(L, 2);
-	*ref = &p->buffer[0];
-	return 0;
-}
-
-static int
-create_uniform(lua_State *L, struct uniform_desc *desc) {
-	size_t sz = desc->size + offsetof(struct uniform, buffer);
-	struct uniform * u = (struct uniform *)lua_newuserdatauv(L, sz, 1);
-	u->slot = desc->slot;
-	u->size = desc->size;
-	if (luaL_newmetatable(L, "SOKOL_UNIFORM")) {
-		luaL_Reg l[] = {
-			{ "__index", NULL },
-			{ "__newindex", luniform_set },
-			{ "__call", luniform_ref },
-			{ "apply", luniform_apply },
-			{ "init", luniform_init },
-			{ NULL, NULL },
-		};
-		luaL_setfuncs(L, l, 0);
-
-		lua_pushvalue(L, -1);
-		lua_setfield(L, -2, "__index");
-	}
-	lua_setmetatable(L, -2);
-	return 1;
-}
-
-static int
-lcreate_uniform(lua_State *L) {
-	struct uniform_desc desc = {
-		.slot = luaL_checkinteger(L, 1),
-		.size = luaL_checkinteger(L, 2),
-	};
-	return create_uniform(L, &desc);
-}
-
-static int
-lpipe_uniform_slot(lua_State *L) {
-	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
-	int idx = luaL_optinteger(L, 2, 0);
-	if (idx < 0 || idx >= UNIFORM_MAX)
-		return luaL_error(L, "Invalid uniform slot index %d", idx);
-	struct uniform_desc * desc = &p->uniform[idx];
-	if (desc->size == 0)
-		return luaL_error(L, "Undefined uniform slot %d", idx);
-	
-	create_uniform(L, desc);
-	
-	return 1;
-}
-
-static inline const char *
-cmphead_(const char *key, const char *name, size_t sz) {
-	if (memcmp(key, name, sz))
-		return NULL;
-	return key+sz;
 }
 
 static int
@@ -622,7 +370,6 @@ lpipeline(lua_State *L) {
 			{ "__index", NULL },
 			{ "__call", lpipeline_ref },
 			{ "apply", lpipeline_apply },
-			{ "uniform_slot", lpipe_uniform_slot },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
@@ -846,6 +593,7 @@ lbuffer_size(lua_State *L) {
 }
 
 int lbindings_new(lua_State *L);
+int luniform_new(lua_State *L);
 
 int
 luaopen_render(lua_State *L) {
@@ -854,7 +602,6 @@ luaopen_render(lua_State *L) {
 		{ "pass", lpass_new },
 		{ "submit", lsubmit },
 		{ "pipeline", lpipeline },
-		{ "uniform", lcreate_uniform },
 		{ "image", limage },
 		{ "buffer", lbuffer },
 		{ "sampler", lsampler },
@@ -862,6 +609,7 @@ luaopen_render(lua_State *L) {
 		{ "srbuffer", lsrbuffer },
 		{ "buffer_size", lbuffer_size },
 		{ "bindings", lbindings_new },
+		{ "uniform", luniform_new },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

@@ -233,7 +233,8 @@ function S.init(arg)
 	
 	STATE.drawmgr = drawmgr.new(bank_ptr, setting.draw_instance)
 	
-	STATE.uniform = STATE.pipeline:uniform_slot(0):init {
+	STATE.uniform = render.uniform {
+		16,	-- size
 		tex_size = {
 			offset = 0,
 			type = "float",

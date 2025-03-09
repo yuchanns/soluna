@@ -194,7 +194,7 @@ lnew_material_text_normal(lua_State *L) {
 	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->sprite, 2, "sprite_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->bind, 3, "bindings", "SOKOL_BINDINGS", 1);
-	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 0);
+	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 1);
 	ref_object(L, &m->srbuffer, 5, "sr_buffer", "SOLUNA_SRBUFFER", 1);
 	init_pipeline(m);
 
