@@ -109,16 +109,40 @@ ref_object(lua_State *L, void *ptr, int uv_index, const char *key, const char *l
 	}
 }
 
+static void
+init_pipeline(struct material_default *p) {
+	sg_shader shd = sg_make_shader(texquad_shader_desc(sg_query_backend()));
+
+	p->pip = sg_make_pipeline(&(sg_pipeline_desc) {
+		.layout = {
+			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+			.attrs = {
+					[ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT3,
+				}
+        },
+		.colors[0].blend = (sg_blend_state) {
+			.enabled = true,
+			.src_factor_rgb = SG_BLENDFACTOR_ONE,
+			.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+			.src_factor_alpha = SG_BLENDFACTOR_ONE,
+			.dst_factor_alpha = SG_BLENDFACTOR_ZERO
+		},
+        .shader = shd,
+		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+        .label = "default-pipeline"
+    });
+}
+
 static int
 lnew_material_default(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	struct material_default *m = (struct material_default *)lua_newuserdatauv(L, sizeof(*m), 6);
+	struct material_default *m = (struct material_default *)lua_newuserdatauv(L, sizeof(*m), 5);
+	init_pipeline(m);
 	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->sprite, 2, "sprite_buffer", "SOKOL_BUFFER", 0);
 	ref_object(L, &m->bind, 3, "bindings", "SOKOL_BINDINGS", 1);
 	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 1);
-	ref_object(L, &m->pip, 5, "pipeline", "SOKOL_PIPELINE", 0);
-	ref_object(L, &m->srbuffer, 6, "sr_buffer", "SOLUNA_SRBUFFER", 1);
+	ref_object(L, &m->srbuffer, 5, "sr_buffer", "SOLUNA_SRBUFFER", 1);
 	if (lua_getfield(L, 1, "sprite_bank") != LUA_TLIGHTUSERDATA) {
 		return luaL_error(L, "Missing .sprite_bank");
 	}

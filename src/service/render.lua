@@ -208,7 +208,6 @@ function S.init(arg)
 		pass = render.pass {
 			color0 = 0x4080c0,
 		},
-		pipeline = render.pipeline "default",
 	}
 	local bindings = render.bindings()
 	bindings:vbuffer(0, inst_buffer)
@@ -260,7 +259,6 @@ function S.init(arg)
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
 		sprite_bank = bank_ptr,
-		pipeline = STATE.pipeline,
 	}
 	
 	STATE.material_text = textmat.normal {

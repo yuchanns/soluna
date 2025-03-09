@@ -310,77 +310,6 @@ lsubmit(lua_State *L) {
 	return 0;
 }
 
-struct pipeline {
-	sg_pipeline pip;
-};
-
-static void
-default_pipeline(struct pipeline *p) {
-	sg_shader shd = sg_make_shader(texquad_shader_desc(sg_query_backend()));
-
-	p->pip = sg_make_pipeline(&(sg_pipeline_desc) {
-		.layout = {
-			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
-			.attrs = {
-					[ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT3,
-				}
-        },
-		.colors[0].blend = (sg_blend_state) {
-			.enabled = true,
-			.src_factor_rgb = SG_BLENDFACTOR_ONE,
-			.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-			.src_factor_alpha = SG_BLENDFACTOR_ONE,
-			.dst_factor_alpha = SG_BLENDFACTOR_ZERO
-		},
-        .shader = shd,
-		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
-        .label = "default-pipeline"
-    });
-}
-
-static int
-lpipeline_apply(lua_State *L) {
-	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
-	sg_apply_pipeline(p->pip);
-	return 0;
-}
-
-static int
-lpipeline_ref(lua_State *L) {
-	struct pipeline * p = (struct pipeline *)luaL_checkudata(L, 1, "SOKOL_PIPELINE");
-	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
-	sg_pipeline *ref = (sg_pipeline *)lua_touserdata(L, 2);
-	*ref = p->pip;
-	return 0;
-}
-
-static int
-lpipeline(lua_State *L) {
-	const char * name = luaL_checkstring(L, 1);
-	struct pipeline * pip = (struct pipeline *)lua_newuserdatauv(L, sizeof(*pip), 0);
-	memset(pip, 0, sizeof(*pip));
-	if (strcmp(name, "default") == 0) {
-		default_pipeline(pip);
-	} else {
-		// todo : externl shaders and pipelines
-		return luaL_error(L, "Invalid pipeline name");
-	}
-	if (luaL_newmetatable(L, "SOKOL_PIPELINE")) {
-		luaL_Reg l[] = {
-			{ "__index", NULL },
-			{ "__call", lpipeline_ref },
-			{ "apply", lpipeline_apply },
-			{ NULL, NULL },
-		};
-		luaL_setfuncs(L, l, 0);
-
-		lua_pushvalue(L, -1);
-		lua_setfield(L, -2, "__index");
-	}
-	lua_setmetatable(L, -2);
-	return 1;
-}
-
 static int
 limage_update(lua_State *L) {
 	struct image *p = (struct image *)luaL_checkudata(L, 1, "SOKOL_IMAGE");
@@ -601,7 +530,6 @@ luaopen_render(lua_State *L) {
 	luaL_Reg l[] = {
 		{ "pass", lpass_new },
 		{ "submit", lsubmit },
-		{ "pipeline", lpipeline },
 		{ "image", limage },
 		{ "buffer", lbuffer },
 		{ "sampler", lsampler },
