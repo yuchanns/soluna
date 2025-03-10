@@ -5,7 +5,7 @@ BIN=bin
 APPNAME=soluna.exe
 CC=gcc
 CFLAGS=-Wall -O2
-LDFLAGS=-Wl,-subsystem,windows -lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 $(LUALIB) -lwinmm -lws2_32 -lntdll
+LDFLAGS=-Wl,-subsystem,windows -lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 $(LUALIB) -lwinmm -lws2_32 -lntdll -lxinput
 LUA_EXE=$(BUILD)/lua.exe
 SHDC=sokol-shdc.exe
 

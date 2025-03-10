@@ -2,6 +2,7 @@ local ltask = require "ltask"
 local spritemgr = require "soluna.spritemgr"
 local mattext = require "soluna.material.text"
 local font = require "soluna.font"
+local soluna = require "soluna"
 
 local arg, app = ...
 
@@ -32,8 +33,11 @@ end
 
 local function mainloop()
 	local count = 0
+	soluna.gamepad_init()
 	while not quit do
-		count = count + 1
+		if soluna.gamepad.A then
+			count = count + 1
+		end
 		local rad = count * 3.1415927 / 180
 		local scale = math.sin(rad)
 		batch:reset()

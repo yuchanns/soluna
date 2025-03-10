@@ -20,12 +20,14 @@ int luaopen_material_default(lua_State *L);
 int luaopen_material_text(lua_State *L);
 int luaopen_soluna_app(lua_State *L);
 int luaopen_font_system(lua_State *L);
+int luaopen_gamepad_device(lua_State *L);
+int luaopen_gamepad(lua_State *L);
 
 void soluna_embed(lua_State* L) {
     static const luaL_Reg modules[] = {
-        { "ltask", luaopen_ltask},
-        { "ltask.root", luaopen_ltask_root},
-        { "ltask.bootstrap", luaopen_ltask_bootstrap},
+		{ "ltask", luaopen_ltask},
+		{ "ltask.root", luaopen_ltask_root},
+		{ "ltask.bootstrap", luaopen_ltask_bootstrap},
 		{ "soluna.app", luaopen_soluna_app },
 		{ "soluna.embedsource", luaopen_embedsource},
 		{ "soluna.log", luaopen_applog },
@@ -41,8 +43,10 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.font.truetype", luaopen_font_truetype },
 		{ "soluna.font.manager", luaopen_font_manager },
 		{ "soluna.font.system", luaopen_font_system },
+		{ "soluna.gamepad", luaopen_gamepad },
+		{ "soluna.gamepad.device", luaopen_gamepad_device },
 //		{ "luaforward", luaopen_luaforward },
-        { NULL, NULL },
+		{ NULL, NULL },
     };
 
     const luaL_Reg *lib;

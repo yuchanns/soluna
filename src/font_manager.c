@@ -1,5 +1,5 @@
 #include "font_manager.h"
-#include "fontmutex.h"
+#include "mutex.h"
 #include "truetype.h"
 
 #include <string.h>
