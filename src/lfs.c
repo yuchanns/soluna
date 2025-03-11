@@ -3,6 +3,8 @@
 
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 
+#define LONGPATH_MAX 4096
+
 #include <windows.h>
 #include <Shlobj.h>
 #include <sys/stat.h>
@@ -75,8 +77,8 @@ system_error(lua_State *L, DWORD errcode) {
 				break;
 			}
 		}
-		char tmp[PATH_MAX];
-		int len = utf8_filename(L, errormsg, n, tmp, PATH_MAX);
+		char tmp[LONGPATH_MAX];
+		int len = utf8_filename(L, errormsg, n, tmp, LONGPATH_MAX);
 		lua_pushlstring(L, tmp, len);
 		HeapFree(GetProcessHeap(), 0, errormsg);
 	}
@@ -91,8 +93,8 @@ error_return(lua_State *L) {
 
 static void
 push_filename(lua_State *L, WIN32_FIND_DATAW *data) {
-	char firstname[PATH_MAX];
-	int ulen = utf8_filename(L, data->cFileName, -1, firstname, PATH_MAX);
+	char firstname[LONGPATH_MAX];
+	int ulen = utf8_filename(L, data->cFileName, -1, firstname, LONGPATH_MAX);
 
 	lua_pushlstring(L, firstname, ulen);
 }
@@ -145,8 +147,8 @@ static int
 ldir(lua_State *L) {
 	size_t sz;
 	const char * pathname = luaL_checklstring(L, 1, &sz);
-	wchar_t winname[PATH_MAX-3];
-	int winsz = windows_filename(L, pathname, sz+1, winname, PATH_MAX-3);
+	wchar_t winname[LONGPATH_MAX-3];
+	int winsz = windows_filename(L, pathname, sz+1, winname, LONGPATH_MAX-3);
 	winname[winsz] = '\\';
 	winname[winsz+1] = '*';
 	winname[winsz+2] = 0;
@@ -188,12 +190,12 @@ ldir(lua_State *L) {
 
 static int
 lpersonaldir(lua_State *L) {
-	wchar_t document[PATH_MAX] = {0};
+	wchar_t document[LONGPATH_MAX] = {0};
 	LPITEMIDLIST pidl = NULL;
 	SHGetSpecialFolderLocation(NULL, CSIDL_PERSONAL, &pidl);
 	if (pidl && SHGetPathFromIDListW(pidl, document)) {
-		char utf8path[PATH_MAX];
-		int sz = utf8_filename(L, document, -1, utf8path, PATH_MAX);
+		char utf8path[LONGPATH_MAX];
+		int sz = utf8_filename(L, document, -1, utf8path, LONGPATH_MAX);
 		lua_pushlstring(L, utf8path, sz);
 		return 1;
 	} else {
@@ -203,13 +205,13 @@ lpersonaldir(lua_State *L) {
 
 static int
 lcurrentdir(lua_State *L) {
-	wchar_t path[PATH_MAX];
-	char utf8path[PATH_MAX];
-	DWORD sz = GetCurrentDirectoryW(PATH_MAX, path);
+	wchar_t path[LONGPATH_MAX];
+	char utf8path[LONGPATH_MAX];
+	DWORD sz = GetCurrentDirectoryW(LONGPATH_MAX, path);
 	if (sz == 0) {
 		return error_return(L);
 	}
-	int usz = utf8_filename(L, path, -1, utf8path, PATH_MAX);
+	int usz = utf8_filename(L, path, -1, utf8path, LONGPATH_MAX);
 	lua_pushlstring(L, utf8path, usz);
 	return 1;
 }
@@ -218,8 +220,8 @@ static int
 lchdir(lua_State *L) {
 	size_t sz;
 	const char * utf8path = luaL_checklstring(L, 1, &sz);
-	wchar_t path[PATH_MAX];
-	windows_filename(L, utf8path, sz+1, path, PATH_MAX);
+	wchar_t path[LONGPATH_MAX];
+	windows_filename(L, utf8path, sz+1, path, LONGPATH_MAX);
 	if (SetCurrentDirectoryW(path) == 0) {
 		return error_return(L);
 	}
@@ -342,8 +344,8 @@ file_info (lua_State *L) {
 	size_t sz;
 	int i;
 	const char * utf8path = luaL_checklstring(L, 1, &sz);
-	wchar_t file[PATH_MAX];
-	windows_filename(L, utf8path, sz+1, file, PATH_MAX);
+	wchar_t file[LONGPATH_MAX];
+	windows_filename(L, utf8path, sz+1, file, LONGPATH_MAX);
 
 	if (STAT_FUNC(file,	&info))	{
 			lua_pushnil(L);
@@ -381,18 +383,18 @@ static int
 lrealpath(lua_State *L) {
 	size_t sz;
 	const char * pathname = luaL_checklstring(L, 1, &sz);
-	wchar_t winname[PATH_MAX];
-	wchar_t fullname[PATH_MAX];
-	windows_filename(L, pathname, sz+1, winname, PATH_MAX);
-	DWORD r = GetFullPathNameW(winname, PATH_MAX, fullname, NULL);
+	wchar_t winname[LONGPATH_MAX];
+	wchar_t fullname[LONGPATH_MAX];
+	windows_filename(L, pathname, sz+1, winname, LONGPATH_MAX);
+	DWORD r = GetFullPathNameW(winname, LONGPATH_MAX, fullname, NULL);
 	if (r == 0) {
 		return error_return(L);
 	}
-	if (r > PATH_MAX) {
+	if (r > LONGPATH_MAX) {
 		return luaL_error(L, "Invalid path %s", pathname);
 	}
-	char result[PATH_MAX];
-	int len = utf8_filename(L, fullname, r, result, PATH_MAX);
+	char result[LONGPATH_MAX];
+	int len = utf8_filename(L, fullname, r, result, LONGPATH_MAX);
 	lua_pushlstring(L, result, len);
 	return 1;
 }
