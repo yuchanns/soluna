@@ -4,10 +4,28 @@ BUILD=build
 BIN=bin
 APPNAME=soluna.exe
 CC=gcc
-CFLAGS=-Wall -O2
-LDFLAGS=-Wl,-subsystem,windows -lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 $(LUALIB) -lwinmm -lws2_32 -lntdll -lxinput
+# msvc support
+#CC=cl
+LD=$(CC)
 LUA_EXE=$(BUILD)/lua.exe
 SHDC=sokol-shdc.exe
+
+#for msvc
+ifeq ($(CC),cl)
+ CFLAGS=-utf-8 -W3 -O2 -std:c11 -experimental:c11atomics
+ OUTPUT_O=-c -Fo:
+ OUTPUT_EXE=-Fe:
+ STDC=
+ SUBSYSTEM=-LINK -SUBSYSTEM:WINDOWS -ENTRY:"mainCRTStartup"
+ LDFLAGS=$(SUBSYSTEM) xinput.lib Ws2_32.lib ntdll.lib
+else
+ CFLAGS=-Wall -O2
+ OUTPUT_O=-c -o
+ OUTPUT_EXE=-o
+ STDC=-std=c99 -lm
+ SUBSYSTEM=-Wl,-subsystem,windows
+ LDFLAGS=-lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 -lwinmm -lws2_32 -lntdll -lxinput $(SUBSYSTEM)
+endif
 
 all : $(BIN)/$(APPNAME)
 
@@ -17,16 +35,16 @@ LUAINC=-I3rd/lua
 LUASRC:=$(wildcard 3rd/lua/*.c 3rd/lua/*.h)
 
 $(LUA_EXE) : $(LUASRC)
-	$(CC) $(CFLAGS) -o $@ 3rd/lua/onelua.c -DMAKE_LUA -std=c99 -lm
+	$(CC) $(CFLAGS) -o $@ 3rd/lua/onelua.c -DMAKE_LUA $(STDC)
 
-COMPILE_C=$(CC) $(CFLAGS) -c -o $@ $<
+COMPILE_C=$(CC) $(CFLAGS) $(OUTPUT_O) $@ $<
 COMPILE_LUA=$(LUA_EXE) script/lua2c.lua $< $@
 COMPILE_DATALIST=$(LUA_EXE) script/datalist2c.lua $< $@
 
 LUA_O=$(BUILD)/onelua.o
 
 $(LUA_O) : $(LUASRC)
-	$(CC) $(CFLAGS) -c -o $@ 3rd/lua/onelua.c -DMAKE_LIB -std=c99 -lm
+	$(CC) $(CFLAGS) $(OUTPUT_O) $@ 3rd/lua/onelua.c -DMAKE_LIB $(STDC)
 
 SHADER_SRC=$(wildcard src/*.glsl)
 SHADER_O=$(patsubst src/%.glsl,$(BUILD)/%.glsl.h,$(SHADER_SRC))
@@ -79,7 +97,7 @@ $(BUILD)/soluna_embedlua.o : src/embedlua.c $(LTASK_LUACODE) $(DATALIST_CODE)
 	$(COMPILE_C) -I$(BUILD) $(LUAINC)
 
 $(BUILD)/soluna_%.o : src/%.c
-	$(COMPILE_C) $(LUAINC) $(3RDINC) $(SHADERINC) -Wno-unknown-pragmas
+	$(COMPILE_C) $(LUAINC) $(3RDINC) $(SHADERINC)
 	
 $(BUILD)/ltask_%.o : 3rd/ltask/src/%.c
 	$(COMPILE_C) $(LUAINC) -D_WIN32_WINNT=0x0601 -DLTASK_EXTERNAL_OPENLIBS=soluna_openlibs
@@ -90,7 +108,7 @@ $(DATALIST_O) : 3rd/datalist/datalist.c
 	$(COMPILE_C) $(LUAINC)
 
 $(BIN)/$(APPNAME): $(MAIN_O) $(LTASK_O) $(LUA_O) $(DATALIST_O)
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(LD) $(OUTPUT_EXE) $@ $^ $(LDFLAGS)
 	
 clean :
 	rm -f $(BIN)/*.exe $(BUILD)/*.o $(BUILD)/*.h

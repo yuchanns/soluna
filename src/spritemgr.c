@@ -11,7 +11,6 @@
 #define INVALID_TEXTUREID 0xffff
 
 #define MAX_NODE 8192
-#define MAX_SPRITE_PER_TEXTURE 65536
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb/stb_rect_pack.h"
@@ -61,8 +60,6 @@ pack_sprite(struct sprite_bank *b, stbrp_context *ctx, stbrp_node *tmp, stbrp_re
 	for (i=from;i<b->n;i++) {
 		struct sprite_rect *rect = &b->rect[i];
 		if ((rect->texid == 0 || rect->texid == last_texid) && rect->frame == current_frame) {
-			if (rect_i >= MAX_SPRITE_PER_TEXTURE)
-				break;
 			stbrp_rect * sr = &srect[rect_i++];
 			sr->id = i;
 			sr->w = rect->u & 0xffff;
@@ -114,8 +111,8 @@ lbank_pack(lua_State *L) {
 
 	stbrp_context ctx;
 	stbrp_node tmp[MAX_NODE];
-	stbrp_rect rect[MAX_SPRITE_PER_TEXTURE];
-	
+	stbrp_rect * rect = malloc(sizeof(*rect) * b->n);
+
 	int texture = b->texture_n;
 	int from = 0;
 	int reserved = 0;
@@ -126,6 +123,7 @@ lbank_pack(lua_State *L) {
 		}
 		++b->texture_n;
 	}
+	free(rect);
 	b->texture_ready = 1;
 	
 	lua_pushinteger(L, texture);
