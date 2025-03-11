@@ -1,11 +1,12 @@
 local ltask = require "ltask"
 local render = require "soluna.render"
 local image = require "soluna.image"
-local setting = require "soluna.setting"
 local embedsource = require "soluna.embedsource"
 local drawmgr = require "soluna.drawmgr"
 local defmat = require "soluna.material.default"
 local textmat = require "soluna.material.text"
+
+local setting = require "soluna".settings()
 
 local font = {} ;  do
 	local mgr = require "soluna.font.manager"
@@ -95,7 +96,9 @@ function S.frame(count)
 	STATE.uniform.baseinst = 0
 	for i = 1, batch_n do
 		local ptr, size = batch[i][1]()
-		STATE.drawmgr:append(ptr, size)
+		if ptr then
+			STATE.drawmgr:append(ptr, size)
+		end
 	end
 	local draw_n = #STATE.drawmgr
 	for i = 1, draw_n do
@@ -155,6 +158,21 @@ function S.quit()
 	font.shutdown()
 end
 
+function S.load_sprites(name)
+	local loader = ltask.uniqueservice "loader"
+	local spr = ltask.call(loader, "loadbundle", name)
+	local rect = ltask.call(loader, "pack")
+
+	local imgmem = image.new(setting.texture_size, setting.texture_size)
+	local canvas = imgmem:canvas()
+	for id, v in pairs(rect) do
+		local src = image.canvas(v.data, v.w, v.h, v.stride)
+		image.blit(canvas, src, v.x, v.y)
+	end
+	
+	STATE.textures[1]:update(imgmem)
+end
+
 function S.init(arg)
 	font.init()
 	local loader = ltask.uniqueservice "loader"
@@ -191,19 +209,7 @@ function S.init(arg)
 		max_sprite = setting.sprite_max,
 		texture_size = texture_size,
 	})
-	
-	local spr = ltask.call(loader, "loadbundle", "asset/sprites.dl")
-	local rect = ltask.call(loader, "pack")
 
-	local imgmem = image.new(texture_size, texture_size)
-	local canvas = imgmem:canvas()
-	for id, v in pairs(rect) do
-		local src = image.canvas(v.data, v.w, v.h, v.stride)
-		image.blit(canvas, src, v.x, v.y)
-	end
-	
-	img:update(imgmem)
-	
 	STATE = {
 		pass = render.pass {
 			color0 = 0x4080c0,

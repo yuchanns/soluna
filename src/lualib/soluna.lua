@@ -18,4 +18,13 @@ function soluna.gamepad_init()
 	return state
 end
 
+local settings
+function soluna.settings()
+	if settings == nil then
+		local s = ltask.queryservice "settings"
+		settings = ltask.call(s, "get")
+	end
+	return settings
+end
+
 return soluna

@@ -11,7 +11,7 @@
 #include "spritebundle.lua.h"
 #include "render.lua.h"
 #include "settingdefault.dl.h"
-#include "setting.lua.h"
+#include "settings.lua.h"
 #include "fontmgr.lua.h"
 #include "gamepad.lua.h"
 #include "soluna.lua.h"
@@ -59,7 +59,6 @@ luaopen_embedsource(lua_State *L) {
 
 		lua_newtable(L);	// runtime
 			REG_SOURCE(spritebundle)
-			REG_SOURCE(setting)
 			REG_SOURCE(soluna)
 		lua_setfield(L, -2, "lib");
 
@@ -72,6 +71,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(loader)
 			REG_SOURCE(render)
 			REG_SOURCE(gamepad)
+			REG_SOURCE(settings)
 		lua_setfield(L, -2, "service");
 
 		lua_newtable(L);	// data list
