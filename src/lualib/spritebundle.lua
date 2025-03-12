@@ -9,11 +9,7 @@ local function load_bundle(filename)
 	return b
 end
 
-local function crop(item, filecache)
-	local c = filecache[item.filename]
-	if c == nil then
-		error("No file : " .. item.filename)
-	end
+local function crop_(item, c)
 	local x = item.cx
 	local y = item.cy
 	local w = item.cw
@@ -37,6 +33,61 @@ local function crop(item, filecache)
 	item.cy = cy + (y or 0)
 	item.cw = cw
 	item.ch = ch
+end
+
+local function unpack_size(size)
+	if type(size) == "number" then
+		return size, size
+	else
+		local x, y = size:match "(%d+)[xX*](%d+)"
+		return tonumber(x), tonumber(y)
+	end
+end
+
+local function crop(item, filecache)
+	local c = filecache[item.filename]
+	if c == nil then
+		error("No file : " .. item.filename)
+	end
+	local number = item.number
+	if number then
+		-- multi sprites
+		local cw, ch = unpack_size(assert(item.size))
+		local gap = item.gap
+		local gap_x = 0
+		local gap_y = 0
+		if gap then
+			gap_x, gap_y = unpack_size(gap)
+		end
+		local cx = 0
+		local cy = 0
+		local col = 1
+		local row
+		if type(number) == "number" then
+			row = number
+		else
+			row, col = unpack_size(number)
+		end
+		local count = 1
+		local offx = item.x
+		local offy = item.y
+		gap_x = gap_x + cw
+		gap_y = gap_y + ch
+		local filename = item.filename
+		for i = 1, col do
+			cx = 0
+			for j = 1, row do
+				local s = { cx = cx, cy = cy, cw = cw, ch = ch , x = offx , y = offy, filename = filename }
+				item[count] = s
+				crop_(s, c)
+				count = count + 1
+				cx = cx + gap_x
+			end
+			cy = cy + gap_y
+		end
+	else
+		crop_(item, c)
+	end
 end
 
 function M.load(filecache, filename)

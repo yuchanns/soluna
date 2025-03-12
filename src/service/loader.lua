@@ -23,11 +23,24 @@ function S.loadbundle(filename)
 		local desc = spritebundle.load(filecache, filename)
 		b = {}
 		for _, item in ipairs(desc) do
-			local id = sprite_bank:add(item.cw, item.ch, item.x, item.y)
-			sprite_bank:touch(id)	-- todo: don't touch here
-			item.id = id
-			sprite[id] = item
-			b[item.name] = id
+			local n = #item
+			if n == 0 then
+				local id = sprite_bank:add(item.cw, item.ch, item.x, item.y)
+				sprite_bank:touch(id)	-- todo: don't touch here
+				item.id = id
+				sprite[id] = item
+				b[item.name] = id
+			else
+				local pack = {}
+				b[item.name] = pack
+				for i = 1, n do
+					local s = item[i]
+					local id = sprite_bank:add(s.cw, s.ch, s.x, s.y)
+					sprite_bank:touch(id)	-- todo:
+					sprite[id] = s
+					pack[i] = id
+				end
+			end
 		end
 		bundle[filename] = b
 	end

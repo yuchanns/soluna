@@ -199,8 +199,8 @@ image_crop(lua_State *L) {
 	
 	lua_pushinteger(L, left);
 	lua_pushinteger(L, top);
-	lua_pushinteger(L, w - (left + right));
-	lua_pushinteger(L, h - (top + bottom));
+	lua_pushinteger(L, r.width - (left + right));
+	lua_pushinteger(L, r.line - (top + bottom));
 
 	return 4;
 }
@@ -346,8 +346,8 @@ image_canvas(lua_State *L) {
 		int w = luaL_checkinteger(L, 6);
 		int h = luaL_checkinteger(L, 7);
 		stride = width * 4;
-		if (x < 0 || y < 0 || x+w >= width || y+h >= height) {
-			return luaL_error(L, "Invalid rect (%d %d %d %d)", x, y, w, h);
+		if (x < 0 || y < 0 || x+w > width || y+h > height) {
+			return luaL_error(L, "Invalid rect (%d %d %d %d) in (%d %d)", x, y, w, h, width, height);
 		}
 		width = w;
 		height = h;
