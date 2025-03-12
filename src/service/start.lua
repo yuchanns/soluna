@@ -25,8 +25,16 @@ local render = ltask.uniqueservice "render"
 local batch_id = ltask.call(render, "register_batch", ltask.self())
 local quit = false
 
+local messages = { "mouse_move" }
+
 local function mainloop()
 	soluna.gamepad_init()
+	local addr = ltask.self()
+	for _, msg in ipairs(messages) do
+		if callback[msg] then
+			ltask.call(external, "listen", addr, msg)
+		end
+	end
 	local count = 0
 	while not quit do
 		count = count + 1
@@ -43,6 +51,11 @@ end
 ltask.fork(mainloop)
 
 local S = {}
+
+function S.message(msg, ...)
+	local cb = callback[msg]
+	cb(...)
+end
 
 function S.quit()
 	if not quit then

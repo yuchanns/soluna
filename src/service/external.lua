@@ -23,8 +23,39 @@ function command.cleanup()
 	ltask.send(1, "quit_ltask")
 end
 
+local listener = {}
+local message_filter = {}
+
+function message_filter.mouse_move(x, y)
+	return x, y
+end
+
+function S.listen(addr, msg)
+	local queue = listener[msg]
+	if queue then
+		queue[#queue+1] = addr
+	else
+		listener[msg] = { addr }
+	end
+end
+
 local function dispatch(type, ...)
-	local f =command[type]
+	local q = listener[type]
+	if q then
+		local f = message_filter[type]
+		if f then
+			for i = 1, #q do
+				local addr = q[i]
+				ltask.send(addr, "message", type, f(...))
+			end
+		else
+			for i = 1, #q do
+				local addr = q[i]
+				ltask.send(addr, "message", type, ...)
+			end
+		end
+	end
+	local f = command[type]
 	if f then
 		f(...)
 	else
@@ -35,6 +66,15 @@ end
 
 function S.external(p)
 	dispatch(app.unpackmessage(p))
+end
+
+function S.update()
+	local change = device.update()
+	if change then
+		for addr, msg in pairs(listener) do
+			ltask.send(addr, msg)
+		end
+	end
 end
 
 function S.init(arg)
