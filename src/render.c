@@ -164,6 +164,25 @@ lbuffer_ref(lua_State *L) {
 }
 
 static int
+lbuffer_tostring(lua_State *L) {
+	struct buffer *p = (struct buffer *)lua_touserdata(L, 1);
+	const char * name = "Invalid";
+	switch(p->type) {
+	case SG_BUFFERTYPE_VERTEXBUFFER:
+		name = "VB";
+		break;
+	case SG_BUFFERTYPE_INDEXBUFFER:
+		name = "IB";
+		break;
+	case SG_BUFFERTYPE_STORAGEBUFFER:
+		name = "SB";
+		break;
+	}
+	lua_pushfstring(L, "[%s:%d]", name, p->handle.id);
+	return 1;
+}
+
+static int
 lbuffer(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	struct buffer * p = (struct buffer *)lua_newuserdatauv(L, sizeof(*p), 0);
@@ -192,6 +211,7 @@ lbuffer(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "__call", lbuffer_ref },
+			{ "__tostring", lbuffer_tostring },
 			{ "update", lbuffer_update },
 			{ NULL, NULL },
 		};

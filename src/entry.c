@@ -3,114 +3,138 @@
 
 #include <lua.h>
 #include <lauxlib.h>
-#include <lualib.h>
 #include <string.h>
 #include <stdio.h>
+
+#define FRAME_CALLBACK 1
+#define CLEANUP_CALLBACK 2
+#define EVENT_CALLBACK 3
+#define CALLBACK_COUNT 3
 
 #include "sokol/sokol_app.h"
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_glue.h"
 #include "sokol/sokol_log.h"
 #include "sokol/sokol_args.h"
-#include "message.h"
 #include "loginfo.h"
-#include "ltask/src/cond.h"
+#include "appevent.h"
 
 struct app_context {
 	lua_State *L;
-	void (*send_message)(void *ud, void *p);
-	void *send_message_ud;
+	lua_State *quitL;
 	int (*send_log)(void *ud, unsigned int id, void *data, uint32_t sz);
 	void *send_log_ud;
-	struct cond frame_sync;
-	int frame_ready;
 };
 
 static struct app_context *CTX = NULL;
 
-static void
-send_app_message(void *p) {
-	if (CTX && CTX->send_message) {
-		CTX->send_message(CTX->send_message_ud, p);
-	}
+struct soluna_message {
+	const char * type;
+	union {
+		int p[2];
+		uint64_t u64;
+	} v;
+};
+
+static inline struct soluna_message *
+message_create(const char *type, int p1, int p2) {
+	struct soluna_message * msg = (struct soluna_message *)malloc(sizeof(*msg));
+	msg->type = type;
+	msg->v.p[0] = p1;
+	msg->v.p[1] = p2;
+	return msg;
+}
+
+static inline struct soluna_message *
+message_create64(const char *type, uint64_t p) {
+	struct soluna_message * msg = (struct soluna_message *)malloc(sizeof(*msg));
+	msg->type = type;
+	msg->v.u64 = p;
+	return msg;
+}
+
+static inline void
+message_release(struct soluna_message *msg) {
+	free(msg);
 }
 
 static int
-set_callback(lua_State *L) {
+lmessage_send(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
 	luaL_checktype(L, 2, LUA_TLIGHTUSERDATA);
-	luaL_checktype(L, 3, LUA_TLIGHTUSERDATA);
-	luaL_checktype(L, 4, LUA_TLIGHTUSERDATA);
-	CTX->send_message = lua_touserdata(L, 1);
-	CTX->send_message_ud = lua_touserdata(L, 2);
-	CTX->send_log = lua_touserdata(L, 3);
-	CTX->send_log_ud = lua_touserdata(L, 4);
-
+	void (*send_message)(void *ud, void *p) = lua_touserdata(L, 1);
+	void *send_message_ud = lua_touserdata(L, 2);
+	const char * what = NULL;
+	if (lua_type(L, 3) == LUA_TSTRING) {
+		what = lua_tostring(L, 3);
+	} else {
+		luaL_checktype(L, 3, LUA_TLIGHTUSERDATA);
+		what = (const char *)lua_touserdata(L, 3);
+	}
+	int64_t p1 = luaL_optinteger(L, 4, 0);
+	struct soluna_message * msg = NULL;
+	if (lua_isnoneornil(L, 5)) {
+		msg = message_create64(what, p1);
+	} else {
+		int p2 = luaL_checkinteger(L, 5);
+		msg = message_create(what, (int)p1, p2);
+	}
+	send_message(send_message_ud, msg);
 	return 0;
 }
 
 static int
-get_appinfo(lua_State *L) {
-	lua_newtable(L);
-	lua_pushinteger(L, sapp_width());
-	lua_setfield(L, -2, "width");
-	lua_pushinteger(L, sapp_height());
-	lua_setfield(L, -2, "height");
+lmessage_unpack(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	struct soluna_message *m = (struct soluna_message *)lua_touserdata(L,1);
+	lua_pushstring(L, m->type);
+	lua_pushinteger(L, m->v.p[0]);
+	lua_pushinteger(L, m->v.p[1]);
+	lua_pushinteger(L, m->v.u64);
+	message_release(m);
+	return 4;
+}
+
+static int
+lquit_signal(lua_State *L) {
+	if (CTX) {
+		CTX->quitL = CTX->L;
+		CTX->L = NULL;
+	}
+	return 0;
+}
+
+static int
+levent_unpack(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	struct event_message em;
+	app_event_unpack(&em, lua_touserdata(L, 1));
+	lua_pushlightuserdata(L, (void *)em.typestr);
+	lua_pushinteger(L, em.p1);
+	lua_pushinteger(L, em.p2);
+	return 3;
+}
+
+int
+luaopen_soluna_app(lua_State *L) {
+	luaL_checkversion(L);
+	luaL_Reg l[] = {
+		{ "unpackmessage", lmessage_unpack },
+		{ "sendmessage", lmessage_send },
+		{ "unpackevent", levent_unpack },
+		{ "quit", lquit_signal },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, l);
 	return 1;
-}
-
-void soluna_openlibs(lua_State *L);
-
-static const char *code = "local embed = require 'soluna.embedsource' ; local f = load(embed.runtime.main()) ; f(...)";
-
-static int
-pmain(lua_State *L) {
-	soluna_openlibs(L);
-	lua_pushcfunction(L, set_callback);
-	lua_setglobal(L, "external_messsage");
-	lua_pushcfunction(L, get_appinfo);
-	lua_setglobal(L, "app_info");
-	int n = sargs_num_args();
-	luaL_checkstack(L, n+1, NULL);
-	int i;
-	lua_newtable(L);
-	int arg_table = lua_gettop(L);
-	for (i=0;i<n;i++) {
-		const char *k = sargs_key_at(i);
-		const char *v = sargs_value_at(i);
-		if (v[0] == 0) {
-			lua_pushstring(L, sargs_key_at(i));
-		} else {
-			lua_pushstring(L, v);
-			lua_setfield(L, arg_table, k);
-		}
-	}
-	int arg_n = lua_gettop(L) - arg_table + 1;
-	if (luaL_loadstring(L, code) != LUA_OK) {
-		return lua_error(L);
-	}
-	lua_insert(L, -arg_n-1);
-	if (lua_pcall(L, arg_n, 0, 0) != LUA_OK) {
-		return lua_error(L);
-	}
-	
-	return 0;
-}
-
-static void
-start_app(lua_State *L) {
-	lua_pushcfunction(L, pmain);
-	if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-		fprintf(stderr, "Error : %s", lua_tostring(L, -1));
-		lua_close(L);
-		sapp_quit();
-	}
 }
 
 static void
 log_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* message, uint32_t line_nr, const char* filename, void* user_data) {
-	if (CTX == NULL || CTX->send_log == NULL)
+	if (CTX == NULL || CTX->send_log == NULL) {
+		fprintf(stderr, "%s (%d) : %s\n", filename, line_nr, message);
 		return;
+	}
 	struct log_info *msg = (struct log_info *)malloc(sizeof(*msg));
 	if (tag) {
 		strncpy(msg->tag, tag, sizeof(msg->tag));
@@ -131,6 +155,108 @@ log_func(const char* tag, uint32_t log_level, uint32_t log_item, const char* mes
 	CTX->send_log(CTX->send_log_ud, 0, msg, sizeof(*msg));
 }
 
+void soluna_openlibs(lua_State *L);
+
+static const char *code = "local embed = require 'soluna.embedsource' ; local f = load(embed.runtime.main()) ; return f(...)";
+
+static void
+set_app_info(lua_State *L, int index) {
+	lua_newtable(L);
+	lua_pushinteger(L, sapp_width());
+	lua_setfield(L, -2, "width");
+	lua_pushinteger(L, sapp_height());
+	lua_setfield(L, -2, "height");
+	lua_setfield(L, index, "app");
+}
+
+static int
+pmain(lua_State *L) {
+	soluna_openlibs(L);
+	int n = sargs_num_args();
+	luaL_checkstack(L, n+1, NULL);
+	int i;
+	lua_newtable(L);
+	int arg_table = lua_gettop(L);
+	for (i=0;i<n;i++) {
+		const char *k = sargs_key_at(i);
+		const char *v = sargs_value_at(i);
+		if (v[0] == 0) {
+			lua_pushstring(L, sargs_key_at(i));
+		} else {
+			lua_pushstring(L, v);
+			lua_setfield(L, arg_table, k);
+		}
+	}
+	set_app_info(L, arg_table);
+	
+	int arg_n = lua_gettop(L) - arg_table + 1;
+	if (luaL_loadstring(L, code) != LUA_OK) {
+		return lua_error(L);
+	}
+	lua_insert(L, -arg_n-1);
+	lua_call(L, arg_n, 1);
+	return 1;
+}
+
+static void *
+get_ud(lua_State *L, const char *key) {
+	if (lua_getfield(L, -1, key) != LUA_TLIGHTUSERDATA) {
+		lua_pop(L, 1);
+		return NULL;
+	}
+	void * ud = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	return ud;
+}
+
+static int
+get_function(lua_State *L, const char *key, int index) {
+	if (lua_getfield(L, -1, key) != LUA_TFUNCTION) {
+		fprintf(stderr, "main.lua need return a %s function", key);
+		return 1;
+	}
+	lua_insert(L, index);
+	return 0;
+}
+
+static int
+init_callback(lua_State *L, struct app_context * ctx) {
+	if (!lua_istable(L, -1)) {
+		fprintf(stderr, "main.lua need return a table, it's %s\n", lua_typename(L, lua_type(L, -1)));
+		return 1;
+	}
+	ctx->send_log = get_ud(L, "send_log");
+	ctx->send_log_ud = get_ud(L, "send_log_ud");
+	if (get_function(L, "frame", FRAME_CALLBACK))
+		return 1;
+	if (get_function(L, "cleanup", CLEANUP_CALLBACK))
+		return 1;
+	if (get_function(L, "event", EVENT_CALLBACK))
+		return 1;
+	lua_settop(L, CALLBACK_COUNT);
+	return 0;
+}
+
+static int
+msghandler(lua_State *L) {
+	const char *msg = lua_tostring(L, 1);
+	luaL_traceback(L, L, msg, 1);
+	return 1;
+}
+
+static int
+start_app(lua_State *L) {
+	lua_settop(L, 0);
+	lua_pushcfunction(L, msghandler);
+	lua_pushcfunction(L, pmain);
+	if (lua_pcall(L, 0, 1, 1) != LUA_OK) {
+		fprintf(stderr, "Start fatal : %s", lua_tostring(L, -1));
+		return 1;
+	} else {
+		return init_callback(L, CTX);
+	}
+}
+
 static void
 app_init() {
 	static struct app_context app;
@@ -139,12 +265,9 @@ app_init() {
 		return;
 
 	app.L = L;
-	app.send_message = NULL;
-	app.send_message_ud = NULL;
+	app.quitL = NULL;
 	app.send_log = NULL;
 	app.send_log_ud = NULL;
-	cond_create(&app.frame_sync);
-	app.frame_ready = 0;
 	
 	CTX = &app;
 	
@@ -152,149 +275,68 @@ app_init() {
         .environment = sglue_environment(),
         .logger.func = log_func,			
 	});
-	start_app(L);
-	sargs_shutdown();
+	if (start_app(L)) {
+		sargs_shutdown();
+		lua_close(L);
+		app.L = NULL;
+		sapp_quit();
+	} else {
+		sargs_shutdown();
+	}
+}
+
+static lua_State *
+get_L(struct app_context *ctx) {
+	if (ctx == NULL)
+		return NULL;
+	lua_State *L = ctx->L;
+	if (L == NULL) {
+		if (ctx->quitL != NULL) {
+			ctx->L = ctx->quitL;
+			ctx->quitL = NULL;
+			sapp_quit();
+			return NULL;
+		}
+	}
+	return L;
+}
+
+static void
+invoke_callback(lua_State *L, int index, int nargs) {
+	lua_pushvalue(L, index);
+	if (nargs > 0) {
+		lua_insert(L, -nargs-1);
+	}
+	if (lua_pcall(L, nargs, 0, 0) != LUA_OK) {
+		fprintf(stderr, "Error : %s", lua_tostring(L, -1));
+		lua_pop(L, 1);
+	}
 }
 
 static void
 app_frame() {
-	if (CTX->frame_ready) {
-		cond_wait_begin(&CTX->frame_sync);
-		send_app_message(message_create64("frame", sapp_frame_count()));
-		cond_wait(&CTX->frame_sync);
-		cond_wait_end(&CTX->frame_sync);
+	lua_State *L = get_L(CTX);
+	if (L) {
+		lua_pushinteger(L, sapp_frame_count());
+		invoke_callback(L, FRAME_CALLBACK, 1);
 	}
-}
-
-static int
-lframeready(lua_State *L) {
-	int ready = lua_toboolean(L, 1);
-	CTX->frame_ready = ready;
-	return 0;
-}
-
-static int
-lnextframe(lua_State *L) {
-	cond_trigger_begin(&CTX->frame_sync);
-	cond_trigger_end(&CTX->frame_sync, 1);
-	return 0;
-}
-
-static int
-lmessage_unpack(lua_State *L) {
-	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
-	struct soluna_message *m = (struct soluna_message *)lua_touserdata(L,1);
-	lua_pushstring(L, m->type);
-	lua_pushinteger(L, m->v.p[0]);
-	lua_pushinteger(L, m->v.p[1]);
-	lua_pushinteger(L, m->v.u64);
-	message_release(m);
-	return 4;
-}
-
-int
-luaopen_soluna_app(lua_State *L) {
-	luaL_checkversion(L);
-	luaL_Reg l[] = {
-		{ "frameready", lframeready },
-		{ "nextframe", lnextframe },
-		{ "unpackmessage", lmessage_unpack },
-		{ NULL, NULL },
-	};
-	luaL_newlib(L, l);
-	return 1;
-}
-
-static int
-pcleanup(lua_State *L) {
-	if (lua_getglobal(L, "cleanup") != LUA_TFUNCTION)
-		return 0;
-	lua_call(L, 0, 0);
-	return 0;
 }
 
 static void
 app_cleanup() {
-	if (CTX == NULL)
-		return;
-	lua_State *L = CTX->L;
-	send_app_message(message_create("cleanup", 0, 0));
-	lua_pushcfunction(L, pcleanup);
-	if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-		fprintf(stderr, "Error: %s", lua_tostring(L, -1));
+	lua_State *L = get_L(CTX);
+	if (L) {
+		invoke_callback(L, CLEANUP_CALLBACK, 0);
 	}
-	lua_close(L);
-	cond_release(&CTX->frame_sync);
-	memset(CTX, 0, sizeof(*CTX));
 	sg_shutdown();
 }
 
 static void
-mouse_message(const sapp_event* ev) {
-	const char *typestr = NULL;
-	int p1 = 0;
-	int p2 = 0;
-	switch (ev->type) {
-	case SAPP_EVENTTYPE_MOUSE_MOVE:
-		typestr = "mouse_move";
-		p1 = ev->mouse_x;
-		p2 = ev->mouse_y;
-		break;
-	case SAPP_EVENTTYPE_MOUSE_DOWN:
-	case SAPP_EVENTTYPE_MOUSE_UP:
-		typestr = "mouse_button";
-		p1 = ev->mouse_button;
-		p2 = ev->type == SAPP_EVENTTYPE_MOUSE_DOWN;
-		break;
-	case SAPP_EVENTTYPE_MOUSE_SCROLL:
-		typestr = "mouse_scroll";
-		p1 = ev->scroll_y;
-		p2 = ev->scroll_x;
-		break;
-	default:
-		typestr = "mouse";
-		p1 = ev->type;
-		break;
-	}
-	send_app_message(message_create(typestr, p1, p2));
-}
-
-static void
-window_message(const sapp_event *ev) {
-	const char *typestr = NULL;
-	int p1 = 0;
-	int p2 = 0;
-	switch (ev->type) {
-	case SAPP_EVENTTYPE_RESIZED:
-		typestr = "window_resize";
-		p1 = ev->window_width;
-		p2 = ev->window_height;
-		break;
-	default:
-		typestr = "window";
-		p1 = ev->type;
-		break;
-	}
-	send_app_message(message_create(typestr, p1, p2));
-}
-
-static void
 app_event(const sapp_event* ev) {
-	switch (ev->type) {
-	case SAPP_EVENTTYPE_MOUSE_MOVE:
-	case SAPP_EVENTTYPE_MOUSE_DOWN:
-	case SAPP_EVENTTYPE_MOUSE_UP:
-	case SAPP_EVENTTYPE_MOUSE_SCROLL:
-	case SAPP_EVENTTYPE_MOUSE_ENTER:
-	case SAPP_EVENTTYPE_MOUSE_LEAVE:
-		mouse_message(ev);
-		break;
-	case SAPP_EVENTTYPE_RESIZED:
-		window_message(ev);
-		break;
-	default:
-		send_app_message(message_create("message", ev->type, 0));
-		break;
+	lua_State *L = get_L(CTX);
+	if (L) {
+		lua_pushlightuserdata(L, (void *)ev);
+		invoke_callback(L, EVENT_CALLBACK, 1);
 	}
 }
 

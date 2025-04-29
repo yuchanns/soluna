@@ -208,7 +208,7 @@ batch_add_sprite(lua_State *L, struct batch *b) {
 	int n = b->n;
 	struct draw_primitive * p = batch_reserve(b->b, n + 1);
 	if (p == NULL)
-		luaL_error(L, "Out of memory");
+		luaL_error(L, "batch_add_sprite : Out of memory");
 	
 	p += n;
 	
@@ -227,7 +227,7 @@ batch_add_material(lua_State *L, struct batch *b) {
 	int n = b->n;
 	struct draw_primitive * p = batch_reserve(b->b, n + 2);
 	if (p == NULL)
-		luaL_error(L, "Out of memory");
+		luaL_error(L, "batch_add_material : Out of memory");
 
 	p += n;
 	
@@ -300,7 +300,7 @@ lsprite_newbatch(lua_State *L) {
 	b->n = 0;
 	b->b = batch_new(0);
 	if (b->b == NULL)
-		return luaL_error(L, "Out of memory");
+		return luaL_error(L, "sprite_newbatch : Out of memory");
 
 	if (luaL_newmetatable(L, "SOLUNA_BATCH")) {
 		luaL_Reg l[] = {

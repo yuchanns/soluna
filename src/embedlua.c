@@ -4,7 +4,6 @@
 #include "timer.lua.h"
 #include "root.lua.h"
 #include "main.lua.h"
-#include "external.lua.h"
 #include "start.lua.h"
 #include "print_r.lua.h"
 #include "loader.lua.h"
@@ -66,7 +65,6 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(log)
 			REG_SOURCE(root)
 			REG_SOURCE(timer)
-			REG_SOURCE(external)
 			REG_SOURCE(start)
 			REG_SOURCE(loader)
 			REG_SOURCE(render)

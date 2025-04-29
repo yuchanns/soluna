@@ -28,7 +28,9 @@ local function patch(s, k, v)
 	
 	if type(v) == "table" then
 		local orig_v = s[k]
-		if type(orig_v) == "table" then
+		if orig_v == nil then
+			s[k] = v
+		elseif type(orig_v) == "table" then
 			for sub_k,sub_v in pairs(v) do
 				patch(orig_v, sub_k, sub_v)
 			end

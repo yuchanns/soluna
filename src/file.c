@@ -77,7 +77,7 @@ lfile_load(lua_State *L) {
 	void * buffer = create_tmp_buffer(L, sz);
 	if (buffer == NULL) {
 		fclose(f);
-		return luaL_error(L, "Out of memory");
+		return luaL_error(L, "lfile_load : Out of memory");
 	}
 	size_t rd = fread(buffer, 1, sz, f);
 	fclose(f);
@@ -105,7 +105,7 @@ lfile_load_string(lua_State *L) {
 		buffer = malloc(sz);
 		if (buffer == NULL) {
 			fclose(f);
-			return luaL_error(L, "Out of memory");
+			return luaL_error(L, "lfile_load_string : Out of memory");
 		}
 	}
 	size_t rd = fread(buffer, 1, sz, f);
@@ -118,7 +118,7 @@ lfile_load_string(lua_State *L) {
 		if (sz > FILE_TMPSIZE)
 			free(buffer);
 		if (!succ)
-			return luaL_error(L, "Out of memory");
+			return luaL_error(L, "lfile_load_string : Out of memory");
 	}
 	if (rd != sz) {
 		return luaL_error(L, "Read %s fail", filename);
@@ -167,7 +167,7 @@ loader(lua_State *L) {
 	buf->ptr = malloc(sz);
 	if (buf->ptr == NULL) {
 		fclose(f);
-		return luaL_error(L, "Out of memory");
+		return luaL_error(L, "loader : Out of memory");
 	}
 	size_t rd = fread(buf->ptr, 1, sz, f);
 	fclose(f);

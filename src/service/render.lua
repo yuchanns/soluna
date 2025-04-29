@@ -87,9 +87,6 @@ function S.frame(count)
 
 	-- todo: do not wait all batch commits
 	local batch_n = #batch
-	if batch_n == 0 then
-		return
-	end
 	batch.wait()
 	STATE.drawmgr:reset()
 	STATE.bindings:voffset(0, 0)

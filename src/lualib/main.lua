@@ -1,7 +1,7 @@
 local boot = require "ltask.bootstrap"
 local embedsource = require "soluna.embedsource"
-
-local wait_func
+local event = require "soluna.event"
+local soluna_app = require "soluna.app"
 
 local init_func_temp = [=[
 	local name = ...
@@ -51,6 +51,20 @@ local function start(config)
 			service_path = config.service_path or "",
 		}),
 	}
+	
+	local ev = event.create()
+	local frame_barrier = event.create()
+	
+	table.insert(root_config.bootstrap, {
+		name = "start",
+		args = {
+			config.args,
+			{
+				init = ev:ptr(),
+				frame = frame_barrier:ptr()
+			}
+		},
+	})
 
 	boot.init_socket()
 	local bootstrap = load(embedsource.runtime.bootstrap(), "@3rd/ltask/lualib/bootstrap.lua")()
@@ -62,16 +76,29 @@ local function start(config)
 		root_initfunc = root_config.initfunc,
 		mainthread = config.mainthread,
 	}
+	ev:wait()
 	local sender, sender_ud = bootstrap.external_sender(ctx)
-	local logger, logger_ud = bootstrap.log_sender(ctx)
-	_G.external_messsage(sender, sender_ud, logger, logger_ud)
-	function wait_func()
-		bootstrap.wait(ctx)
+	local c_sendmessage = require "soluna.app".sendmessage
+	local function send_message(...)
+		c_sendmessage(sender, sender_ud, ...)
 	end
-end
-
-function _G.cleanup()
-	wait_func()
+	local logger, logger_ud = bootstrap.log_sender(ctx)
+	local unpackevent = assert(soluna_app.unpackevent)
+	return {
+		send_log = logger,
+		send_log_ud = logger_ud,
+		cleanup = function()
+			send_message "cleanup"
+			bootstrap.wait(ctx)
+		end,
+		frame = function(count)
+			send_message("frame", count)
+			frame_barrier:wait()
+		end,
+		event = function(ev)
+			send_message(unpackevent(ev))
+		end,
+	}
 end
 
 local args = ... or {}
@@ -88,7 +115,8 @@ if args.cpath then
 	package.cpath = args.cpath
 end
 
-start {
+return start {
+	args = args,
 	core = {
 		debuglog = "=", -- stdout
 	},
@@ -105,9 +133,5 @@ start {
 			name = "loader",
 			unique = true,
 		},
-        {
-            name = "start",
-			args = { args, _G.app_info() },
-        },
     },
 }
