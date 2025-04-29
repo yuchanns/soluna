@@ -185,7 +185,7 @@ lbuffer(lua_State *L) {
 		.usage = usage,
 		.label = label,
 	    .data.ptr = ptr,
-		.data.size = sz,
+		.data.size = ptr == NULL ? 0 : sz,
 	});
 		
 	if (luaL_newmetatable(L, "SOKOL_BUFFER")) {
