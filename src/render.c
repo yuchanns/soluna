@@ -17,7 +17,7 @@
 
 struct buffer {
 	sg_buffer handle;
-	int type;
+	struct sg_buffer_usage usage;
 };
 
 struct image {
@@ -29,48 +29,47 @@ struct sampler {
 	sg_sampler handle;
 };
 
-static int
+static struct sg_buffer_usage
 get_buffer_type(lua_State *L, int index) {
 	if (lua_getfield(L, index, "type") != LUA_TSTRING) {
-		return luaL_error(L, "Need .type");
+		luaL_error(L, "Need .type");
 	}
 	const char * str = lua_tostring(L, -1);
-	int t = 0;
+	struct sg_buffer_usage usage = { 0 };
 	if (strcmp(str, "vertex") == 0) {
-		t = SG_BUFFERTYPE_VERTEXBUFFER;
+		usage.vertex_buffer = true;
 	} else if (strcmp(str, "index") == 0) {
-		t = SG_BUFFERTYPE_INDEXBUFFER;
+		usage.index_buffer = true;
 	} else if (strcmp(str, "storage") == 0) {
-		t = SG_BUFFERTYPE_STORAGEBUFFER;
+	    usage.storage_buffer = true;
 	} else {
-		return luaL_error(L, "Invalid buffer .type = %s", str);
+		luaL_error(L, "Invalid buffer .type = %s", str);
 	}
 	lua_pop(L, 1);
-	return t;
+	return usage;
 }
 
-static int
-get_buffer_usage(lua_State *L, int index) {
+static void
+get_buffer_usage(lua_State *L, int index, struct sg_buffer_usage *usage) {
 	if (lua_getfield(L, index, "usage") != LUA_TSTRING) {
 		if (lua_isnil(L, -1)) {
 			lua_pop(L, 1);
-			return SG_USAGE_IMMUTABLE;
+			usage->immutable = true;
+			return;
 		}
-		return luaL_error(L, "Invalid .usage");
+		luaL_error(L, "Invalid .usage");
 	}
 	const char * str = lua_tostring(L, -1);
-	int t = 0;
 	if (strcmp(str, "stream") == 0) {
-		t = SG_USAGE_STREAM;
+		usage->stream_update = true;
 	} else if (strcmp(str, "dynamic") == 0) {
-		t = SG_USAGE_DYNAMIC;
+		usage->dynamic_update = true;
 	} else if (strcmp(str, "immutable") == 0) {
-		t = SG_USAGE_IMMUTABLE;
+		usage->immutable = true;
 	} else {
-		return luaL_error(L, "Invalid buffer .usage = %s", str);
+		luaL_error(L, "Invalid buffer .usage = %s", str);
 	}
 	lua_pop(L, 1);
-	return t;
 }
 
 static const void *
@@ -167,16 +166,12 @@ static int
 lbuffer_tostring(lua_State *L) {
 	struct buffer *p = (struct buffer *)lua_touserdata(L, 1);
 	const char * name = "Invalid";
-	switch(p->type) {
-	case SG_BUFFERTYPE_VERTEXBUFFER:
+	if (p->usage.vertex_buffer) {
 		name = "VB";
-		break;
-	case SG_BUFFERTYPE_INDEXBUFFER:
+	} else if (p->usage.index_buffer) {
 		name = "IB";
-		break;
-	case SG_BUFFERTYPE_STORAGEBUFFER:
+	} else if (p->usage.storage_buffer) {
 		name = "SB";
-		break;
 	}
 	lua_pushfstring(L, "[%s:%d]", name, p->handle.id);
 	return 1;
@@ -186,11 +181,11 @@ static int
 lbuffer(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	struct buffer * p = (struct buffer *)lua_newuserdatauv(L, sizeof(*p), 0);
-	p->type = get_buffer_type(L, 1);
-	int usage = get_buffer_usage(L, 1);
+	p->usage = get_buffer_type(L, 1);
+	get_buffer_usage(L, 1, &p->usage);
 	size_t sz;
 	const void *ptr = get_buffer_data(L, 1, &sz);
-	if (usage == SG_USAGE_IMMUTABLE && ptr == NULL) {
+	if (p->usage.immutable && ptr == NULL) {
 		return luaL_error(L, "immutable buffer needs init data");
 	}
 	const char *label = NULL;
@@ -200,8 +195,7 @@ lbuffer(lua_State *L) {
 	lua_pop(L, 1);
 	p->handle = sg_make_buffer(&(sg_buffer_desc) {
 		.size = sz,
-		.type = p->type,
-		.usage = usage,
+		.usage = p->usage,
 		.label = label,
 	    .data.ptr = ptr,
 		.data.size = ptr == NULL ? 0 : sz,
@@ -369,7 +363,7 @@ limage_ref(lua_State *L) {
 static int
 limage(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	sg_image_desc img = { .usage = SG_USAGE_DYNAMIC };
+	sg_image_desc img = { .usage.dynamic_update = true };
 	if (lua_getfield(L, 1, "width") != LUA_TNUMBER) {
 		return luaL_error(L, "Need .width");
 	}
