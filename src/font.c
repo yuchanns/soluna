@@ -79,6 +79,19 @@ lcobj(lua_State *L) {
 	return 1;
 }
 
+static int
+limport_icon(lua_State *L) {
+	struct font_manager *F = getF(L);
+	luaL_checktype(L, 1, LUA_TUSERDATA);
+	void *data = lua_touserdata(L, 1);
+	size_t sz = lua_rawlen(L, 1);
+	int n = sz / FONT_MANAGER_GLYPHSIZE / FONT_MANAGER_GLYPHSIZE;
+	if (n * FONT_MANAGER_GLYPHSIZE * FONT_MANAGER_GLYPHSIZE != sz)
+		return luaL_error(L, "Invalid icon bundle size");
+	font_manager_icon_init(F, n, data);
+	return 0;
+}
+
 int
 luaopen_font(lua_State *L) {
 	luaL_checkversion(L);
@@ -91,6 +104,7 @@ luaopen_font(lua_State *L) {
 		{ "submit",				lsubmit },
 		{ "cobj",				lcobj },
 		{ "texture_size",		NULL },
+		{ "import_icon",		limport_icon },
 		{ NULL, 				NULL },
 	};
 	

@@ -1,6 +1,9 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <math.h>
+#include <string.h>
+
+#include "font_define.h"
 
 // implement from image.c
 #include "stb/stb_image.h"
@@ -14,10 +17,10 @@
 
 #define MAX_SIZE 4096
 #define INF 1e20
-#define SDF_RADIUS 10
+#define SDF_RADIUS 8
 #define SDF_CUTOFF 0.25
 // the same with font glyph size
-#define IMAGE_SIZE 48
+#define IMAGE_SIZE 64
 
 // 1D squared distance transform
 static void
@@ -196,10 +199,35 @@ image_savesdf(lua_State *L) {
 	return 1;
 }
 
+static int
+icon_bundle(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	int n = lua_rawlen(L, 1);
+	size_t sz = n * FONT_MANAGER_GLYPHSIZE * FONT_MANAGER_GLYPHSIZE;
+	void * buffer = lua_newuserdatauv(L, sz, 0);
+	int i;
+	for (i=0; i<n; i++) {
+		// import icon i
+		if (lua_geti(L, 1, i+1) != LUA_TSTRING) {
+			return luaL_error(L, "Invalid icon %d (%s)", i+1, lua_typename(L, lua_type(L, -1)));
+		}
+		size_t icon_size;
+		const char *icon = lua_tolstring(L, -1, &icon_size);
+		if (icon_size != FONT_MANAGER_GLYPHSIZE * FONT_MANAGER_GLYPHSIZE) {
+			return luaL_error(L, "Invalid icon %d size, need %d * %d bytes", i+1, FONT_MANAGER_GLYPHSIZE, FONT_MANAGER_GLYPHSIZE);
+		}
+		unsigned char *ptr = (unsigned char *)buffer + i * FONT_MANAGER_GLYPHSIZE * FONT_MANAGER_GLYPHSIZE;
+		memcpy(ptr, icon, FONT_MANAGER_GLYPHSIZE * FONT_MANAGER_GLYPHSIZE);
+		lua_pop(L, 1);
+	}
+	return 1;
+}
+
 int
 luaopen_image_sdf(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
+		{ "bundle", icon_bundle },
 		{ "load", image_loadsdf },
 		{ "save", image_savesdf },	// for debug
 		{ NULL, NULL },

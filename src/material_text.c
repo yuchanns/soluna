@@ -60,7 +60,7 @@ submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n
 			tmp.spr[count].offset = (-og.offset_x + 0x8000) << 16 | (-og.offset_y + 0x8000);
 			tmp.spr[count].u = og.u << 16 | FONT_MANAGER_GLYPHSIZE;
 			tmp.spr[count].v = og.v << 16 | FONT_MANAGER_GLYPHSIZE;
-	
+
 			sprite_mul_scale(p, scale);
 			// calc scale/rot index
 			int sr_index = srbuffer_add(m->srbuffer, p->sr);
@@ -70,14 +70,12 @@ submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n
 			}
 			tmp.inst[count].x = (float)p->x / 256.0f;
 			tmp.inst[count].y = (float)p->y / 256.0f;
-			tmp.inst[count].sr_index = (float)0;
+			tmp.inst[count].sr_index = (float)sr_index;
 			++count;
 		} else {
 			t->codepoint = -1;
 		}
 	}
-//	dump("inst", tmp.inst, count * sizeof(tmp.inst[0]));
-//	dump("sprt", tmp.spr, count * sizeof(tmp.spr[0]));
 	sg_append_buffer(m->inst, &(sg_range) { tmp.inst , count * sizeof(tmp.inst[0]) });
 	sg_append_buffer(m->sprite, &(sg_range) { tmp.spr , count * sizeof(tmp.spr[0]) });
 }
