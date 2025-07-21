@@ -20,11 +20,13 @@
             C struct: vs_params_t
             Bind slot: UB_vs_params => 0
         Storage buffer 'sprite_buffer':
-            C struct: sprite_buffer_t
+            C struct: sprite_t
             Bind slot: SBUF_sprite_buffer => 1
+            Readonly: true
         Storage buffer 'sr_lut':
-            C struct: sr_lut_t
+            C struct: sr_mat_t
             Bind slot: SBUF_sr_lut => 0
+            Readonly: true
         Image 'tex':
             Image type: SG_IMAGETYPE_2D
             Sample type: SG_IMAGESAMPLETYPE_FLOAT
@@ -338,6 +340,7 @@ static inline const sg_shader_desc* texquad_shader_desc(sg_backend backend) {
             desc.fragment_func.source = (const char*)fs_source_hlsl4;
             desc.fragment_func.d3d11_target = "ps_4_0";
             desc.fragment_func.entry = "main";
+            desc.attrs[0].base_type = SG_SHADERATTRBASETYPE_FLOAT;
             desc.attrs[0].hlsl_sem_name = "TEXCOORD";
             desc.attrs[0].hlsl_sem_index = 0;
             desc.uniform_blocks[0].stage = SG_SHADERSTAGE_VERTEX;

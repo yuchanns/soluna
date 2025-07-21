@@ -3,6 +3,33 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+
+static void *
+malloc_luastring(size_t sz) {
+	unsigned char * buffer = malloc(sz+1);
+	if (buffer) {
+		buffer[sz] = 0;
+		return (void *)buffer;
+	} else {
+		return NULL;
+	}
+}
+
+static void *
+realloc_luastring(void *ptr, size_t sz) {
+	unsigned char * buffer = realloc(ptr, sz+1);
+	if (buffer) {
+		buffer[sz] = 0;
+		return (void *)buffer;
+	} else {
+		return NULL;
+	}
+}
+
+#define STBI_MALLOC malloc_luastring
+#define STBI_FREE free
+#define STBI_REALLOC realloc_luastring
 
 #define STBI_ONLY_PNG
 #define STBI_MAX_DIMENSIONS 65536
@@ -16,6 +43,12 @@
 
 #include "luabuffer.h"
 
+static void *
+free_image(void *ud, void *ptr, size_t osize, size_t nsize) {
+	stbi_image_free(ptr);
+	return NULL;
+}
+
 static int
 image_load(lua_State *L) {
 	size_t sz;
@@ -27,10 +60,9 @@ image_load(lua_State *L) {
 		lua_pushstring(L, stbi_failure_reason());
 		return 2;
 	}
-	lua_pushlstring(L, (const char *)img, x * y * 4);
+	lua_pushexternalstring(L, (const char *)img, x * y * 4, free_image, NULL);
 	lua_pushinteger(L, x);
 	lua_pushinteger(L, y);
-	stbi_image_free(img);
 	return 3;
 };
 

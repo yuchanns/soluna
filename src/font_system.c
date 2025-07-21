@@ -7,6 +7,12 @@
 #include <windows.h>
 #define MAX_NAME 1024
 
+static void *
+free_data(void *ud, void *ptr, size_t oszie, size_t nsize) {
+	free(ptr);
+	return NULL;
+}
+
 static int
 lttfdata(lua_State *L) {
 	const char * familyName = luaL_checkstring(L, 1);
@@ -24,28 +30,35 @@ lttfdata(lua_State *L) {
 		DeleteDC(hdc);
 		return luaL_error(L, "Create font failed: %d", GetLastError());
 	}
-    int ok = 0;
     HGDIOBJ oldobj = SelectObject(hdc, hfont);
 	uint32_t tags[2] = {0x66637474/*ttcf*/, 0};
 	int i;
+	DWORD bytes = 0;
+	char *buf = NULL;
 	for (i=0;i<2;i++) {
 		uint32_t tag = tags[i];
-		DWORD bytes = GetFontData(hdc, tag, 0, 0, 0);
+		bytes = GetFontData(hdc, tag, 0, 0, 0);
         if (bytes != GDI_ERROR) {
-			void *buf = lua_newuserdatauv(L, bytes, 0);
-			bytes = GetFontData(hdc, tag, 0, buf, bytes);
+			buf = malloc(bytes+1);//lua_newuserdatauv(L, bytes, 0);
+			if (buf == NULL)
+				return luaL_error(L, "Out of memory : sysfont");
+			buf[bytes] = 0;
+			bytes = GetFontData(hdc, tag, 0, (void *)buf, bytes);
 			if (bytes != GDI_ERROR) {
-				ok = 1;
 				break;
+			} else {
+				free(buf);
+				bytes = 0;
 			}
 		}
 	}
 	SelectObject(hdc, oldobj);
 	DeleteObject(hfont);
 	DeleteDC(hdc);
-	if (!ok) {
+	if (bytes == 0) {
 		return luaL_error(L, "Read font data failed");
 	}
+	lua_pushexternalstring(L, buf, bytes, free_data , NULL);
 	return 1;
 }
 

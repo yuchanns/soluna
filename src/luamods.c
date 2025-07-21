@@ -24,6 +24,7 @@ int luaopen_gamepad_device(lua_State *L);
 int luaopen_gamepad(lua_State *L);
 int luaopen_localfs(lua_State *L);
 int luaopen_soluna_event(lua_State *L);
+int luaopen_image_sdf(lua_State *L);
 
 void soluna_embed(lua_State* L) {
     static const luaL_Reg modules[] = {
@@ -49,6 +50,7 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.gamepad.device", luaopen_gamepad_device },
 		{ "soluna.lfs", luaopen_localfs },
 		{ "soluna.event", luaopen_soluna_event },
+		{ "soluna.image.sdf", luaopen_image_sdf },
 //		{ "luaforward", luaopen_luaforward },
 		{ NULL, NULL },
     };
