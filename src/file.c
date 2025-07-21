@@ -26,42 +26,10 @@ fopen_utf8(const char *filename, const char *mode) {
 
 #endif
 
-static int
-create_tmp_buffer_(lua_State *L) {
-	int sz = lua_tointeger(L, 1);
-	lua_newuserdatauv(L, sz, 0);
-	return 1;
-}
-
 static void *
-create_tmp_buffer(lua_State *L, size_t sz) {
-	lua_pushcfunction(L, create_tmp_buffer_);
-	lua_pushinteger(L, sz);
-	if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
-		lua_pop(L, 1);
-		return NULL;
-	}
-	return lua_touserdata(L, -1);
-}
-
-static int
-push_size_string_(lua_State *L) {
-	const char * str = (const char *)lua_touserdata(L, 1);
-	size_t sz = lua_tointeger(L, 2);
-	lua_pushlstring(L, str, sz);
-	return 1;
-}
-
-static int
-push_size_string(lua_State *L, void *buffer, size_t sz) {
-	lua_pushcfunction(L, push_size_string_);
-	lua_pushlightuserdata(L, buffer);
-	lua_pushinteger(L, sz);
-	if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
-		lua_pop(L, 1);
-		return 0;
-	}
-	return 1;
+external_free(void *ud, void *ptr, size_t osize, size_t nsize) {
+	free(ptr);
+	return NULL;
 }
 
 static int
@@ -74,55 +42,20 @@ lfile_load(lua_State *L) {
 	fseek(f, 0, SEEK_END);
 	size_t sz = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	void * buffer = create_tmp_buffer(L, sz);
+	char * buffer = (char *)malloc(sz+1);
 	if (buffer == NULL) {
 		fclose(f);
-		return luaL_error(L, "lfile_load : Out of memory");
+		return luaL_error(L, "lfile_load_string : Out of memory");
 	}
-	size_t rd = fread(buffer, 1, sz, f);
-	fclose(f);
-	if (rd != sz) {
-		return luaL_error(L, "Read %s fail", filename);
-	}
-	return 1;
-}
-
-#define FILE_TMPSIZE 65536
-
-static int
-lfile_load_string(lua_State *L) {
-	const char *filename = luaL_checkstring(L, 1);
-	const char *mode = luaL_optstring(L, 2, "rb");
-	FILE *f = fopen_utf8(filename, mode);
-	if (f == NULL)
-		return 0;
-	fseek(f, 0, SEEK_END);
-	size_t sz = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	char tmp[FILE_TMPSIZE];
-	void * buffer = tmp;
-	if (sz > FILE_TMPSIZE) {
-		buffer = malloc(sz);
-		if (buffer == NULL) {
-			fclose(f);
-			return luaL_error(L, "lfile_load_string : Out of memory");
-		}
-	}
+	buffer[sz] = 0;
 	size_t rd = fread(buffer, 1, sz, f);
 	fclose(f);
 	
-	if (sz <= FILE_TMPSIZE) {
-		lua_pushlstring(L, buffer, sz);
-	} else {
-		int succ = push_size_string(L, buffer, sz);
-		if (sz > FILE_TMPSIZE)
-			free(buffer);
-		if (!succ)
-			return luaL_error(L, "lfile_load_string : Out of memory");
-	}
 	if (rd != sz) {
+		free(buffer);
 		return luaL_error(L, "Read %s fail", filename);
 	}
+	lua_pushexternalstring(L, buffer, sz, external_free, NULL);
 	return 1;
 }
 
@@ -194,7 +127,6 @@ luaopen_soluna_file(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "load", lfile_load },
-		{ "loadstring", lfile_load_string },
 		{ "loader", lfile_loader },
 		{ NULL, NULL },
 	};

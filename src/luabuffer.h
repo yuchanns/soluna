@@ -9,10 +9,6 @@ static inline uint8_t const *
 luaL_getbuffer(lua_State *L, size_t *sz) {
 	uint8_t const * ret = NULL;
 	switch (lua_type(L, 1)) {
-	case LUA_TUSERDATA:
-		ret = (uint8_t const *)lua_touserdata(L, 1);
-		*sz = lua_rawlen(L, 1);
-		break;
 	case LUA_TFUNCTION: {
 		lua_pushvalue(L, 1);
 		lua_call(L, 0, 3);

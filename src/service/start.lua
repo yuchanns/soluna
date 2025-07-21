@@ -43,7 +43,7 @@ local function init(arg)
 	ltask.call(render, "init", arg.app)
 
 	local entry = soluna.settings().entry
-	local source = entry and file.loadstring(entry)
+	local source = entry and file.load(entry)
 	if not source then
 		error ("Can't load entry " .. tostring(entry))
 	end
