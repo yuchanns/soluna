@@ -18,6 +18,12 @@ sprite_set_xy(struct draw_primitive *p, float x, float y) {
 	p->y = to_fixpoint_(y);
 }
 
+static inline void
+sprite_add_xy(struct draw_primitive *p, float x, float y) {
+	p->x += to_fixpoint_(x);
+	p->y += to_fixpoint_(y);
+}
+
 static inline int
 convert_scale_(float scale) {
 	assert(scale >= 0);

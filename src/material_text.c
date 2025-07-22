@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 #include "sokol/sokol_gfx.h"
 #include "sdftext.glsl.h"
@@ -237,11 +239,191 @@ lchar_for_batch(lua_State *L) {
 	return 1;
 }
 
+struct text_primitive {
+	struct draw_primitive pos;
+	union {
+		struct draw_primitive dummy;
+		struct text text;
+	} u;
+};
+
+/*
+** From lua utf8lib :
+** Decode one UTF-8 sequence, returning NULL if byte sequence is
+** invalid.  The array 'limits' stores the minimum value for each
+** sequence length, to check for overlong representations. Its first
+** entry forces an error for non-ascii bytes with no continuation
+** bytes (count == 0).
+*/
+
+#define iscont(c)	(((c) & 0xC0) == 0x80)
+#define l_uint32 uint32_t
+#define MAXUTF		0x7FFFFFFFu
+
+static const char *utf8_decode (const char *s, l_uint32 *val) {
+  static const l_uint32 limits[] =
+        {~(l_uint32)0, 0x80, 0x800, 0x10000u, 0x200000u, 0x4000000u};
+  unsigned int c = (unsigned char)s[0];
+  l_uint32 res = 0;  /* final result */
+  if (c < 0x80)  /* ascii? */
+    res = c;
+  else {
+    int count = 0;  /* to count number of continuation bytes */
+    for (; c & 0x40; c <<= 1) {  /* while it needs continuation bytes... */
+      unsigned int cc = (unsigned char)s[++count];  /* read next byte */
+      if (!iscont(cc))  /* not a continuation byte? */
+        return NULL;  /* invalid byte sequence */
+      res = (res << 6) | (cc & 0x3F);  /* add lower 6 bits from cont. byte */
+    }
+    res |= ((l_uint32)(c & 0x7F) << (count * 5));  /* add first byte */
+    if (count > 5 || res > MAXUTF || res < limits[count])
+      return NULL;  /* invalid byte sequence */
+    s += count;  /* skip continuation bytes read */
+  }
+  *val = res;
+  return s + 1;  /* +1 to include first byte */
+}
+
+static int
+count_string(const char *str) {
+	uint32_t val = 0;
+	int n = 0;
+	while ((str = utf8_decode(str, &val))) {
+		if (val == 0)
+			break;
+		if (val > 32)
+			++n;
+	}
+	return n;
+}
+
+#define MAX_WIDTH 4096
+#define MAX_HEIGHT 4096
+#define DEFAULT_FONTSIZE 24
+
+static void *
+free_primitive(void *ud, void *ptr, size_t osize, size_t nsize) {
+	free(ptr);
+	return NULL;
+}
+
+// todo: support multi font/size
+struct block_context {
+	int width;
+	int height;
+	int x;
+	int y;
+	int ascent;
+	int decent;
+};
+
+static inline int
+advance(struct block_context *ctx, int x) {
+	if (x + ctx->x > ctx->width)
+		return 1;
+	ctx->x += x;
+	return 0;
+}
+
+static inline int
+newline(struct block_context *ctx) {
+	if (ctx->y + ctx->ascent + ctx->decent > ctx->height)
+		return 1;
+	ctx->y += ctx->ascent + ctx->decent;
+	ctx->x = 0;
+	return 0;
+}
+
+// todo: support color
+static int
+ltext(lua_State *L) {
+	const char * str = luaL_checkstring(L, 1);
+	int count = count_string(str);
+	struct block_context ctx;
+	ctx.width = luaL_optinteger(L, 2, MAX_WIDTH);
+	ctx.height = luaL_optinteger(L, 3, MAX_HEIGHT);
+	struct font_manager *mgr = (struct font_manager *)lua_touserdata(L, lua_upvalueindex(1));
+	int fontid = lua_tointeger(L, lua_upvalueindex(2));
+	int fontsize = lua_tointeger(L, lua_upvalueindex(3));
+	uint32_t fontcolor = lua_tointeger(L, lua_upvalueindex(4));
+	ctx.x = 0;
+	int decent, gap;
+	font_manager_fontheight(mgr, fontid, fontsize, &ctx.ascent, &decent, &gap);
+	ctx.decent = -decent + gap;
+	ctx.y = ctx.ascent;
+
+	char * buffer = (char *)malloc(count * sizeof(struct text_primitive)+1);
+	struct text_primitive * prim = (struct text_primitive *)buffer;
+	int i;
+	int n = 0;
+	for (i=0;i<count;i++) {
+		uint32_t val = 0;
+		str = utf8_decode(str, &val);
+		if (val <= 32) {
+			if (val == '\n') {
+				if (newline(&ctx))
+					break;
+			} else {
+				struct font_glyph g, og;
+				if (font_manager_glyph(mgr, fontid, 32, fontsize, &g, &og) == NULL) {
+					if (advance(&ctx, g.advance_x)) {
+						if (newline(&ctx))
+							break;
+						advance(&ctx, g.advance_x);
+					}
+				}
+			}
+		} else {
+			prim->pos.x = ctx.x * 256;
+			prim->pos.y = ctx.y * 256;
+			prim->pos.sr = 0;
+			prim->pos.sprite = -MATERIAL_TEXT_NORMAL;
+			
+			struct font_glyph g, og;
+			if (font_manager_glyph(mgr, fontid, val, fontsize, &g, &og) == NULL) {
+				if (advance(&ctx, g.advance_x)) {
+					if (newline(&ctx))
+						break;
+					prim->pos.x = ctx.x * 256;
+					prim->pos.y = ctx.y * 256;
+					advance(&ctx, g.advance_x);
+				}
+				prim->u.text.codepoint = val;
+				prim->u.text.font = fontid;
+				prim->u.text.size = fontsize;
+				prim->u.text.color = fontcolor;
+				++n;
+				++prim;
+			}
+		}
+	}
+	lua_pushexternalstring(L, buffer, n * sizeof(struct text_primitive), free_primitive, NULL);
+	return 1;
+}
+
+static int
+ltext_block(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	void * font_mgr = lua_touserdata(L, 1);
+	int fontid = luaL_checkinteger(L, 2);
+	int fontsize = luaL_optinteger(L, 3, DEFAULT_FONTSIZE);
+	uint32_t color = luaL_optinteger(L, 4, 0xff000000);
+	if (!(color & 0xff000000))
+		color |= 0xff000000;
+	lua_pushlightuserdata(L, font_mgr);	// 1
+	lua_pushinteger(L, fontid);	// 2
+	lua_pushinteger(L, fontsize);	// 3
+	lua_pushinteger(L, color);	// 4
+	lua_pushcclosure(L, ltext, 4);
+	return 1;
+}
+
 int
 luaopen_material_text(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "char", NULL },
+		{ "block", ltext_block },
 		{ "normal", lnew_material_text_normal },
 		{ NULL, NULL },
 	};

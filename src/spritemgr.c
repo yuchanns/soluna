@@ -216,6 +216,9 @@ batch_add_sprite(lua_State *L, struct batch *b) {
 	if (id <= 0)
 		luaL_error(L, "Invalid sprite id %d", id);
 
+	p->x = 0;
+	p->y = 0;
+	p->sr = 0;
 	p->sprite = id;
 	b->n = n + 1;
 
@@ -238,6 +241,9 @@ batch_add_material(lua_State *L, struct batch *b) {
 		luaL_error(L, "Invalid material id %d", matid);
 	lua_pop(L, 1);
 
+	p->x = 0;
+	p->y = 0;
+	p->sr = 0;
 	p->sprite = -matid;
 
 	int sz = lua_rawlen(L, 2);
@@ -251,10 +257,31 @@ batch_add_material(lua_State *L, struct batch *b) {
 	return p;
 }
 
+static struct draw_primitive *
+batch_add_stream(lua_State *L, struct batch *b, int *count) {
+	int n = b->n;
+	size_t sz = 0;
+	const char * data = luaL_checklstring(L, 2, &sz);
+	if (sz == 0)
+		return NULL;
+	*count = sz / 2 / sizeof(struct draw_primitive);
+	if (*count * 2 * sizeof(struct draw_primitive) != sz)
+		luaL_error(L, "Invalid stream size (%d)", sz);
+	struct draw_primitive * p = batch_reserve(b->b, n + 2 * *count);
+	if (p == NULL) {
+		luaL_error(L, "batch_add_stream : Out of memory");
+	}
+	p += n;
+	b->n = n + *count * 2;
+	memcpy(p, data, *count * 2 * sizeof(struct draw_primitive));
+	return p;
+}
+
 static int
 lbatch_add(lua_State *L) {
 	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
 	struct draw_primitive *p;
+	int n = 1;
 	switch (lua_type(L, 2)) {
 	case LUA_TNUMBER:
 		p = batch_add_sprite(L, b);
@@ -262,21 +289,30 @@ lbatch_add(lua_State *L) {
 	case LUA_TUSERDATA:
 		p = batch_add_material(L, b);
 		break;
+	case LUA_TSTRING:
+		p = batch_add_stream(L, b, &n);
+		if (p == NULL)
+			return 0;
+		break;
 	default:
 		return luaL_error(L, "Invalid type %s", lua_typename(L, lua_type(L, 2)));
 	}
 	float x = luaL_checknumber(L, 3);
 	float y = luaL_checknumber(L, 4);
 	
-	sprite_set_xy(p, x, y);
 	if (lua_gettop(L) > 4) {
+		// todo : calc multi sr
 		float scale = luaL_optnumber(L, 5, 1);
 		float rot = luaL_optnumber(L, 6, 0);
 		sprite_set_sr(p, scale, rot);
-	} else {
-		p->sr = 0;
 	}
 	
+	int i;
+	
+	for (i=0;i<n;i++) {
+		sprite_add_xy(p, x, y);
+		p+=2;
+	}
 	return 0;
 }
 

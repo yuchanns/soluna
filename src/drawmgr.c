@@ -112,14 +112,15 @@ ldrawmgr_append(lua_State *L) {
 			return luaL_error(L, "Too many draw");
 		}
 		if (index <= 0) {
-			if (i == prim_n || index == 0)
+			if (i == prim_n || index == 0) {
 				return luaL_error(L, "Invalid batch stream");
+			}
 			i += append_external_material(d, p, (end_ptr - p)/2, index) * 2;
 		} else {
 			--index;
 			if (index >= rect_n)
 				return luaL_error(L, "Invalid sprite id %d", index);
-			int texid =  rect[index].texid;
+			int texid = rect[index].texid;
 			i += append_default_material(d, p, end_ptr - p, texid);
 		}
 	}
