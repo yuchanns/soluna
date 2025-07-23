@@ -67,13 +67,18 @@ local function init(arg)
 	local batch_id = ltask.call(render, "register_batch", ltask.self())
 	local async = ltask.async()
 
-	function app.frame(count)
+	local function frame(count)
 		batch:reset()
 		frame_cb(count)
 		async:request(render, "submit_batch", batch_id, batch:ptr())
 		async:request(render, "frame")
 		async:wait()
+	end
+	
+	function app.frame(count)
+		local ok, err = pcall(frame, count)
 		event.trigger(ev.frame)
+		assert(ok, err)
 	end
 end
 

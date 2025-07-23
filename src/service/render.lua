@@ -82,7 +82,7 @@ local STATE
 
 local S = {}
 
-function S.frame(count)
+local function frame(count)
 	local batch_size = setting.batch_size
 
 	-- todo: do not wait all batch commits
@@ -124,11 +124,16 @@ function S.frame(count)
 			end
 		end
 	STATE.pass:finish()
+end
+
+function S.frame(count)
+	local ok , err = pcall(frame, count)
 	render.submit()
-	for i = 1, batch_n do
+	for i = 1, #batch do
 		local ptr, size, token = batch.consume(i)
 		ltask.wakeup(token)
 	end
+	assert(ok, err)
 end
 
 S.register_batch = assert(batch.register)
