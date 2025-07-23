@@ -22,7 +22,7 @@ end
 
 local p = {
 	name = cname:match "([^/]+)%.lua%.h$",
-	bytes = string.gsub(bin, ".", tohex),	
+	bytes = string.gsub(bin .. "\0" , ".", tohex),	
 }
 
 local source = string.gsub(code, "$(%w+)", p)

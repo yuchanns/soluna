@@ -21,13 +21,13 @@
 
 #define REG_SOURCE(name) \
 	lua_pushlightuserdata(L, (void *)luasrc_##name);	\
-	lua_pushinteger(L, sizeof(luasrc_##name));	\
+	lua_pushinteger(L, sizeof(luasrc_##name) - 1);	\
 	lua_pushcclosure(L, get_string, 2);	\
 	lua_setfield(L, -2, #name);
 
 #define REG_DATALIST(name) \
 	lua_pushlightuserdata(L, (void *)dl_##name);	\
-	lua_pushinteger(L, sizeof(dl_##name));	\
+	lua_pushinteger(L, sizeof(dl_##name) - 1);	\
 	lua_pushcclosure(L, get_stringloader, 2);	\
 	lua_setfield(L, -2, #name);
 
@@ -35,7 +35,7 @@ static int
 get_string(lua_State *L) {
 	const char * s = (const char *)lua_touserdata(L, lua_upvalueindex(1));
 	size_t sz = (size_t)lua_tointeger(L, lua_upvalueindex(2));
-	lua_pushlstring(L, s, sz);
+	lua_pushexternalstring(L, s, sz, NULL, NULL);
 	return 1;
 }
 
