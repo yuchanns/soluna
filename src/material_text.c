@@ -284,6 +284,18 @@ static const char *utf8_decode (const char *s, l_uint32 *val) {
   return s + 1;  /* +1 to include first byte */
 }
 
+static const char *
+skip_bracket(const char *str) {
+	for (;;) {
+		if (*str == ']') {
+			return str + 1;
+		} else if (*str == '\0') {
+			return str;
+		}
+		++str;
+	}
+}
+
 static int
 count_string(const char *str) {
 	uint32_t val = 0;
@@ -291,8 +303,22 @@ count_string(const char *str) {
 	while ((str = utf8_decode(str, &val))) {
 		if (val == 0)
 			break;
-		if (val > 32)
-			++n;
+		if (val > 32) {
+			if (val == '[') {
+				char c = *str;
+				if (c == '[') {
+					++n;
+				} else {
+					if (c == 'i') {
+						// icons
+						++n;
+					}
+					str = skip_bracket(str);
+				}
+			} else {
+				++n;
+			}
+		}
 	}
 	return n;
 }
@@ -315,6 +341,8 @@ struct block_context {
 	int y;
 	int ascent;
 	int decent;
+	uint32_t default_color;
+	uint32_t color;
 };
 
 static inline int
@@ -334,6 +362,47 @@ newline(struct block_context *ctx) {
 	return 0;
 }
 
+static inline int
+tohex(char c) {
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	return -1;
+}
+
+static const char *
+parse_bracket(struct block_context *ctx, const char *str, int *icon) {
+	char c = *str;
+	int hex = -1;
+	if (c == 'i') {
+		++str;
+		int num = 0;
+		while (*str >= '0' && *str <= '9') {
+			num = num * 10 + (*str - '0');
+			++str;
+		}
+		*icon = num + 1;
+	} else if ((hex = tohex(c)) >= 0) {
+		int color = hex;
+		for (;;) {
+			++str;
+			if ((hex = tohex(*str)) >= 0) {
+				color = color * 16 + hex;
+			} else {
+				break;
+			}
+		}
+		if (!(color & 0xff000000))
+			color |= 0xff000000;
+		ctx->color = color;
+	} else if (c == 'n') {
+		ctx->color = ctx->default_color;
+	}
+	// todo: other command
+	return skip_bracket(str);
+}
+
 // todo: support color
 static int
 ltext(lua_State *L) {
@@ -345,18 +414,19 @@ ltext(lua_State *L) {
 	struct font_manager *mgr = (struct font_manager *)lua_touserdata(L, lua_upvalueindex(1));
 	int fontid = lua_tointeger(L, lua_upvalueindex(2));
 	int fontsize = lua_tointeger(L, lua_upvalueindex(3));
-	uint32_t fontcolor = lua_tointeger(L, lua_upvalueindex(4));
+	ctx.default_color = lua_tointeger(L, lua_upvalueindex(4));
+	ctx.color = ctx.default_color;
 	ctx.x = 0;
 	int decent, gap;
 	font_manager_fontheight(mgr, fontid, fontsize, &ctx.ascent, &decent, &gap);
 	ctx.decent = -decent + gap;
 	ctx.y = ctx.ascent;
-
+	
 	char * buffer = (char *)malloc(count * sizeof(struct text_primitive)+1);
 	struct text_primitive * prim = (struct text_primitive *)buffer;
 	int i;
 	int n = 0;
-	for (i=0;i<count;i++) {
+	for (i=0;i<count;) {
 		uint32_t val = 0;
 		str = utf8_decode(str, &val);
 		if (val <= 32) {
@@ -374,13 +444,31 @@ ltext(lua_State *L) {
 				}
 			}
 		} else {
+			int icon = 0;
+			if (val == '[') {
+				if (*str != '[') {
+					str = parse_bracket(&ctx, str, &icon);
+					if (!icon) {
+						continue;
+					}
+				}
+			}
 			prim->pos.x = ctx.x * 256;
 			prim->pos.y = ctx.y * 256;
 			prim->pos.sr = 0;
 			prim->pos.sprite = -MATERIAL_TEXT_NORMAL;
 			
+			int codepoint = val;
+			int font = fontid;
+			
+			if (icon > 0) {
+				codepoint = icon -1;
+				font = FONT_ICON;
+				prim->pos.y -= ( ctx.ascent ) * 256;
+			}
+			
 			struct font_glyph g, og;
-			if (font_manager_glyph(mgr, fontid, val, fontsize, &g, &og) == NULL) {
+			if (font_manager_glyph(mgr, font, codepoint, fontsize, &g, &og) == NULL) {
 				if (advance(&ctx, g.advance_x)) {
 					if (newline(&ctx))
 						break;
@@ -388,13 +476,14 @@ ltext(lua_State *L) {
 					prim->pos.y = ctx.y * 256;
 					advance(&ctx, g.advance_x);
 				}
-				prim->u.text.codepoint = val;
-				prim->u.text.font = fontid;
+				prim->u.text.codepoint = codepoint;
+				prim->u.text.font = font;
 				prim->u.text.size = fontsize;
-				prim->u.text.color = fontcolor;
+				prim->u.text.color = ctx.color;
 				++n;
 				++prim;
 			}
+			++i;
 		}
 	}
 	lua_pushexternalstring(L, buffer, n * sizeof(struct text_primitive), free_primitive, NULL);

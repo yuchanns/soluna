@@ -384,6 +384,16 @@ font_manager_scale(struct font_manager *F, struct font_glyph *glyph, int size) {
 	uscale(&glyph->h, size);
 }
 
+static void
+icon_scale(struct font_glyph *glyph, int size) {
+	glyph->offset_x = glyph->offset_x * size / FONT_MANAGER_GLYPHSIZE;
+	glyph->offset_y = glyph->offset_y * size / FONT_MANAGER_GLYPHSIZE;
+	glyph->advance_x = glyph->advance_x * size / FONT_MANAGER_GLYPHSIZE;
+	glyph->advance_y = glyph->advance_y * size / FONT_MANAGER_GLYPHSIZE;
+	glyph->w = glyph->w * size / FONT_MANAGER_GLYPHSIZE;
+	glyph->h = glyph->h * size / FONT_MANAGER_GLYPHSIZE;
+}
+
 static const char *
 font_manager_update(struct font_manager *F, int fontid, int codepoint, struct font_glyph *glyph, uint8_t *buffer, int stride) {
 	if (fontid <= 0)
@@ -486,7 +496,11 @@ font_manager_glyph(struct font_manager *F, int fontid, int codepoint, int size, 
 		updated = 1;	// not need update
 		og->w = og->h = 0;
 	}
-	font_manager_scale(F, g, size);
+	if (fontid == FONT_ICON) {
+		icon_scale(g, size);
+	} else {
+		font_manager_scale(F, g, size);
+	}
 	if (updated == 0) {
 		const char * err = font_manager_update(F, fontid, codepoint, og, F->texture_buffer, FONT_MANAGER_TEXSIZE);
 		if (err) {
