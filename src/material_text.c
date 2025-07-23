@@ -58,7 +58,7 @@ submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n
 		struct font_glyph g, og;
 		const char* err = font_manager_glyph(m->font, t->font, t->codepoint, t->size, &g, &og);
 		if (err == NULL) {
-			float scale = (float)g.w / og.w;
+			float scale = og.w == 0 ? 0 : (float)g.w / og.w;
 			tmp.spr[count].offset = (-og.offset_x + 0x8000) << 16 | (-og.offset_y + 0x8000);
 			tmp.spr[count].u = og.u << 16 | FONT_MANAGER_GLYPHSIZE;
 			tmp.spr[count].v = og.v << 16 | FONT_MANAGER_GLYPHSIZE;
