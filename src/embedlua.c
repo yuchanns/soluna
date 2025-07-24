@@ -15,6 +15,7 @@
 #include "gamepad.lua.h"
 #include "soluna.lua.h"
 #include "icon.lua.h"
+#include "layout.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -60,6 +61,7 @@ luaopen_embedsource(lua_State *L) {
 		lua_newtable(L);	// runtime
 			REG_SOURCE(spritebundle)
 			REG_SOURCE(icon)
+			REG_SOURCE(layout)
 			REG_SOURCE(soluna)
 		lua_setfield(L, -2, "lib");
 

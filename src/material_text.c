@@ -307,6 +307,7 @@ count_string(const char *str) {
 			if (val == '[') {
 				char c = *str;
 				if (c == '[') {
+					++str;
 					++n;
 				} else {
 					if (c == 'i') {
@@ -403,6 +404,15 @@ parse_bracket(struct block_context *ctx, const char *str, int *icon) {
 	return skip_bracket(str);
 }
 
+#define ALIGNMENT_LEFT 0
+#define ALIGNMENT_CENTER 1
+#define ALIGNMENT_RIGHT 2
+#define ALIGNMENT_MASK 3
+#define VALIGNMENT_TOP 4
+#define VALIGNMENT_CENTER 0
+#define VALIGNMENT_BOTTOM 5
+#define VALIGNMENT_MASK 0xc
+
 // todo: support color
 static int
 ltext(lua_State *L) {
@@ -426,16 +436,21 @@ ltext(lua_State *L) {
 	struct text_primitive * prim = (struct text_primitive *)buffer;
 	int i;
 	int n = 0;
+	int width = 0;
 	for (i=0;i<count;) {
 		uint32_t val = 0;
 		str = utf8_decode(str, &val);
 		if (val <= 32) {
 			if (val == '\n') {
+				if (ctx.x > width)
+					width = ctx.x;
 				if (newline(&ctx))
 					break;
 			} else {
 				struct font_glyph g, og;
 				if (font_manager_glyph(mgr, fontid, 32, fontsize, &g, &og) == NULL) {
+					if (ctx.x > width)
+						width = ctx.x;
 					if (advance(&ctx, g.advance_x)) {
 						if (newline(&ctx))
 							break;
@@ -451,12 +466,14 @@ ltext(lua_State *L) {
 					if (!icon) {
 						continue;
 					}
+				} else {
+					++str;
 				}
 			}
-			prim->pos.x = ctx.x * 256;
-			prim->pos.y = ctx.y * 256;
-			prim->pos.sr = 0;
-			prim->pos.sprite = -MATERIAL_TEXT_NORMAL;
+			prim[n].pos.x = ctx.x * 256;
+			prim[n].pos.y = ctx.y * 256;
+			prim[n].pos.sr = 0;
+			prim[n].pos.sprite = -MATERIAL_TEXT_NORMAL;
 			
 			int codepoint = val;
 			int font = fontid;
@@ -464,7 +481,7 @@ ltext(lua_State *L) {
 			if (icon > 0) {
 				codepoint = icon -1;
 				font = FONT_ICON;
-				prim->pos.y -= ( ctx.ascent ) * 256;
+				prim[n].pos.y -= ( ctx.ascent ) * 256;
 			}
 			
 			struct font_glyph g, og;
@@ -472,22 +489,89 @@ ltext(lua_State *L) {
 				if (advance(&ctx, g.advance_x)) {
 					if (newline(&ctx))
 						break;
-					prim->pos.x = ctx.x * 256;
-					prim->pos.y = ctx.y * 256;
+					prim[n].pos.x = ctx.x * 256;
+					prim[n].pos.y = ctx.y * 256;
 					advance(&ctx, g.advance_x);
 				}
-				prim->u.text.codepoint = codepoint;
-				prim->u.text.font = font;
-				prim->u.text.size = fontsize;
-				prim->u.text.color = ctx.color;
+				prim[n].u.text.codepoint = codepoint;
+				prim[n].u.text.font = font;
+				prim[n].u.text.size = fontsize;
+				prim[n].u.text.color = ctx.color;
 				++n;
-				++prim;
 			}
 			++i;
 		}
 	}
+	if (ctx.x > width)
+		width = ctx.x;
+	int height = ctx.y + ctx.decent;
+	int alignment = lua_tointeger(L, lua_upvalueindex(5));
+	if (alignment) {
+		int offx, offy;
+		int align = alignment & ALIGNMENT_MASK;
+		switch (align) {
+		case ALIGNMENT_CENTER:
+			offx = (ctx.width - width) / 2 * 256;
+			break;
+		case ALIGNMENT_RIGHT:
+			offx = (ctx.width - width) * 256;
+			break;
+		default:
+			offx = 0;
+			break;
+		}
+		int valign = alignment & VALIGNMENT_MASK;
+		switch (valign) {
+		case VALIGNMENT_CENTER:
+			offy = (ctx.height - height) / 2 * 256;
+			break;
+		case VALIGNMENT_BOTTOM:
+			offy = (ctx.height - height) * 256;
+			break;
+		default:
+			offy = 0;
+			break;
+		}
+		for (i=0;i<n;i++) {
+			prim[i].pos.x += offx;
+			prim[i].pos.y += offy;
+		}
+	}
 	lua_pushexternalstring(L, buffer, n * sizeof(struct text_primitive), free_primitive, NULL);
 	return 1;
+}
+
+static uint32_t
+parse_alignment(lua_State *L, int index) {
+	const char *alignment_string = lua_tostring(L, index);
+	int i;
+	char c;
+	uint32_t alignment = 0;
+	for (i=0;(c = alignment_string[i]);i++) {
+		switch(c) {
+		case 'l' :
+		case 'L' :
+			alignment |= ALIGNMENT_LEFT;
+			break;
+		case 'r' :
+		case 'R' :
+			alignment |= ALIGNMENT_RIGHT;
+			break;
+		case 'c' :
+		case 'C' :
+			alignment |= ALIGNMENT_CENTER;
+			break;
+		case 'v' :
+		case 'V' :
+			alignment |= VALIGNMENT_CENTER;
+			break;
+		case 'b' :
+		case 'B' :
+			alignment |= VALIGNMENT_BOTTOM;
+			break;
+		}
+	}
+	return alignment;
 }
 
 static int
@@ -497,13 +581,18 @@ ltext_block(lua_State *L) {
 	int fontid = luaL_checkinteger(L, 2);
 	int fontsize = luaL_optinteger(L, 3, DEFAULT_FONTSIZE);
 	uint32_t color = luaL_optinteger(L, 4, 0xff000000);
+	uint32_t alignment = 0;
+	if (lua_type(L, 5) == LUA_TSTRING) {
+		alignment = parse_alignment(L, 5);
+	}
 	if (!(color & 0xff000000))
 		color |= 0xff000000;
 	lua_pushlightuserdata(L, font_mgr);	// 1
 	lua_pushinteger(L, fontid);	// 2
 	lua_pushinteger(L, fontsize);	// 3
 	lua_pushinteger(L, color);	// 4
-	lua_pushcclosure(L, ltext, 4);
+	lua_pushinteger(L, alignment);	// 5
+	lua_pushcclosure(L, ltext, 5);
 	return 1;
 }
 

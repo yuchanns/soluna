@@ -466,6 +466,10 @@ font_manager_update(struct font_manager *F, int fontid, int codepoint, struct fo
 	buffer += stride * glyph->v + glyph->u;
 
 	int src_stride = width;
+	if (width > FONT_MANAGER_GLYPHSIZE)
+		width = FONT_MANAGER_GLYPHSIZE;
+	if (height > FONT_MANAGER_GLYPHSIZE)
+		height = FONT_MANAGER_GLYPHSIZE;
 	if (width > glyph->w)
 		width = glyph->w;
 	if (height > glyph->h)

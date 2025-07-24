@@ -13,3 +13,6 @@
 [submodule "3rd/datalist"]
 	path = 3rd/datalist
 	url = https://github.com/cloudwu/datalist.git
+[submodule "3rd/yoga"]
+	path = 3rd/yoga
+	url = https://github.com/facebook/yoga.git

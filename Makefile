@@ -24,12 +24,13 @@ else
  OUTPUT_EXE=-o
  STDC=-std=c99 -lm
  SUBSYSTEM=-Wl,-subsystem,windows
- LDFLAGS=-lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 -lwinmm -lws2_32 -lntdll -lxinput $(SUBSYSTEM)
+ LDFLAGS=-lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 -lwinmm -lws2_32 -lntdll -lxinput -lstdc++ $(SUBSYSTEM)
 endif
 
 all : $(BIN)/$(APPNAME)
 
 3RDINC=-I3rd
+YOGAINC=-I3rd/yoga
 
 LUAINC=-I3rd/lua
 LUASRC:=$(wildcard 3rd/lua/*.c 3rd/lua/*.h)
@@ -97,7 +98,7 @@ $(BUILD)/soluna_embedlua.o : src/embedlua.c $(LTASK_LUACODE) $(DATALIST_CODE)
 	$(COMPILE_C) -I$(BUILD) $(LUAINC)
 
 $(BUILD)/soluna_%.o : src/%.c
-	$(COMPILE_C) $(LUAINC) $(3RDINC) $(SHADERINC)
+	$(COMPILE_C) $(LUAINC) $(3RDINC) $(SHADERINC) $(YOGAINC)
 	
 $(BUILD)/ltask_%.o : 3rd/ltask/src/%.c
 	$(COMPILE_C) $(LUAINC) -D_WIN32_WINNT=0x0601 -DLTASK_EXTERNAL_OPENLIBS=soluna_openlibs
@@ -106,8 +107,13 @@ DATALIST_O=$(BUILD)/datalist.o
 
 $(DATALIST_O) : 3rd/datalist/datalist.c
 	$(COMPILE_C) $(LUAINC)
+	
+YOGASRC:=$(wildcard 3rd/yoga/yoga/*.cpp $(addsuffix *.cpp,$(wildcard 3rd/yoga/yoga/*/)))
 
-$(BIN)/$(APPNAME): $(MAIN_O) $(LTASK_O) $(LUA_O) $(DATALIST_O)
+$(BUILD)/yoga.o : src/yogaone.cpp $(YOGASRC)
+	g++ --std=c++20 -c -o $@ $< $(YOGAINC) $(CFLAGS)
+
+$(BIN)/$(APPNAME): $(MAIN_O) $(LTASK_O) $(LUA_O) $(DATALIST_O) $(BUILD)/yoga.o
 	$(LD) $(OUTPUT_EXE) $@ $^ $(LDFLAGS)
 	
 clean :
