@@ -408,10 +408,10 @@ parse_bracket(struct block_context *ctx, const char *str, int *icon) {
 #define ALIGNMENT_CENTER 1
 #define ALIGNMENT_RIGHT 2
 #define ALIGNMENT_MASK 3
-#define VALIGNMENT_TOP 4
+#define VALIGNMENT_TOP (1<<2)
 #define VALIGNMENT_CENTER 0
-#define VALIGNMENT_BOTTOM 5
-#define VALIGNMENT_MASK 0xc
+#define VALIGNMENT_BOTTOM (2<<2)
+#define VALIGNMENT_MASK (3<<2)
 
 // todo: support color
 static int
@@ -486,6 +486,8 @@ ltext(lua_State *L) {
 			
 			struct font_glyph g, og;
 			if (font_manager_glyph(mgr, font, codepoint, fontsize, &g, &og) == NULL) {
+				if (ctx.x > width)
+					width = ctx.x;
 				if (advance(&ctx, g.advance_x)) {
 					if (newline(&ctx))
 						break;
@@ -506,32 +508,32 @@ ltext(lua_State *L) {
 		width = ctx.x;
 	int height = ctx.y + ctx.decent;
 	int alignment = lua_tointeger(L, lua_upvalueindex(5));
-	if (alignment) {
-		int offx, offy;
-		int align = alignment & ALIGNMENT_MASK;
-		switch (align) {
-		case ALIGNMENT_CENTER:
-			offx = (ctx.width - width) / 2 * 256;
-			break;
-		case ALIGNMENT_RIGHT:
-			offx = (ctx.width - width) * 256;
-			break;
-		default:
-			offx = 0;
-			break;
-		}
-		int valign = alignment & VALIGNMENT_MASK;
-		switch (valign) {
-		case VALIGNMENT_CENTER:
-			offy = (ctx.height - height) / 2 * 256;
-			break;
-		case VALIGNMENT_BOTTOM:
-			offy = (ctx.height - height) * 256;
-			break;
-		default:
-			offy = 0;
-			break;
-		}
+	int offx, offy;
+	int align = alignment & ALIGNMENT_MASK;
+	switch (align) {
+	case ALIGNMENT_CENTER:
+		offx = (ctx.width - width) / 2 * 256;
+		break;
+	case ALIGNMENT_RIGHT:
+		offx = (ctx.width - width) * 256;
+		break;
+	default:
+		offx = 0;
+		break;
+	}
+	int valign = alignment & VALIGNMENT_MASK;
+	switch (valign) {
+	case VALIGNMENT_CENTER:
+		offy = (ctx.height - height) / 2 * 256;
+		break;
+	case VALIGNMENT_BOTTOM:
+		offy = (ctx.height - height) * 256;
+		break;
+	default:
+		offy = 0;
+		break;
+	}
+	if (offx != 0 || offy != 0) {
 		for (i=0;i<n;i++) {
 			prim[i].pos.x += offx;
 			prim[i].pos.y += offy;
@@ -560,6 +562,10 @@ parse_alignment(lua_State *L, int index) {
 		case 'c' :
 		case 'C' :
 			alignment |= ALIGNMENT_CENTER;
+			break;
+		case 't' :
+		case 'T' :
+			alignment |= VALIGNMENT_TOP;
 			break;
 		case 'v' :
 		case 'V' :
