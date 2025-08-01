@@ -225,14 +225,14 @@ image_crop(lua_State *L) {
 	int top = remove_top(&r);
 	if (top == h)
 		return 0;
-	int bottom = remove_bottom(&r);
+	remove_bottom(&r);
 	int left = remove_left(&r);
 	int right = remove_right(&r);
 	
 	lua_pushinteger(L, left);
 	lua_pushinteger(L, top);
 	lua_pushinteger(L, r.width - (left + right));
-	lua_pushinteger(L, r.line - (top + bottom));
+	lua_pushinteger(L, r.line);
 
 	return 4;
 }
