@@ -368,11 +368,6 @@ advance(struct block_context *ctx, int x) {
 
 static inline int
 newline(struct block_context *ctx, struct text_primitive * prim, int n) {
-	if (ctx->y + ctx->ascent + ctx->decent > ctx->height)
-		return 1;
-	ctx->y += ctx->ascent + ctx->decent;
-	ctx->x = 0;
-	
 	int from = ctx->line_prim;
 	ctx->line_prim = n;
 	int line_width = ctx->line_width;
@@ -386,16 +381,23 @@ newline(struct block_context *ctx, struct text_primitive * prim, int n) {
 	case ALIGNMENT_RIGHT:
 		offx = (ctx->width - line_width) * 256;
 		break;
-	default:
+	}
+	
+	if (offx > 0) {
+		int i;
+		for (i=from;i<n;i++) {
+			prim[i].pos.x += offx;
+		}
+	}
+
+	if (ctx->y + ctx->ascent + ctx->decent > ctx->height) {
+		return 1;
+	} else {
+		ctx->y += ctx->ascent + ctx->decent;
+		ctx->x = 0;
+
 		return 0;
 	}
-
-	int i;
-	for (i=from;i<n;i++) {
-		prim[i].pos.x += offx;
-	}
-
-	return 0;
 }
 
 static inline int
@@ -455,6 +457,8 @@ ltext(lua_State *L) {
 	ctx.x = 0;
 	int decent, gap;
 	font_manager_fontheight(mgr, fontid, fontsize, &ctx.ascent, &decent, &gap);
+	if (gap == 0)
+		gap = 1;
 	ctx.decent = -decent + gap;
 	ctx.y = ctx.ascent;
 	ctx.line_prim = 0;
