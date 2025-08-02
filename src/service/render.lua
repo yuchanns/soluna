@@ -289,4 +289,8 @@ function S.init(arg)
 	}
 end
 
+function S.resize(w, h)
+	STATE.uniform.framesize = { 2/w, -2/h }
+end
+
 return S

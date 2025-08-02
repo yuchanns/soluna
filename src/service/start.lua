@@ -12,6 +12,7 @@ local args, ev = ...
 local S = {}
 
 local app = {}
+local prehook = {}
 
 function app.cleanup()
 	ltask.send(1, "quit_ltask")
@@ -22,9 +23,25 @@ function app.frame(count)
 	event.trigger(ev.frame)
 end
 
+local render_service
+local pre_size
+
+function prehook.window_resize(w, h)
+	if render_service then
+		ltask.call(render_service, "resize", w, h)
+	else
+		pre_size = { width = w, height = h }
+	end
+end
+
 -- external message from soluna host
 function S.external(p)
 	local what, arg1, arg2 = message_unpack(p)
+	
+	local pre = prehook[what]
+	if pre then
+		pre(arg1, arg2)
+	end
 	local f = app[what]
 	if f then
 		f(arg1, arg2)
@@ -41,6 +58,11 @@ local function init(arg)
 	
 	local render = ltask.uniqueservice "render"
 	ltask.call(render, "init", arg.app)
+	render_service = render
+	if pre_size then
+		ltask.call(render, "resize", pre_size.width, pre_size.height)
+		pre_size = nil
+	end
 
 	local entry = soluna.settings().entry
 	local source = entry and file.load(entry)
