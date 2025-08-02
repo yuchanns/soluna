@@ -16,6 +16,7 @@
 #include "soluna.lua.h"
 #include "icon.lua.h"
 #include "layout.lua.h"
+#include "text.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -62,6 +63,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(spritebundle)
 			REG_SOURCE(icon)
 			REG_SOURCE(layout)
+			REG_SOURCE(text)
 			REG_SOURCE(soluna)
 		lua_setfield(L, -2, "lib");
 
