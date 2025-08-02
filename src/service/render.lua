@@ -82,6 +82,16 @@ local STATE
 
 local S = {}
 
+function S.app(settings)
+	local soluna_app = require "soluna.app"
+	for k, v in pairs(settings) do
+		local f = soluna_app[k]
+		if f then
+			f(v)
+		end
+	end
+end
+
 local function frame(count)
 	local batch_size = setting.batch_size
 

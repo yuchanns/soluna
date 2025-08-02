@@ -115,6 +115,15 @@ levent_unpack(lua_State *L) {
 	return 3;
 }
 
+static int
+lset_window_title(lua_State *L) {
+	if (lua_type(L, 1) != LUA_TSTRING)
+		return 0;
+	const char * text = lua_tostring(L, 1);
+	sapp_set_window_title(text);
+	return 0;
+}
+
 int
 luaopen_soluna_app(lua_State *L) {
 	luaL_checkversion(L);
@@ -122,6 +131,7 @@ luaopen_soluna_app(lua_State *L) {
 		{ "unpackmessage", lmessage_unpack },
 		{ "sendmessage", lmessage_send },
 		{ "unpackevent", levent_unpack },
+		{ "set_window_title", lset_window_title },
 		{ "quit", lquit_signal },
 		{ NULL, NULL },
 	};

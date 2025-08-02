@@ -27,4 +27,10 @@ function soluna.settings()
 	return settings
 end
 
+function soluna.set_window_title(text)
+	local s = ltask.queryservice "render"
+	assert(type(text) == "string")
+	ltask.send(s, "app", { set_window_title = text })
+end
+
 return soluna
