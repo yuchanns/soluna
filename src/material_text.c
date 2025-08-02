@@ -334,6 +334,15 @@ free_primitive(void *ud, void *ptr, size_t osize, size_t nsize) {
 	return NULL;
 }
 
+#define ALIGNMENT_LEFT 0
+#define ALIGNMENT_CENTER 1
+#define ALIGNMENT_RIGHT 2
+#define ALIGNMENT_MASK 3
+#define VALIGNMENT_TOP (1<<2)
+#define VALIGNMENT_CENTER 0
+#define VALIGNMENT_BOTTOM (2<<2)
+#define VALIGNMENT_MASK (3<<2)
+
 // todo: support multi font/size
 struct block_context {
 	int width;
@@ -342,6 +351,9 @@ struct block_context {
 	int y;
 	int ascent;
 	int decent;
+	int line_prim;
+	int line_width;
+	int alignment;
 	uint32_t default_color;
 	uint32_t color;
 };
@@ -355,11 +367,34 @@ advance(struct block_context *ctx, int x) {
 }
 
 static inline int
-newline(struct block_context *ctx) {
+newline(struct block_context *ctx, struct text_primitive * prim, int n) {
 	if (ctx->y + ctx->ascent + ctx->decent > ctx->height)
 		return 1;
 	ctx->y += ctx->ascent + ctx->decent;
 	ctx->x = 0;
+	
+	int from = ctx->line_prim;
+	ctx->line_prim = n;
+	int line_width = ctx->line_width;
+	ctx->line_width = 0;
+	int offx = 0;
+	int align = ctx->alignment & ALIGNMENT_MASK;
+	switch (align) {
+	case ALIGNMENT_CENTER:
+		offx = (ctx->width - line_width) / 2 * 256;
+		break;
+	case ALIGNMENT_RIGHT:
+		offx = (ctx->width - line_width) * 256;
+		break;
+	default:
+		return 0;
+	}
+
+	int i;
+	for (i=from;i<n;i++) {
+		prim[i].pos.x += offx;
+	}
+
 	return 0;
 }
 
@@ -404,15 +439,6 @@ parse_bracket(struct block_context *ctx, const char *str, int *icon) {
 	return skip_bracket(str);
 }
 
-#define ALIGNMENT_LEFT 0
-#define ALIGNMENT_CENTER 1
-#define ALIGNMENT_RIGHT 2
-#define ALIGNMENT_MASK 3
-#define VALIGNMENT_TOP (1<<2)
-#define VALIGNMENT_CENTER 0
-#define VALIGNMENT_BOTTOM (2<<2)
-#define VALIGNMENT_MASK (3<<2)
-
 // todo: support color
 static int
 ltext(lua_State *L) {
@@ -431,28 +457,30 @@ ltext(lua_State *L) {
 	font_manager_fontheight(mgr, fontid, fontsize, &ctx.ascent, &decent, &gap);
 	ctx.decent = -decent + gap;
 	ctx.y = ctx.ascent;
+	ctx.line_prim = 0;
+	ctx.line_width = 0;
+	ctx.alignment = lua_tointeger(L, lua_upvalueindex(5));
 	
 	char * buffer = (char *)malloc(count * sizeof(struct text_primitive)+1);
 	struct text_primitive * prim = (struct text_primitive *)buffer;
 	int i;
 	int n = 0;
-	int width = 0;
 	for (i=0;i<count;) {
 		uint32_t val = 0;
 		str = utf8_decode(str, &val);
 		if (val <= 32) {
 			if (val == '\n') {
-				if (ctx.x > width)
-					width = ctx.x;
-				if (newline(&ctx))
+				if (ctx.x > ctx.line_width)
+					ctx.line_width = ctx.x;
+				if (newline(&ctx, prim, n))
 					break;
 			} else {
 				struct font_glyph g, og;
 				if (font_manager_glyph(mgr, fontid, 32, fontsize, &g, &og) == NULL) {
-					if (ctx.x > width)
-						width = ctx.x;
+					if (ctx.x > ctx.line_width)
+						ctx.line_width = ctx.x;
 					if (advance(&ctx, g.advance_x)) {
-						if (newline(&ctx))
+						if (newline(&ctx, prim, n))
 							break;
 						advance(&ctx, g.advance_x);
 					}
@@ -486,10 +514,10 @@ ltext(lua_State *L) {
 			
 			struct font_glyph g, og;
 			if (font_manager_glyph(mgr, font, codepoint, fontsize, &g, &og) == NULL) {
-				if (ctx.x > width)
-					width = ctx.x;
+				if (ctx.x > ctx.line_width)
+					ctx.line_width = ctx.x;
 				if (advance(&ctx, g.advance_x)) {
-					if (newline(&ctx))
+					if (newline(&ctx, prim, n))
 						break;
 					prim[n].pos.x = ctx.x * 256;
 					prim[n].pos.y = ctx.y * 256;
@@ -504,24 +532,13 @@ ltext(lua_State *L) {
 			++i;
 		}
 	}
-	if (ctx.x > width)
-		width = ctx.x;
+	if (ctx.x > ctx.line_width)
+		ctx.line_width = ctx.x;
 	int height = ctx.y + ctx.decent;
-	int alignment = lua_tointeger(L, lua_upvalueindex(5));
-	int offx, offy;
-	int align = alignment & ALIGNMENT_MASK;
-	switch (align) {
-	case ALIGNMENT_CENTER:
-		offx = (ctx.width - width) / 2 * 256;
-		break;
-	case ALIGNMENT_RIGHT:
-		offx = (ctx.width - width) * 256;
-		break;
-	default:
-		offx = 0;
-		break;
-	}
-	int valign = alignment & VALIGNMENT_MASK;
+	
+	newline(&ctx, prim, n);
+	int offy;
+	int valign = ctx.alignment & VALIGNMENT_MASK;
 	switch (valign) {
 	case VALIGNMENT_CENTER:
 		offy = (ctx.height - height) / 2 * 256;
@@ -533,9 +550,8 @@ ltext(lua_State *L) {
 		offy = 0;
 		break;
 	}
-	if (offx != 0 || offy != 0) {
+	if (offy != 0) {
 		for (i=0;i<n;i++) {
-			prim[i].pos.x += offx;
 			prim[i].pos.y += offy;
 		}
 	}
