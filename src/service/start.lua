@@ -76,7 +76,7 @@ local function init(arg)
 	local callback = f(batch)
 	local frame_cb = callback.frame
 	
-	local messages = { "mouse_move", "mouse_button", "mouse_scroll", "mouse", "window_resize" }
+	local messages = { "mouse_move", "mouse_button", "mouse_scroll", "mouse", "window_resize", "char" }
 	local avail = {}
 	for _, v in ipairs(messages) do
 		avail[v] = true

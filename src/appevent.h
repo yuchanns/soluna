@@ -55,6 +55,24 @@ window_message(struct event_message *em, const sapp_event *ev) {
 }
 
 static inline void
+key_message(struct event_message *em, const sapp_event *ev) {
+	em->typestr = NULL;
+	em->p1 = 0;
+	em->p2 = 0;
+	switch (ev->type) {
+	case SAPP_EVENTTYPE_CHAR:
+		em->typestr = "char";
+		em->p1 = (int)ev->char_code;
+		em->p2 = 0;
+		break;
+	default:
+		em->typestr = "key";
+		em->p1 = ev->type;
+		break;
+	}
+}
+
+static inline void
 app_event_unpack(struct event_message *em, const sapp_event* ev) {
 	switch (ev->type) {
 	case SAPP_EVENTTYPE_MOUSE_MOVE:
@@ -67,6 +85,9 @@ app_event_unpack(struct event_message *em, const sapp_event* ev) {
 		break;
 	case SAPP_EVENTTYPE_RESIZED:
 		window_message(em, ev);
+		break;
+	case SAPP_EVENTTYPE_CHAR:
+		key_message(em, ev);
 		break;
 	default:
 		em->typestr = "message";
