@@ -58,12 +58,23 @@ submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n
 		struct font_glyph g, og;
 		const char* err = font_manager_glyph(m->font, t->font, t->codepoint, t->size, &g, &og);
 		if (err == NULL) {
-			float scale = og.w == 0 ? 0 : (float)g.w / og.w;
+//			float scale = og.w == 0 ? 0 : (float)g.w / og.w;
 			tmp.spr[count].offset = (-og.offset_x + 0x8000) << 16 | (-og.offset_y + 0x8000);
 			tmp.spr[count].u = og.u << 16 | FONT_MANAGER_GLYPHSIZE;
 			tmp.spr[count].v = og.v << 16 | FONT_MANAGER_GLYPHSIZE;
 
-			sprite_mul_scale(p, scale);
+			uint32_t scale_fix;
+			uint32_t scale_inv;
+			if (og.w == 0) {
+				scale_fix = 4096;
+				scale_inv = 0;
+			} else {
+				scale_fix = g.w * 4096 / og.w;
+				scale_inv = (1 << 31) / scale_fix;
+			}
+
+			sprite_apply_scale(p, scale_fix, scale_inv);
+
 			// calc scale/rot index
 			int sr_index = srbuffer_add(m->srbuffer, p->sr);
 			if (sr_index < 0) {

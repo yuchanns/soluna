@@ -34,7 +34,7 @@ void main() {
 	ivec2 v2 = ivec2(0 , s.v & 0xffff);
 	ivec2 off = ivec2(s.offset >> 16 , s.offset & 0xffff) - 0x8000;
 	vec2 uv_offset = vec2(u2[gl_VertexIndex & 1] , v2[gl_VertexIndex >> 1]);
-	vec2 pos = ((uv_offset - off) * sr[int(position.z)].m + position.xy) * framesize;
+	vec2 pos = ((uv_offset - off + position.xy) * sr[int(position.z)].m) * framesize;
 	gl_Position = vec4(pos.x - 1.0f, pos.y + 1.0f, 0, 1);
 	uv = (uv_base + uv_offset) * texsize;
 }

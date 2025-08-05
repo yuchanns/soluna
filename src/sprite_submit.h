@@ -28,7 +28,7 @@ static inline int
 convert_scale_(float scale) {
 	assert(scale >= 0);
 	if (scale >= 1.0f) {
-		// scale is 20 bit fix point
+		// scale is 12+8 bits fixpoint
 		int fs = (int)((scale - 1.0f) * 256.0f);
 		// max scale 1111, 1110, 1111,1111,1111
 		const int maxfs = 0xfefff;
@@ -66,19 +66,36 @@ sprite_set_sr(struct draw_primitive *p, float scale, float rot) {
 }
 
 static inline void
-sprite_mul_scale(struct draw_primitive *p, float scale) {
-	uint32_t scale_fix = p->sr >> 12;
-	if (scale_fix == 0) {
-		p->sr |= convert_scale_(scale) << 12;
-	} else {
-		if (scale_fix >= 0xff000) {
-			scale *= (float)(scale_fix & 0xfff) * (1.0f / 4096.0f);
+sprite_apply_scale(struct draw_primitive *p, uint32_t scale_fix, uint32_t inv_scale) {
+	if (scale_fix == 0x1000)
+		return;
+	int64_t x = p->x;
+	int64_t y = p->y;
+	x = (x * inv_scale) >> 19;
+	y = (y * inv_scale) >> 19;
+	p->x = (int32_t)x;
+	p->y = (int32_t)y;
+	
+	uint32_t orig_scale = p->sr >> 12;
+	if (orig_scale != 0) {
+		if (orig_scale >= 0xff000) {
+			orig_scale &= 0xfff;
 		} else {
-			scale *= (float)scale_fix * (1.0f / 256.0f) + 1.0f;
+			orig_scale = (orig_scale + 256) << 4;
 		}
-		uint32_t sr = p->sr & 0xfff;
-		p->sr = sr | (convert_scale_(scale) << 12);
+		uint64_t tmp = orig_scale;
+		tmp *= scale_fix;
+		scale_fix = (uint32_t)(tmp >> 12);
 	}
+	if (scale_fix < 0x1000) {
+		scale_fix |= 0xff000;
+	} else {
+		scale_fix -= 0x1000;
+		scale_fix >>= 8;
+		if (scale_fix > 0xfefff)
+			scale_fix = 0xfefff;
+	}
+	p->sr = (scale_fix << 12) | (p->sr & 0xfff);
 }
 
 #endif

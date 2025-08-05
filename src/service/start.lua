@@ -93,14 +93,12 @@ local function init(arg)
 		end
 	end
 	local batch_id = ltask.call(render, "register_batch", ltask.self())
-	local async = ltask.async()
 
 	local function frame(count)
 		batch:reset()
 		frame_cb(count)
-		async:request(render, "submit_batch", batch_id, batch:ptr())
-		async:request(render, "frame")
-		async:wait()
+		ltask.send(render, "submit_batch", batch_id, batch:ptr())
+		ltask.call(render, "frame")
 	end
 	
 	function app.frame(count)

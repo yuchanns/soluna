@@ -323,13 +323,7 @@ lbatch_add(lua_State *L) {
 	}
 	float x = luaL_checknumber(L, 3);
 	float y = luaL_checknumber(L, 4);
-	
-	if (lua_gettop(L) > 4) {
-		float scale = luaL_optnumber(L, 5, 1);
-		float rot = luaL_optnumber(L, 6, 0);
-		sprite_set_sr(p, scale, rot);
-	}
-	
+
 	int i;
 	
 	for (i=0;i<n;i++) {
@@ -364,7 +358,7 @@ layer_close(lua_State *L, struct batch *b) {
 	} else {
 		--b->layer;
 		struct layer *current = &b->stack[b->layer];
-		sprite_transform_set(&b->trans, current->s, current->r, current->x, current->y);
+		sprite_transform_set(&b->trans, current->x, current->y, current->s, current->r);
 	}
 }
 
@@ -385,24 +379,28 @@ layer_new(lua_State *L, struct batch *b) {
 
 static void 
 layer_merge(struct layer *current, struct layer *last) {
-	float x, y;
-	if (last->r != 0) {
-		float sinv = sinf(last->r);
-		float cosv = cosf(last->r);
-		y = current->y * cosv + current->x * sinv;
-		x = current->x * cosv - current->y * sinv;
-		current->r += last->r;
+	float x,y;
+	float lastx = last->x;
+	float lasty = last->y;
+	if (current->s != 1) {
+		float inv_s = 1 / current->s;
+		lastx *= inv_s;
+		lasty *= inv_s;
+	}
+	if (current->r != 0) {
+		float sinv = sinf(current->r);
+		float cosv = cosf(current->r);
+		x = lastx * cosv + lasty * sinv;
+		y = lasty * cosv - lastx * sinv;
 	} else {
-		x = current->x;
-		y = current->y;
+		x = lastx;
+		y = lasty;
 	}
-	if (last->s != 1) {
-		x *= last->s;
-		y *= last->s;
-		current->s *= last->s;
-	}
-	current->x = x + last->x;
-	current->y = y + last->y;
+	current->x += x;
+	current->y += y;
+	
+	current->s *= last->s;
+	current->r += last->r;
 }
 
 static int
@@ -417,31 +415,31 @@ lbatch_layer(lua_State *L) {
 		return 0;
 	case 2:
 		// rot only
-		new_layer->s = 1;
-		new_layer->r = luaL_checknumber(L, 2);
 		new_layer->x = 0;
 		new_layer->y = 0;
+		new_layer->s = 1;
+		new_layer->r = luaL_checknumber(L, 2);
 		break;
 	case 3:
 		// trans only
-		new_layer->s = 1;
-		new_layer->r = 0;
 		new_layer->x = luaL_checknumber(L, 2);
 		new_layer->y = luaL_checknumber(L, 3);
+		new_layer->s = 1;
+		new_layer->r = 0;
 		break;
 	case 4:
-		// st, no rot
-		new_layer->s = luaL_checknumber(L, 2);
-		new_layer->r = 0;
-		new_layer->x = luaL_checknumber(L, 3);
-		new_layer->y = luaL_checknumber(L, 4);
+		// tr, no scale
+		new_layer->x = luaL_checknumber(L, 2);
+		new_layer->y = luaL_checknumber(L, 3);
+		new_layer->s = 1;
+		new_layer->r = luaL_checknumber(L, 4);
 		break;
 	case 5:
-		// srt
-		new_layer->s = luaL_checknumber(L, 2);
-		new_layer->r = luaL_checknumber(L, 3);
-		new_layer->x = luaL_checknumber(L, 4);
-		new_layer->y = luaL_checknumber(L, 5);
+		// tsr
+		new_layer->x = luaL_checknumber(L, 2);
+		new_layer->y = luaL_checknumber(L, 3);
+		new_layer->s = luaL_checknumber(L, 4);
+		new_layer->r = luaL_checknumber(L, 5);
 		break;
 	default:
 		luaL_error(L, "Too many arguments");
@@ -451,7 +449,7 @@ lbatch_layer(lua_State *L) {
 	if (b->layer > 1) {
 		layer_merge(new_layer, new_layer-1);
 	}
-	sprite_transform_set(&b->trans, new_layer->s, new_layer->r, new_layer->x, new_layer->y);
+	sprite_transform_set(&b->trans, new_layer->x, new_layer->y, new_layer->s, new_layer->r);
 	return 0;
 }
 
