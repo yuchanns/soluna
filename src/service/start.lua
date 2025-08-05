@@ -4,6 +4,7 @@ local spritemgr = require "soluna.spritemgr"
 local soluna = require "soluna"
 local soluna_app = require "soluna.app"
 local event = require "soluna.event"
+local util = require "soluna.util"
 
 local message_unpack = soluna_app.unpackmessage
 
@@ -48,6 +49,8 @@ function S.external(p)
 	end
 end
 
+local cleanup = util.func_chain()
+
 local function init(arg)
 	if arg == nil then
 		error "No command line args"
@@ -73,6 +76,9 @@ local function init(arg)
 	-- todo: run entry (f)
 	
 	local batch = spritemgr.newbatch()
+	cleanup:add(function()
+		batch:release()
+	end)
 	local callback = f(batch)
 	local frame_cb = callback.frame
 	
@@ -105,7 +111,7 @@ local function init(arg)
 end
 
 function S.quit()
-	-- todo: cleanup
+	cleanup()
 end
 
 ltask.fork(function()

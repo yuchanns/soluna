@@ -154,16 +154,16 @@ function S.quit()
 	for _, v in ipairs(batch) do
 		workers[v.source] = true
 	end
-	for addr in pairs(workers) do
-		ltask.call(addr, "quit")
-	end
+	
+	S.submit_batch = function() end	-- prevent submit
+
 	for _, v in ipairs(batch) do
 		for _, resp in ipairs(v) do
 			local _,_, token = resp()
 			ltask.wakeup(token)
 		end
 	end
-	-- double check
+
 	for addr in pairs(workers) do
 		ltask.call(addr, "quit")
 	end

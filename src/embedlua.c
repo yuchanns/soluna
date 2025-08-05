@@ -17,6 +17,7 @@
 #include "icon.lua.h"
 #include "layout.lua.h"
 #include "text.lua.h"
+#include "util.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -65,6 +66,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(layout)
 			REG_SOURCE(text)
 			REG_SOURCE(soluna)
+			REG_SOURCE(util)
 		lua_setfield(L, -2, "lib");
 
 		lua_newtable(L);	// service

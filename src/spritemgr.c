@@ -1,6 +1,7 @@
 #include "spritemgr.h"
 #include "sprite_submit.h"
 #include "batch.h"
+#include "transform.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -191,15 +192,38 @@ lsprite_newbank(lua_State *L) {
 	return 1;
 }
 
+struct layer {
+	float s;
+	float r;
+	float x;
+	float y;
+};
+
 struct batch {
 	int n;
+	int layer;
+	int layer_cap;
+	struct transform trans;
 	struct draw_batch *b;
+	struct layer *stack;
 };
 
 static int
 lbatch_reset(lua_State *L) {
 	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
 	b->n = 0;
+	b->layer = 0;
+	sprite_transform_identity(&b->trans);
+	return 0;
+}
+
+static int
+lbatch_release(lua_State *L) {
+	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+	b->n = 0;
+	b->n = 0;
+	batch_delete(b->b);
+	b->b = NULL;
 	return 0;
 }
 
@@ -301,7 +325,6 @@ lbatch_add(lua_State *L) {
 	float y = luaL_checknumber(L, 4);
 	
 	if (lua_gettop(L) > 4) {
-		// todo : calc multi sr
 		float scale = luaL_optnumber(L, 5, 1);
 		float rot = luaL_optnumber(L, 6, 0);
 		sprite_set_sr(p, scale, rot);
@@ -311,6 +334,7 @@ lbatch_add(lua_State *L) {
 	
 	for (i=0;i<n;i++) {
 		sprite_add_xy(p, x, y);
+		sprite_transform_apply(p, &b->trans);
 		p+=2;
 	}
 	return 0;
@@ -330,20 +354,127 @@ lbatch_ptr(lua_State *L) {
 	return 2;
 }
 
+static void
+layer_close(lua_State *L, struct batch *b) {
+	if (b->layer <= 0)
+		luaL_error(L, "none layer to close");
+	if (b->layer == 1) {
+		b->layer = 0;
+		sprite_transform_identity(&b->trans);
+	} else {
+		--b->layer;
+		struct layer *current = &b->stack[b->layer];
+		sprite_transform_set(&b->trans, current->s, current->r, current->x, current->y);
+	}
+}
+
+static struct layer *
+layer_new(lua_State *L, struct batch *b) {
+	if (b->layer >= b->layer_cap) {
+		int cap = (b->layer + 1) * 3 / 2;
+		struct layer * tmp = (struct layer *)lua_newuserdatauv(L, cap * sizeof(struct layer), 0);
+		memcpy(tmp, b->stack, b->layer_cap * sizeof(struct layer));
+		b->stack = tmp;
+		b->layer_cap = cap;
+		lua_setiuservalue(L, 1, 1);
+	}
+	struct layer * ret = &b->stack[b->layer];
+	++b->layer;
+	return ret;
+}
+
+static void 
+layer_merge(struct layer *current, struct layer *last) {
+	float x, y;
+	if (last->r != 0) {
+		float sinv = sinf(last->r);
+		float cosv = cosf(last->r);
+		y = current->y * cosv + current->x * sinv;
+		x = current->x * cosv - current->y * sinv;
+		current->r += last->r;
+	} else {
+		x = current->x;
+		y = current->y;
+	}
+	if (last->s != 1) {
+		x *= last->s;
+		y *= last->s;
+		current->s *= last->s;
+	}
+	current->x = x + last->x;
+	current->y = y + last->y;
+}
+
+static int
+lbatch_layer(lua_State *L) {
+	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+	struct layer *new_layer = layer_new(L, b);
+	switch (lua_gettop(L)) {
+	case 1:
+		// close layer
+		--b->layer;
+		layer_close(L, b);
+		return 0;
+	case 2:
+		// rot only
+		new_layer->s = 1;
+		new_layer->r = luaL_checknumber(L, 2);
+		new_layer->x = 0;
+		new_layer->y = 0;
+		break;
+	case 3:
+		// trans only
+		new_layer->s = 1;
+		new_layer->r = 0;
+		new_layer->x = luaL_checknumber(L, 2);
+		new_layer->y = luaL_checknumber(L, 3);
+		break;
+	case 4:
+		// st, no rot
+		new_layer->s = luaL_checknumber(L, 2);
+		new_layer->r = 0;
+		new_layer->x = luaL_checknumber(L, 3);
+		new_layer->y = luaL_checknumber(L, 4);
+		break;
+	case 5:
+		// srt
+		new_layer->s = luaL_checknumber(L, 2);
+		new_layer->r = luaL_checknumber(L, 3);
+		new_layer->x = luaL_checknumber(L, 4);
+		new_layer->y = luaL_checknumber(L, 5);
+		break;
+	default:
+		luaL_error(L, "Too many arguments");
+	}
+	if (new_layer->s == 0)
+		luaL_error(L, "Scale can't be 0");
+	if (b->layer > 1) {
+		layer_merge(new_layer, new_layer-1);
+	}
+	sprite_transform_set(&b->trans, new_layer->s, new_layer->r, new_layer->x, new_layer->y);
+	return 0;
+}
+
 static int
 lsprite_newbatch(lua_State *L) {
-	struct batch *b = (struct batch *)lua_newuserdatauv(L, sizeof(*b), 0);
+	struct batch *b = (struct batch *)lua_newuserdatauv(L, sizeof(*b), 1);
 	b->n = 0;
 	b->b = batch_new(0);
 	if (b->b == NULL)
 		return luaL_error(L, "sprite_newbatch : Out of memory");
-
+	b->layer = 0;
+	b->layer_cap = 0;
+	b->stack = NULL;
+	sprite_transform_identity(&b->trans);
+		
 	if (luaL_newmetatable(L, "SOLUNA_BATCH")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "reset", lbatch_reset },
 			{ "add", lbatch_add },
 			{ "ptr", lbatch_ptr },
+			{ "release", lbatch_release },
+			{ "layer", lbatch_layer },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
@@ -365,5 +496,6 @@ luaopen_spritemgr(lua_State *L) {
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
+	sprite_transform_init();
 	return 1;
 }
