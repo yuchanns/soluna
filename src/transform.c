@@ -8,12 +8,17 @@ static int sin_lut[4096];
 
 void
 sprite_transform_init() {
+	static int init = 0;
+	// Don't card about race condition, because sin_lut is a constant table
+	if (init)
+		return;
 	int i;
 	const float pi = 3.1415927f;
 	const float pow2 = (float)(1<<24);
 	for (i=0;i<4096;i++) {
 		sin_lut[i] = (int)(sinf((float)i / 2048.0f * pi) * pow2);
 	}
+	init = 1;
 }
 
 static inline void
