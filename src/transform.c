@@ -70,5 +70,5 @@ sprite_transform_set(struct transform *t, float s, float r, float x, float y) {
 	const float rot_scale = 2048.0 / 3.1415927;
 	t->r = (int)(r * rot_scale) % 4096;
 	t->x = (int32_t)(x * 256);
-	t->y = (int32_t)(x * 256);
+	t->y = (int32_t)(y * 256);
 }
