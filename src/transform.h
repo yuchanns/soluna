@@ -7,7 +7,7 @@ struct transform {
 	// ix, iy : sign bit + 23.8   fix number
 	int32_t x;	
 	int32_t y;
-	uint32_t s; // 20.12 fix number
+	int32_t s; // sign bit + 19.12 fix number
 	int r;	// 12bits [0,4095]
 };
 
