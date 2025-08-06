@@ -506,17 +506,6 @@ struct sprite_object {
 	uint32_t v;
 };
 
-//#define MAX_OBJECT 32768
-
-struct draw_buffer {
-	int n;
-	int cap;
-	struct inst_object *inst;
-	struct sprite_object *spr;
-	struct sprite_bank * bank;
-	struct sr_buffer *srb;
-};
-
 static int
 lbuffer_size(lua_State *L) {
 	const char * name = luaL_checkstring(L, 1);

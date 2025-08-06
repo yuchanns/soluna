@@ -13,9 +13,9 @@
 #include "spritemgr.h"
 #include "font_manager.h"
 #include "sprite_submit.h"
+#include "material_util.h"
 
 #define BATCHN 4096
-#define MATERIAL_TEXT_NORMAL 1
 
 struct text {
 	int codepoint;
@@ -52,7 +52,7 @@ submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n
 	int count = 0;
 	for (i=0;i<n;i++) {
 		struct draw_primitive *p = &prim[i*2];
-		assert(p->sprite == -1);
+		assert(p->sprite == -MATERIAL_TEXT_NORMAL);
 		
 		struct text * t = (struct text *)&prim[i*2+1];
 		struct font_glyph g, og;
@@ -143,24 +143,6 @@ lmateraial_text_draw(lua_State *L) {
 	m->uniform->texsize = texsize;
 
 	return 0;
-}
-
-static void
-ref_object(lua_State *L, void *ptr, int uv_index, const char *key, const char *luatype, int direct) {
-	if (lua_getfield(L, 1, key) != LUA_TUSERDATA)
-		luaL_error(L, "Invalid key .%s", key);
-	void *obj = luaL_checkudata(L, -1, luatype);
-	lua_pushvalue(L, -1);
-	// ud, object, object
-	lua_setiuservalue(L, -3, uv_index);
-	if (!direct) {
-		lua_pushlightuserdata(L, ptr);
-		lua_call(L, 1, 0);
-	} else {
-		lua_pop(L, 1);
-		void **ref = (void **)ptr;
-		*ref = obj;
-	}
 }
 
 static void

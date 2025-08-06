@@ -1,8 +1,8 @@
 @vs vs
 layout(binding=0) uniform vs_params {
+	vec2 framesize;
 	float texsize;
 	int baseinst;
-	vec2 framesize;
 };
 
 struct sr_mat {

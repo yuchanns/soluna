@@ -5,8 +5,13 @@ local embedsource = require "soluna.embedsource"
 local drawmgr = require "soluna.drawmgr"
 local defmat = require "soluna.material.default"
 local textmat = require "soluna.material.text"
+local quadmat = require "soluna.material.quad"
 
 local setting = require "soluna".settings()
+
+local DEFAULT_MAT <const> = 0
+local TEXT_MAT <const> = 1
+local QUAD_MAT <const> = 2
 
 local font = {} ;  do
 	local mgr = require "soluna.font.manager"
@@ -80,6 +85,37 @@ end
 
 local STATE
 
+local materials = {
+	[DEFAULT_MAT] = {
+		submit = function(ptr, n)
+			STATE.material:submit(ptr, n)
+		end,
+		draw = function(ptr, n, tex)
+			STATE.bindings:image(0, STATE.textures[tex+1])
+			STATE.material:draw(ptr, n, tex)
+		end,
+	},
+	[TEXT_MAT] = {
+		submit = function(ptr, n)
+			STATE.material_text:submit(ptr, n)
+		end,
+		draw = function(ptr, n)
+			STATE.bindings:image(0, STATE.font_texture)
+			STATE.material_text:draw(ptr, n)
+		end,
+	},
+	[QUAD_MAT] = {
+		submit = function(ptr, n)
+			STATE.material_quad:submit(ptr, n)
+		end,
+		draw = function(ptr, n)
+			STATE.bindings:image(0, STATE.font_texture)
+			STATE.material_quad:draw(ptr, n)
+		end,
+	}
+}
+
+
 local S = {}
 
 function S.app(settings)
@@ -100,6 +136,7 @@ local function frame(count)
 	batch.wait()
 	STATE.drawmgr:reset()
 	STATE.bindings:voffset(0, 0)
+	STATE.quad_bindings:voffset(0, 0)
 	STATE.uniform.baseinst = 0
 	for i = 1, batch_n do
 		local ptr, size = batch[i][1]()
@@ -110,28 +147,16 @@ local function frame(count)
 	local draw_n = #STATE.drawmgr
 	for i = 1, draw_n do
 		local mat, ptr, n, tex = STATE.drawmgr(i)
-		if mat == 0 then
-			assert(tex == 0)
-			STATE.material:submit(ptr, n)
-		else
-			assert(mat == 1)
-			-- text
-			STATE.material_text:submit(ptr, n)
-		end
+		local obj = materials[mat]
+		obj.submit(ptr, n)
 	end
 	STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 	STATE.pass:begin()
 	font.submit(STATE.font_texture)
 		for i = 1, draw_n do
 			local mat, ptr, n, tex = STATE.drawmgr(i)
-			if mat == 0 then
-				STATE.bindings:image(0, STATE.textures[tex+1])
-				STATE.material:draw(ptr, n, tex)
-			else
-				assert(mat == 1)
-				STATE.bindings:image(0, STATE.font_texture)
-				STATE.material_text:draw(ptr, n)
-			end
+			local obj = materials[mat]
+			obj.draw(ptr, n, tex)
 		end
 	STATE.pass:finish()
 end
@@ -247,23 +272,39 @@ function S.init(arg)
 
 	STATE.srbuffer_mem = render.srbuffer(setting.srbuffer_size)
 	STATE.bindings = bindings
+
+	do
+		STATE.quad_inst = render.buffer {
+			type = "vertex",
+			usage = "stream",
+			label = "quad-instance",
+			size = quadmat.instance_size * setting.draw_instance,
+		}
+
+		local quadbind = render.bindings()
+		quadbind:vbuffer(0, STATE.quad_inst)
+		quadbind:sbuffer(0, sr_buffer)
+		quadbind:sbuffer(1, sprite_buffer)
+		 		
+		STATE.quad_bindings = quadbind
+	end
 	
 	STATE.drawmgr = drawmgr.new(bank_ptr, setting.draw_instance)
 	
 	STATE.uniform = render.uniform {
 		16,	-- size
-		tex_size = {
+		framesize = {
 			offset = 0,
+			type = "float",
+			n = 2,
+		},
+		tex_size = {
+			offset = 8,
 			type = "float",
 		},
 		baseinst = {
-			offset = 4,
+			offset = 12,
 			type = "int",
-		},
-		framesize = {
-			offset = 8,
-			type = "float",
-			n = 2,
 		},
 	}
 	STATE.uniform.framesize = { 2/arg.width, -2/arg.height }
@@ -286,6 +327,13 @@ function S.init(arg)
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
 		font_manager = font.cobj,
+	}
+
+	STATE.material_quad = quadmat.new {
+		inst_buffer = STATE.quad_inst,
+		bindings = STATE.quad_bindings,
+		uniform = STATE.uniform,
+		sr_buffer = STATE.srbuffer_mem,
 	}
 end
 

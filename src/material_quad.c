@@ -1,0 +1,194 @@
+#include <lua.h>
+#include <lauxlib.h>
+#include <assert.h>
+#include <string.h>
+
+#include "sokol/sokol_gfx.h"
+#include "colorquad.glsl.h"
+#include "srbuffer.h"
+#include "batch.h"
+#include "spritemgr.h"
+#include "material_util.h"
+
+#define BATCHN 4096
+
+struct color {
+	unsigned char channel[4];
+};
+
+struct quad {
+	float w;
+	float h;
+	struct color c;
+};
+
+struct inst_object {
+	float x, y;
+	float w, h;
+	int sr_index;
+	struct color c;
+};
+
+struct buffer_data {
+	struct inst_object inst[BATCHN];
+};
+
+struct material_quad {
+	sg_pipeline pip;
+	sg_buffer inst;
+	sg_bindings *bind;
+	vs_params_t *uniform;
+	struct sr_buffer *srbuffer;
+};
+
+static void
+submit(lua_State *L, struct material_quad *m, struct draw_primitive *prim, int n) {
+	struct buffer_data tmp;
+	int i;
+	int count = 0;
+	for (i=0;i<n;i++) {
+		struct draw_primitive *p = &prim[i*2];
+		assert(p->sprite == -MATERIAL_QUAD);
+		
+		struct quad * q = (struct quad *)&prim[i*2+1];
+		
+		// calc scale/rot index
+		int sr_index = srbuffer_add(m->srbuffer, p->sr);
+		if (sr_index < 0) {
+			// todo: support multiply srbuffer
+			luaL_error(L, "sr buffer is full");
+		}
+		struct inst_object *inst = &tmp.inst[count];
+		inst->x = (float)p->x / 256.0f;
+		inst->y = (float)p->y / 256.0f;
+		inst->w = q->w;
+		inst->h = q->h;
+		inst->sr_index = sr_index;
+		inst->c = q->c;
+		++count;
+	}
+	sg_append_buffer(m->inst, &(sg_range) { tmp.inst , count * sizeof(tmp.inst[0]) });
+}
+
+static int
+lmateraial_quad_submit(lua_State *L) {
+	struct material_quad *m = (struct material_quad *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_QUAD");
+	struct draw_primitive *prim = lua_touserdata(L, 2);
+	int prim_n = luaL_checkinteger(L, 3);
+	int i;
+	for (i=0;i<prim_n;i+=BATCHN) {
+		int n = (prim_n - i) % BATCHN;
+		submit(L, m, prim, n);
+		prim += BATCHN;
+	}
+	return 0;
+}
+
+static int
+lmateraial_quad_draw(lua_State *L) {
+	struct material_quad *m = (struct material_quad *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_QUAD");
+//	struct draw_primitive *prim = lua_touserdata(L, 2);
+	int prim_n = luaL_checkinteger(L, 3);
+	if (prim_n <= 0)
+		return 0;
+	
+	sg_apply_pipeline(m->pip);
+	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
+	sg_apply_bindings(m->bind);
+	sg_draw(0, 4, prim_n);
+	m->bind->vertex_buffer_offsets[0] += prim_n * sizeof(struct inst_object);
+
+	return 0;
+}
+
+static void
+init_pipeline(struct material_quad *m) {
+	sg_shader shd = sg_make_shader(colorquad_shader_desc(sg_query_backend()));
+
+	m->pip = sg_make_pipeline(&(sg_pipeline_desc) {
+		.layout = {
+			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+			.attrs = {
+					[ATTR_colorquad_position].format = SG_VERTEXFORMAT_FLOAT4,
+					[ATTR_colorquad_idx].format = SG_VERTEXFORMAT_UINT,
+					[ATTR_colorquad_c].format = SG_VERTEXFORMAT_UBYTE4N,
+				}
+        },
+		.colors[0].blend = (sg_blend_state) {
+			.enabled = true,
+			.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+			.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+			.src_factor_alpha = SG_BLENDFACTOR_ONE,
+			.dst_factor_alpha = SG_BLENDFACTOR_ZERO
+		},
+        .shader = shd,
+		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+        .label = "colorquad-pipeline"
+    });
+}
+
+static int
+lnew_material_quad(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	struct material_quad *m = (struct material_quad *)lua_newuserdatauv(L, sizeof(*m), 4);
+	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
+	ref_object(L, &m->bind, 2, "bindings", "SOKOL_BINDINGS", 1);
+	ref_object(L, &m->uniform, 3, "uniform", "SOKOL_UNIFORM", 1);
+	ref_object(L, &m->srbuffer, 4, "sr_buffer", "SOLUNA_SRBUFFER", 1);
+	init_pipeline(m);
+
+	if (luaL_newmetatable(L, "SOLUNA_MATERIAL_QUAD")) {
+		luaL_Reg l[] = {
+			{ "__index", NULL },
+			{ "submit", lmateraial_quad_submit },
+			{ "draw", lmateraial_quad_draw },
+			{ NULL, NULL },
+		};
+		luaL_setfuncs(L, l, 0);
+
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+	}
+	lua_setmetatable(L, -2);
+	return 1;
+}
+
+static int
+lquad_for_batch(lua_State *L) {
+	struct quad * t = (struct quad *)lua_touserdata(L, lua_upvalueindex(1));
+	t->w = luaL_checkinteger(L, 1);
+	t->h = luaL_checkinteger(L, 2);
+	uint32_t color = luaL_checkinteger(L, 3);
+	if (!(color & 0xff000000))
+		color |= 0xff000000;
+	t->c.channel[0] = (color >> 16) & 0xff;
+	t->c.channel[1] = (color >> 8) & 0xff;
+	t->c.channel[2] = color & 0xff;
+	t->c.channel[3] = (color >> 24) & 0xff;
+	lua_pushvalue(L, lua_upvalueindex(1));
+	return 1;
+}
+
+int
+luaopen_material_quad(lua_State *L) {
+	luaL_checkversion(L);
+	luaL_Reg l[] = {
+		{ "char", NULL },
+		{ "new", lnew_material_quad },
+		{ NULL, NULL },
+	};
+	luaL_newlib(L, l);
+
+	// quad()
+	struct quad * t = (struct quad *)lua_newuserdatauv(L, sizeof(*t), 1);
+	memset(t, 0, sizeof(*t));
+	lua_pushinteger(L, MATERIAL_QUAD);
+	lua_setiuservalue(L, -2, 1);
+	lua_pushcclosure(L, lquad_for_batch, 1);
+	lua_setfield(L, -2, "quad");
+	
+	lua_pushinteger(L, sizeof(struct inst_object));
+	lua_setfield(L, -2, "instance_size");
+	
+	return 1;
+}
