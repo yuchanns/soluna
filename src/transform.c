@@ -57,8 +57,7 @@ sprite_transform_apply(struct draw_primitive *p, struct transform * t) {
 		y *= t->s;
 		x >>= 12;
 		y >>= 12;
-		// todo mul scale fix version
-		sprite_mul_scale(p, (float)t->s / 4096.0f);
+		sprite_apply_scale(p, t->s);
 	}
 	p->x = (int32_t)x + t->x;
 	p->y = (int32_t)y + t->y;

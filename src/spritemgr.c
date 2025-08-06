@@ -324,16 +324,10 @@ lbatch_add(lua_State *L) {
 	float x = luaL_checknumber(L, 3);
 	float y = luaL_checknumber(L, 4);
 	
-	if (lua_gettop(L) > 4) {
-		float scale = luaL_optnumber(L, 5, 1);
-		float rot = luaL_optnumber(L, 6, 0);
-		sprite_set_sr(p, scale, rot);
-	}
-	
 	int i;
 	
 	for (i=0;i<n;i++) {
-		sprite_add_xy(p, x, y);
+		sprite_apply_xy(p, x, y);
 		sprite_transform_apply(p, &b->trans);
 		p+=2;
 	}

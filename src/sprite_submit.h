@@ -19,7 +19,7 @@ sprite_set_xy(struct draw_primitive *p, float x, float y) {
 }
 
 static inline void
-sprite_add_xy(struct draw_primitive *p, float x, float y) {
+sprite_apply_xy(struct draw_primitive *p, float x, float y) {
 	p->x += to_fixpoint_(x);
 	p->y += to_fixpoint_(y);
 }
@@ -38,6 +38,19 @@ convert_scale_(float scale) {
 	}
 	// use 12 bits for [0,1) scale
 	return 0xff000 | (int)(scale * 4096.0f);
+}
+
+static inline uint32_t
+convert_scale_part_(uint32_t scale12) {
+	uint32_t scale_fix;
+	if (scale12 >= 0x1000) {
+		scale_fix = (scale12 - 0x1000) >> 4;
+		if (scale_fix > 0xfefff)
+			scale_fix = 0xfefff;
+	} else {
+		scale_fix = scale12 | 0xff000;
+	}
+	return scale_fix << 12;
 }
 
 static inline int
@@ -66,19 +79,21 @@ sprite_set_sr(struct draw_primitive *p, float scale, float rot) {
 }
 
 static inline void
-sprite_mul_scale(struct draw_primitive *p, float scale) {
+sprite_apply_scale(struct draw_primitive *p, uint32_t scale_fix12) {
 	uint32_t scale_fix = p->sr >> 12;
 	if (scale_fix == 0) {
-		p->sr |= convert_scale_(scale) << 12;
+		scale_fix = convert_scale_part_(scale_fix12);
 	} else {
+		uint64_t s;
 		if (scale_fix >= 0xff000) {
-			scale *= (float)(scale_fix & 0xfff) * (1.0f / 4096.0f);
+			s = scale_fix & 0xfff;
 		} else {
-			scale *= (float)scale_fix * (1.0f / 256.0f) + 1.0f;
+			s = (scale_fix + 0x100) << 4;
 		}
-		uint32_t sr = p->sr & 0xfff;
-		p->sr = sr | (convert_scale_(scale) << 12);
+		s = (s * scale_fix12) >> 12;
+		scale_fix = convert_scale_part_((uint32_t)s);
 	}
+	p->sr = scale_fix | (p->sr & 0xfff);
 }
 
 #endif
