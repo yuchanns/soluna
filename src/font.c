@@ -11,6 +11,7 @@
 #include <ctype.h>
 
 #include "luabuffer.h"
+#include "stb/stb_image_write.h"
 
 static struct {
 	struct font_manager *mgr;
@@ -63,6 +64,18 @@ ltexture(lua_State *L) {
 }
 
 static int
+ltexture_write(lua_State *L) {
+	struct font_manager *F = getF(L);
+	int size = 0;
+	const void * ptr = font_manager_texture(F, &size);
+	const char * filename = luaL_checkstring(L, 1);
+	if (!stbi_write_png(filename, size, size, 1, ptr, size)) {
+		return luaL_error(L, "Write %s failed", filename);
+	}
+	return 0;
+}
+
+static int
 ltouch(lua_State *L) {
 	struct font_manager *F = getF(L);
 	int fontid = luaL_checkinteger(L, 1);
@@ -97,7 +110,8 @@ luaopen_font(lua_State *L) {
 	luaL_checkversion(L);
 	
 	luaL_Reg l[] = {
-		{ "texture",			ltexture },	// for debug
+		{ "texture",			ltexture },
+		{ "texture_write",		ltexture_write },
 		{ "touch",				ltouch },	// for debug
 		{ "import",				limport },
 		{ "name",				lname },

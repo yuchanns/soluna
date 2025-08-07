@@ -3,8 +3,11 @@ local icon = require "soluna.icon"
 
 local text = {}
 
+local bundle_data
+
 function text.init(bundle)
-	font.import_icon(icon.bundle(bundle))
+	bundle_data = icon.bundle(bundle)	-- prevent gc to collect bundle_data
+	font.import_icon(bundle_data)
 end
 
 local colors = {
