@@ -357,7 +357,7 @@ layer_close(lua_State *L, struct batch *b) {
 		sprite_transform_identity(&b->trans);
 	} else {
 		--b->layer;
-		struct layer *current = &b->stack[b->layer];
+		struct layer *current = &b->stack[b->layer-1];
 		sprite_transform_set(&b->trans, current->s, current->r, current->x, current->y);
 	}
 }

@@ -81,9 +81,10 @@ do
 			doc._yoga[id] = cobj
 		end
 		
-		if attr.image or attr.text or attr.background then
+		if attr.image or attr.text or attr.background or attr.area then
 			local obj = {
 				image = attr.image,
+				area = attr.area,
 				text = attr.text,
 				size = attr.size,
 				color = attr.color,
