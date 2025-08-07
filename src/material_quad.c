@@ -153,19 +153,31 @@ lnew_material_quad(lua_State *L) {
 	return 1;
 }
 
+struct quad_primitive {
+	struct draw_primitive pos;
+	union {
+		struct draw_primitive dummy;
+		struct quad q;
+	} u;
+};
+
 static int
-lquad_for_batch(lua_State *L) {
-	struct quad * t = (struct quad *)lua_touserdata(L, lua_upvalueindex(1));
-	t->w = luaL_checkinteger(L, 1);
-	t->h = luaL_checkinteger(L, 2);
+lquad(lua_State *L) {
+	struct quad_primitive prim;
+	prim.pos.x = 0;
+	prim.pos.y = 0;
+	prim.pos.sr = 0;
+	prim.pos.sprite = -MATERIAL_QUAD;
+	prim.u.q.w = luaL_checkinteger(L, 1);
+	prim.u.q.h = luaL_checkinteger(L, 2);
 	uint32_t color = luaL_checkinteger(L, 3);
 	if (!(color & 0xff000000))
 		color |= 0xff000000;
-	t->c.channel[0] = (color >> 16) & 0xff;
-	t->c.channel[1] = (color >> 8) & 0xff;
-	t->c.channel[2] = color & 0xff;
-	t->c.channel[3] = (color >> 24) & 0xff;
-	lua_pushvalue(L, lua_upvalueindex(1));
+	prim.u.q.c.channel[0] = (color >> 16) & 0xff;
+	prim.u.q.c.channel[1] = (color >> 8) & 0xff;
+	prim.u.q.c.channel[2] = color & 0xff;
+	prim.u.q.c.channel[3] = (color >> 24) & 0xff;
+	lua_pushlstring(L, (const char *)&prim, sizeof(prim));
 	return 1;
 }
 
@@ -173,20 +185,13 @@ int
 luaopen_material_quad(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
-		{ "char", NULL },
+		{ "quad", lquad },
 		{ "new", lnew_material_quad },
+		{ "instance_size", NULL },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
 
-	// quad()
-	struct quad * t = (struct quad *)lua_newuserdatauv(L, sizeof(*t), 1);
-	memset(t, 0, sizeof(*t));
-	lua_pushinteger(L, MATERIAL_QUAD);
-	lua_setiuservalue(L, -2, 1);
-	lua_pushcclosure(L, lquad_for_batch, 1);
-	lua_setfield(L, -2, "quad");
-	
 	lua_pushinteger(L, sizeof(struct inst_object));
 	lua_setfield(L, -2, "instance_size");
 	
