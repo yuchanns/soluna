@@ -34,9 +34,16 @@ function element:__tostring()
 	return "[element:"..self._id.."]"
 end
 
+function element:__newindex(key, value)
+	local _yoga = self._document._yoga
+	local cobj = (_yoga and _yoga[self._id]) or error ("No id : " .. self._id)
+	yoga.node_set(cobj, key, value)
+end
+
 -- update attr
 function element:update(attr)
-	local cobj = (self._yoga and self._yoga[self._id]) or error ("No id : " .. self._id)
+	local _yoga = self._document._yoga
+	local cobj = (_yoga and _yoga[self._id]) or error ("No id : " .. self._id)
 	yoga.node_set(cobj, attr)
 end
 
@@ -73,13 +80,15 @@ do
 			doc._element[id] = setmetatable(elem, element)
 			doc._yoga[id] = cobj
 		end
-		if attr.image or attr.text then
+		
+		if attr.image or attr.text or attr.background then
 			local obj = {
 				image = attr.image,
 				text = attr.text,
 				size = attr.size,
 				color = attr.color,
 				align = attr.text_align,
+				background = attr.background,
 			}
 			doc._yoga[obj] = cobj
 			doc._list[#doc._list + 1] = obj
@@ -98,8 +107,13 @@ do
 		end
 	end
 
-	function layout.load(filename)
-		local list = datalist.parse_list(file.loader(filename))
+	function layout.load(filename_or_list)
+		local list
+		if type(filename_or_list) == "string" then
+			list = datalist.parse_list(file.loader(filename_or_list))
+		else
+			list = filename_or_list
+		end
 		local doc = {
 			_root = yoga.node_new(),
 			_yoga = {},

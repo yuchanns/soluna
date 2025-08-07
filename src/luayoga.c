@@ -358,12 +358,18 @@ lsetFlex(lua_State *L, YGNodeRef node) {
 		char* endptr = NULL;
 		float number;
 		
+		// https://developer.mozilla.org/en-US/docs/Web/CSS/flex
 		switch (count_words(v)) {
 		case 1:
+			// only one word
 			number = strtof(v, &endptr);
 			if (is_whitespace(*endptr)) {
+				// is number, example : 1
+				// flex-glow 1 0%
 				YGNodeStyleSetFlex(node, number);
 			} else {
+				// not a number, example : 50%
+				// 1 1 flex-basis
 				YGNodeStyleSetFlexGrow(node, 1);
 				YGNodeStyleSetFlexShrink(node, 1);
 				setFlexBasis(L, node, v);
@@ -535,10 +541,8 @@ lsetRight(lua_State *L, YGNodeRef node) {
 	setPosition(L, node, YGEdgeRight);
 }
 
-static int
-lnodeSet(lua_State *L) {
-	YGNodeRef node = lua_touserdata(L, 1);
-	luaL_checktype(L, 2, LUA_TTABLE);
+static void
+set_array(lua_State *L, YGNodeRef node) {
 	lua_pushnil(L);
 	int top = lua_gettop(L);
 	while (lua_next(L, 2) != 0) {
@@ -549,6 +553,34 @@ lnodeSet(lua_State *L) {
 			func(L, node);
 		}
 		lua_settop(L, top);
+	}
+}
+
+static void
+set_one(lua_State *L, YGNodeRef node) {
+	lua_settop(L, 3);
+	lua_pushvalue(L, 2);
+	if (lua_rawget(L, lua_upvalueindex(1)) == LUA_TLIGHTUSERDATA) {
+		setfunc func = (setfunc)lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		func(L, node);
+	} else {
+		luaL_error(L, "Invalid attrib name : %s", lua_tostring(L, 2));
+	}
+}
+
+static int
+lnodeSet(lua_State *L) {
+	YGNodeRef node = lua_touserdata(L, 1);
+	switch(lua_type(L, 2)) {
+	case LUA_TTABLE:
+		set_array(L, node);
+		break;
+	case LUA_TSTRING:
+		set_one(L, node);
+		break;
+	default:
+		return luaL_error(L, "Set table or key, value");
 	}
 	return 0;
 }

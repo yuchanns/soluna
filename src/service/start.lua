@@ -64,6 +64,8 @@ local function init(arg)
 	render_service = render
 	if pre_size then
 		ltask.call(render, "resize", pre_size.width, pre_size.height)
+		arg.app.width = pre_size.width
+		arg.app.height = pre_size.height
 		pre_size = nil
 	end
 
@@ -79,7 +81,12 @@ local function init(arg)
 	cleanup:add(function()
 		batch:release()
 	end)
-	local callback = f(batch)
+	local callback = f {
+		batch = batch,
+		width = arg.app.width,
+		height = arg.app.height,
+		table.unpack(arg),
+	}
 	local frame_cb = callback.frame
 	
 	local messages = { "mouse_move", "mouse_button", "mouse_scroll", "mouse", "window_resize", "char" }

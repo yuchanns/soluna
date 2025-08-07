@@ -75,7 +75,7 @@ close_buffer(lua_State *L) {
 
 static int
 loader(lua_State *L) {
-	const char *filename = luaL_checkstring(L, lua_upvalueindex(1));
+	const char *filename = lua_tostring(L, lua_upvalueindex(1));
 	const char *mode = luaL_optstring(L, 2, "rb");
 	FILE *f = fopen_utf8(filename, mode);
 	if (f == NULL)
@@ -118,6 +118,7 @@ loader(lua_State *L) {
 static int
 lfile_loader(lua_State *L) {
 	lua_settop(L, 1);
+	luaL_checkstring(L, 1);
 	lua_pushcclosure(L, loader, 1);
 	return 1;
 }
