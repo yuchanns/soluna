@@ -41,7 +41,7 @@ batch_reserve(struct draw_batch *B, int size) {
 	int cap = B->cap;
 	do {
 		cap = cap * 3/2;
-	} while (cap >= size);
+	} while (cap < size);
 	struct draw_primitive * stream = realloc(B->stream, cap * sizeof(struct draw_primitive));
 	if (stream == NULL)
 		return NULL;

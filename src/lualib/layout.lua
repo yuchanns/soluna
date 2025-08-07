@@ -47,6 +47,12 @@ function element:update(attr)
 	yoga.node_set(cobj, attr)
 end
 
+function element:get()
+	local _yoga = self._document._yoga
+	local cobj = (_yoga and _yoga[self._id]) or error ("No id : " .. self._id)
+	return yoga.node_get(cobj)
+end
+
 do
 	local function parse_node(v)
 		local attr = {}

@@ -232,7 +232,7 @@ batch_add_sprite(lua_State *L, struct batch *b) {
 	int n = b->n;
 	struct draw_primitive * p = batch_reserve(b->b, n + 1);
 	if (p == NULL)
-		luaL_error(L, "batch_add_sprite : Out of memory");
+		luaL_error(L, "batch_add_sprite : Out of memory, n = %d", n);
 	
 	p += n;
 	
@@ -254,7 +254,7 @@ batch_add_material(lua_State *L, struct batch *b) {
 	int n = b->n;
 	struct draw_primitive * p = batch_reserve(b->b, n + 2);
 	if (p == NULL)
-		luaL_error(L, "batch_add_material : Out of memory");
+		luaL_error(L, "batch_add_material : Out of memory, n = %d", n);
 
 	p += n;
 	
@@ -293,7 +293,7 @@ batch_add_stream(lua_State *L, struct batch *b, int *count) {
 		luaL_error(L, "Invalid stream size (%d)", sz);
 	struct draw_primitive * p = batch_reserve(b->b, n + 2 * *count);
 	if (p == NULL) {
-		luaL_error(L, "batch_add_stream : Out of memory");
+		luaL_error(L, "batch_add_stream : Out of memory n = %d count = %d", n, *count);
 	}
 	p += n;
 	b->n = n + *count * 2;
