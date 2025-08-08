@@ -24,5 +24,6 @@ sprite_transform_identity(struct transform * t) {
 void sprite_transform_init();
 void sprite_transform_set(struct transform *t, float s, float r, float x, float y);
 void sprite_transform_apply(struct draw_primitive *p, struct transform * t);
+void sprite_transform_point(const struct transform *t, int *x, int *y);
 
 #endif

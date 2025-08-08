@@ -31,7 +31,7 @@ sincos_lut(int d, int *sin, int *cos) {
 void
 sprite_transform_apply(struct draw_primitive *p, struct transform * t) {
 	int64_t x, y;
-
+	
 	if (t->r != 0) {
 		int sin, cos;
 		sincos_lut(t->r, &sin, &cos);
@@ -70,4 +70,38 @@ sprite_transform_set(struct transform *t, float s, float r, float x, float y) {
 	t->r = (int)(r * rot_scale) % 4096;
 	t->x = (int32_t)(x * 256);
 	t->y = (int32_t)(y * 256);
+}
+
+// returns origin point (x, y) in transformed coordinate system
+void
+sprite_transform_point(const struct transform *t, int *x, int *y) {
+	int64_t ox = *x;
+	int64_t oy = *y;
+
+	ox -= t->x;
+	oy -= t->y;
+	if (t->r != 0) {
+		int sin, cos;
+		sincos_lut(t->r, &sin, &cos);
+
+		int64_t x = ox;
+		int64_t y = oy;
+		ox = x * cos + y * sin;
+		oy = y * cos - x * sin;
+		ox >>= 24;
+		oy >>= 24;
+	}
+	if (t->s != 4096) {
+		int s = t->s;
+		if (s == 0)
+			s = 1;
+		int32_t inv_s = (1 << 30) / s;	// .18bits fix
+		ox *= inv_s;
+		oy *= inv_s;
+		
+		ox >>= 18;
+		oy >>= 18;
+	}
+	*x = (int)ox;
+	*y = (int)oy;
 }

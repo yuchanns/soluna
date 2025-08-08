@@ -321,8 +321,8 @@ lbatch_add(lua_State *L) {
 	default:
 		return luaL_error(L, "Invalid type %s", lua_typename(L, lua_type(L, 2)));
 	}
-	float x = luaL_checknumber(L, 3);
-	float y = luaL_checknumber(L, 4);
+	float x = luaL_optnumber(L, 3, 0);
+	float y = luaL_optnumber(L, 4, 0);
 	
 	int i;
 	
@@ -450,6 +450,27 @@ lbatch_layer(lua_State *L) {
 }
 
 static int
+lbatch_point(lua_State *L) {
+	struct batch *b = (struct batch *)luaL_checkudata(L, 1, "SOLUNA_BATCH");
+	if (b->layer == 0) {
+		lua_settop(L, 3);
+		return 2;
+	}
+	float x = luaL_checknumber(L, 2);
+	float y = luaL_checknumber(L, 3);
+	
+	// to .8 fix number
+	int fx = (int)(x * 256);
+	int fy = (int)(y * 256);
+	
+	sprite_transform_point(&b->trans, &fx, &fy);
+	
+	lua_pushnumber(L, (float)fx / 256.0f);
+	lua_pushnumber(L, (float)fy / 256.0f);
+	return 2;
+}
+
+static int
 lsprite_newbatch(lua_State *L) {
 	struct batch *b = (struct batch *)lua_newuserdatauv(L, sizeof(*b), 1);
 	b->n = 0;
@@ -469,6 +490,7 @@ lsprite_newbatch(lua_State *L) {
 			{ "ptr", lbatch_ptr },
 			{ "release", lbatch_release },
 			{ "layer", lbatch_layer },
+			{ "point", lbatch_point },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
