@@ -1,5 +1,4 @@
 local ltask = require "ltask"
-local app = require "soluna.app"
 
 local soluna = {}
 
@@ -29,7 +28,8 @@ function soluna.settings()
 end
 
 function soluna.set_window_title(text)
-	app.set_window_title(text)
+	local window = ltask.uniqueservice "window"
+	ltask.send(window, "set_title", text)
 end
 
 return soluna

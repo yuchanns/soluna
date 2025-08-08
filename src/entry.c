@@ -19,15 +19,11 @@
 #include "loginfo.h"
 #include "appevent.h"
 
-#define MAX_TITLE 1023
-
 struct app_context {
 	lua_State *L;
 	lua_State *quitL;
 	int (*send_log)(void *ud, unsigned int id, void *data, uint32_t sz);
 	void *send_log_ud;
-	int set_title;
-	char title[MAX_TITLE+1];
 };
 
 static struct app_context *CTX = NULL;
@@ -123,13 +119,8 @@ static int
 lset_window_title(lua_State *L) {
 	if (CTX == NULL || lua_type(L, 1) != LUA_TSTRING)
 		return 0;
-	size_t sz;
-	const char * text = lua_tolstring(L, 1, &sz);
-	if (sz > MAX_TITLE)
-		sz = MAX_TITLE;
-	memcpy(CTX->title, text, sz);
-	CTX->title[sz] = 0;
-	CTX->set_title = 1;
+	const char * text = lua_tostring(L, 1);
+	sapp_set_window_title(text);
 	return 0;
 }
 
@@ -336,10 +327,6 @@ static void
 app_frame() {
 	lua_State *L = get_L(CTX);
 	if (L) {
-		if (CTX->set_title) {
-			// sapp_set_window_title must be called in window thread
-			sapp_set_window_title(CTX->title);
-		}
 		lua_pushinteger(L, sapp_frame_count());
 		invoke_callback(L, FRAME_CALLBACK, 1);
 	}

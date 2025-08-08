@@ -18,6 +18,7 @@
 #include "layout.lua.h"
 #include "text.lua.h"
 #include "util.lua.h"
+#include "window.lua.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -78,6 +79,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(render)
 			REG_SOURCE(gamepad)
 			REG_SOURCE(settings)
+			REG_SOURCE(window)
 		lua_setfield(L, -2, "service");
 
 		lua_newtable(L);	// data list
