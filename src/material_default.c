@@ -61,7 +61,7 @@ submit(lua_State *L, struct material_default *m, struct draw_primitive *prim, in
 }
 
 static int
-lmateraial_default_submit(lua_State *L) {
+lmaterial_default_submit(lua_State *L) {
 	struct material_default *m = (struct material_default *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_DEFAULT");
 	struct draw_primitive *prim = lua_touserdata(L, 2);
 	int prim_n = luaL_checkinteger(L, 3);
@@ -75,7 +75,7 @@ lmateraial_default_submit(lua_State *L) {
 }
 
 static int
-lmateraial_default_draw(lua_State *L) {
+lmaterial_default_draw(lua_State *L) {
 	struct material_default *m = (struct material_default *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_DEFAULT");
 //	struct draw_primitive *prim = lua_touserdata(L, 2);
 	int prim_n = luaL_checkinteger(L, 3);
@@ -135,8 +135,8 @@ lnew_material_default(lua_State *L) {
 	if (luaL_newmetatable(L, "SOLUNA_MATERIAL_DEFAULT")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
-			{ "submit", lmateraial_default_submit },
-			{ "draw", lmateraial_default_draw },
+			{ "submit", lmaterial_default_submit },
+			{ "draw", lmaterial_default_draw },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);
