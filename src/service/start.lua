@@ -59,57 +59,77 @@ local function init(arg)
 	local settings = ltask.uniqueservice "settings"
 	ltask.call(settings, "init", arg)
 	
-	local render = ltask.uniqueservice "render"
-	ltask.call(render, "init", arg.app)
-	render_service = render
-	if pre_size then
-		ltask.call(render, "resize", pre_size.width, pre_size.height)
-		arg.app.width = pre_size.width
-		arg.app.height = pre_size.height
-		pre_size = nil
-	end
+	local setting = soluna.settings()
 
-	local entry = soluna.settings().entry
+	local loader = ltask.uniqueservice "loader"
+	
+	arg.app.bank_ptr = ltask.call(loader, "init", {
+		max_sprite = setting.sprite_max,
+		texture_size = setting.texture_size,
+	})
+	
+	local entry = setting.entry
 	local source = entry and file.load(entry)
 	if not source then
 		error ("Can't load entry " .. tostring(entry))
 	end
 	local f = assert(load(source, "@"..entry, "t"))
-	-- todo: run entry (f)
-	
-	local batch = spritemgr.newbatch()
-	cleanup:add(function()
-		batch:release()
-	end)
-	local callback = f {
-		batch = batch,
-		width = arg.app.width,
-		height = arg.app.height,
-		table.unpack(arg),
-	}
-	local frame_cb = callback.frame
-	
-	local messages = { "mouse_move", "mouse_button", "mouse_scroll", "mouse", "window_resize", "char" }
-	local avail = {}
-	for _, v in ipairs(messages) do
-		avail[v] = true
-	end
-	for k,v in pairs(callback) do
-		if avail[k] then
-			app[k] = v
-		end
-	end
-	local batch_id = ltask.call(render, "register_batch", ltask.self())
 
-	local function frame(count)
-		batch:reset()
-		frame_cb(count)
-		ltask.send(render, "submit_batch", batch_id, batch:ptr())
-		ltask.call(render, "frame")
+	local render = ltask.uniqueservice "render"
+	
+	local function init_render()
+		ltask.call(render, "init", arg.app)
+		render_service = render
+		if pre_size then
+			ltask.call(render, "resize", pre_size.width, pre_size.height)
+			arg.app.width = pre_size.width
+			arg.app.height = pre_size.height
+			pre_size = nil
+		end
+		
+		local batch = spritemgr.newbatch()
+		cleanup:add(function()
+			batch:release()
+		end)
+		
+		local callback = f {
+			batch = batch,
+			width = arg.app.width,
+			height = arg.app.height,
+			table.unpack(arg),
+		}
+		local frame_cb = callback.frame
+		
+		local messages = { "mouse_move", "mouse_button", "mouse_scroll", "mouse", "window_resize", "char" }
+		local avail = {}
+		for _, v in ipairs(messages) do
+			avail[v] = true
+		end
+		for k,v in pairs(callback) do
+			if avail[k] then
+				app[k] = v
+			end
+		end
+		
+		local batch_id = ltask.call(render, "register_batch", ltask.self())
+
+		local function frame(count)
+			batch:reset()
+			frame_cb(count)
+			ltask.send(render, "submit_batch", batch_id, batch:ptr())
+			ltask.call(render, "frame", count)
+		end
+		
+		function app.frame(count)
+			local ok, err = pcall(frame, count)
+			event.trigger(ev.frame)
+			assert(ok, err)
+		end
 	end
 	
 	function app.frame(count)
-		local ok, err = pcall(frame, count)
+		-- init render in the first frame, because render init would call some gfx api
+		local ok, err = pcall(init_render)
 		event.trigger(ev.frame)
 		assert(ok, err)
 	end

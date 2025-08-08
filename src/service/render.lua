@@ -212,10 +212,9 @@ end
 
 function S.init(arg)
 	font.init()
-	local loader = ltask.uniqueservice "loader"
 
 	local texture_size = setting.texture_size
-	
+
 	local img = render.image {
 		width = texture_size,
 		height = texture_size,
@@ -241,11 +240,6 @@ function S.init(arg)
 	}
 
 	-- todo: don't load texture here
-	
-	local bank_ptr = ltask.call(loader, "init", {
-		max_sprite = setting.sprite_max,
-		texture_size = texture_size,
-	})
 
 	STATE = {
 		pass = render.pass {
@@ -289,7 +283,7 @@ function S.init(arg)
 		STATE.quad_bindings = quadbind
 	end
 	
-	STATE.drawmgr = drawmgr.new(bank_ptr, setting.draw_instance)
+	STATE.drawmgr = drawmgr.new(arg.bank_ptr, setting.draw_instance)
 	
 	STATE.uniform = render.uniform {
 		16,	-- size
@@ -317,7 +311,7 @@ function S.init(arg)
 		bindings = STATE.bindings,
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
-		sprite_bank = bank_ptr,
+		sprite_bank = arg.bank_ptr,
 	}
 	
 	STATE.material_text = textmat.normal {

@@ -1,4 +1,5 @@
 local ltask = require "ltask"
+local app = require "soluna.app"
 
 local soluna = {}
 
@@ -28,9 +29,7 @@ function soluna.settings()
 end
 
 function soluna.set_window_title(text)
-	local s = ltask.queryservice "render"
-	assert(type(text) == "string")
-	ltask.send(s, "app", { set_window_title = text })
+	app.set_window_title(text)
 end
 
 return soluna
