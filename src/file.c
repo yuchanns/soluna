@@ -6,6 +6,7 @@
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 
 #include <windows.h>
+#include <shlobj.h>
 
 static inline FILE *
 fopen_utf8(const char *filename, const char *mode) {
@@ -20,9 +21,71 @@ fopen_utf8(const char *filename, const char *mode) {
 	return _wfopen(filenameW, modeW);
 }
 
+static inline int
+create_dir_wchar_(const WCHAR *filenameW) {
+	WIN32_FIND_DATAW FindFileData;
+	HANDLE h = FindFirstFileW(filenameW, &FindFileData);
+	if (h == INVALID_HANDLE_VALUE) {
+		// create dir
+		if (CreateDirectoryW(filenameW, NULL) == 0)
+			return 0;
+	} else {
+		if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			FindClose(h);
+			// dir exist
+        } else {
+            FindClose(h);
+			// not a dir
+			return 0;
+        }
+	}
+	return 1;
+}
+
+static inline int
+personal_dir(char name[FILENAME_MAX]) {
+	WCHAR filenameW[FILENAME_MAX + 0x200 + 1];
+	HRESULT hr = SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, filenameW);
+	if (hr != S_OK)
+		return 0;
+	size_t sz = wcslen(filenameW);
+	if (sz > FILENAME_MAX)
+		return 0;
+	wcscpy(filenameW + sz, L"\\My Games");
+	sz = wcslen(filenameW);
+	if (create_dir_wchar_(filenameW) == 0)
+		return 0;
+	return WideCharToMultiByte(CP_UTF8, 0, filenameW, sz, name, FILENAME_MAX, NULL, NULL);
+}
+
+static inline int
+create_dir(const char *dir) {
+	WCHAR filenameW[FILENAME_MAX + 0x200 + 1];
+	int n = MultiByteToWideChar(CP_UTF8,0,(const char*)dir,-1,filenameW,FILENAME_MAX + 0x200);
+	if (n == 0)
+		return 0;
+	return create_dir_wchar_(filenameW);
+}
+
+#define SLASH '\\'
+
 #else
 
+#define SLASH '/'
+
 #define fopen_utf8(f, m) fopen(f, m)
+
+static inline int
+personal_dir(char name[FILENAME_MAX]) {
+	// todo: support none windows
+	return 0;
+}
+
+static inline int
+create_dir(const char *dir) {
+	// todo: support none windows
+	return 0;
+}
 
 #endif
 
@@ -123,12 +186,32 @@ lfile_loader(lua_State *L) {
 	return 1;
 }
 
+static int
+lgamedir(lua_State *L) {
+	size_t sz;
+	const char * dir = luaL_checklstring(L, 1, &sz);
+	char name[FILENAME_MAX];
+	int n = personal_dir(name);
+	if (n == 0)
+		return luaL_error(L, "Can't open personal dir");
+	if (n + sz + 1 >= FILENAME_MAX) {
+		return luaL_error(L, "gamedir name is too long");
+	}
+	name[n] = SLASH;
+	memcpy(name + n + 1, dir, sz+1);
+	if (create_dir(name) == 0)
+		return luaL_error(L, "create gamedir %s fail", dir);
+	lua_pushlstring(L, name, n+sz+1);
+	return 1;
+}
+
 int
 luaopen_soluna_file(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "load", lfile_load },
 		{ "loader", lfile_loader },
+		{ "gamedir", lgamedir },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
