@@ -98,6 +98,12 @@ local function init(arg)
 			height = arg.app.height,
 			table.unpack(arg),
 		}
+		
+		if type(callback) ~= "table" then
+			soluna_app.close_window()
+			 return
+		end
+		
 		local frame_cb = callback.frame
 		
 		local messages = { "mouse_move", "mouse_button", "mouse_scroll", "mouse", "window_resize", "char" }
@@ -131,7 +137,11 @@ local function init(arg)
 		-- init render in the first frame, because render init would call some gfx api
 		local ok, err = pcall(init_render)
 		event.trigger(ev.frame)
-		assert(ok, err)
+		if not ok then
+			print(err)
+			soluna_app.close_window()
+		end
+--		assert(ok, err)
 	end
 end
 

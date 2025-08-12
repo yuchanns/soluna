@@ -124,6 +124,12 @@ lset_window_title(lua_State *L) {
 	return 0;
 }
 
+static int
+lclose_window(lua_State *L) {
+	sapp_quit();
+	return 0;
+}
+
 int
 luaopen_soluna_app(lua_State *L) {
 	luaL_checkversion(L);
@@ -133,6 +139,7 @@ luaopen_soluna_app(lua_State *L) {
 		{ "unpackevent", levent_unpack },
 		{ "set_window_title", lset_window_title },
 		{ "quit", lquit_signal },
+		{ "close_window", lclose_window },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
