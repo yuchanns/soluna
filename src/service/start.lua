@@ -101,7 +101,7 @@ local function init(arg)
 		
 		if type(callback) ~= "table" then
 			soluna_app.close_window()
-			 return
+			return
 		end
 		
 		local frame_cb = callback.frame
@@ -135,7 +135,7 @@ local function init(arg)
 	
 	function app.frame(count)
 		-- init render in the first frame, because render init would call some gfx api
-		local ok, err = pcall(init_render)
+		local ok, err = xpcall(init_render, debug.traceback)
 		event.trigger(ev.frame)
 		if not ok then
 			print(err)
