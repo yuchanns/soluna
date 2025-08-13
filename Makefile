@@ -38,9 +38,10 @@ YOGAINC=-I3rd/yoga
 
 LUAINC=-I3rd/lua
 LUASRC:=$(wildcard 3rd/lua/*.c 3rd/lua/*.h)
+WINFILE:=src/winfile.c
 
-$(LUA_EXE) : $(LUASRC)
-	$(CC) $(CFLAGS) -o $@ 3rd/lua/onelua.c -DMAKE_LUA
+$(LUA_EXE) : $(LUASRC) $(WINFILE)
+	$(CC) $(CFLAGS) -o $@ 3rd/lua/onelua.c $(WINFILE) -DMAKE_LUA -Dfopen=fopen_utf8
 
 COMPILE_C=$(CC) $(CFLAGS) $(STDC) $(OUTPUT_O) $@ $<
 COMPILE_LUA=$(LUA_EXE) script/lua2c.lua $< $@
@@ -49,7 +50,7 @@ COMPILE_DATALIST=$(LUA_EXE) script/datalist2c.lua $< $@
 LUA_O=$(BUILD)/onelua.o
 
 $(LUA_O) : $(LUASRC)
-	$(CC) $(CFLAGS) $(OUTPUT_O) $@ 3rd/lua/onelua.c -DMAKE_LIB
+	$(CC) $(CFLAGS) $(OUTPUT_O) $@ 3rd/lua/onelua.c -DMAKE_LIB -Dfopen=fopen_utf8
 
 SHADER_SRC=$(wildcard src/*.glsl)
 SHADER_O=$(patsubst src/%.glsl,$(BUILD)/%.glsl.h,$(SHADER_SRC))

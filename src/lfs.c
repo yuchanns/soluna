@@ -196,7 +196,7 @@ lpersonaldir(lua_State *L) {
 	if (pidl && SHGetPathFromIDListW(pidl, document)) {
 		char utf8path[LONGPATH_MAX];
 		int sz = utf8_filename(L, document, -1, utf8path, LONGPATH_MAX);
-		lua_pushlstring(L, utf8path, sz);
+		lua_pushlstring(L, utf8path, sz-1);
 		return 1;
 	} else {
 		return error_return(L);
@@ -399,11 +399,104 @@ lrealpath(lua_State *L) {
 	return 1;
 }
 
+static inline int
+create_dir_wchar_(const WCHAR *filenameW) {
+	WIN32_FIND_DATAW FindFileData;
+	HANDLE h = FindFirstFileW(filenameW, &FindFileData);
+	if (h == INVALID_HANDLE_VALUE) {
+		// create dir
+		if (CreateDirectoryW(filenameW, NULL) == 0)
+			return -1;
+	} else {
+		if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			FindClose(h);
+			// dir exist
+		} else {
+            FindClose(h);
+			// not a dir
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static int
+mkdir_utf8(const char *name) {
+	WCHAR filenameW[FILENAME_MAX + 0x200 + 1];
+	int n = MultiByteToWideChar(CP_UTF8,0,(const char*)name,-1,filenameW,FILENAME_MAX + 0x200);
+	if (n == 0)
+		return -1;
+	return create_dir_wchar_(filenameW);
+}
+
+static int
+pusherror(lua_State * L) {
+	lua_pushnil(L);
+	DWORD err = GetLastError();
+	LPVOID lpMsgBuf;
+
+	if (FormatMessageW(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+		FORMAT_MESSAGE_FROM_SYSTEM |
+		FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL,
+		err,
+		0,
+		(LPWSTR) &lpMsgBuf,
+		0, NULL) == 0) {
+		lua_pushstring(L, "FormatMessage failed");
+    }
+	
+	char errtext[1024] = "unknown";
+	size_t sz = wcslen((LPWSTR)lpMsgBuf);
+
+	WideCharToMultiByte(CP_UTF8, 0, (LPWSTR)lpMsgBuf, sz, errtext, 1024, NULL, NULL);
+
+	LocalFree(lpMsgBuf);
+	
+	lua_pushstring(L, errtext);
+	lua_pushinteger(L, err);
+	return 3;
+}
+
 #else
 
 #error todo : support linux etc
 
+#define mkdir_utf8(path) (mkdir((path), \
+    S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IXOTH))
+	
+// todo: succ when dir exist
+	
+static int
+pusherror(lua_State * L) {
+	lua_pushnil(L);
+	lua_pushstring(L, strerror(errno));
+	lua_pushinteger(L, errno);
+	return 3;
+}
+
 #endif
+
+static int
+pushresult(lua_State * L, int res) {
+	if (res == -1) {
+		return pusherror(L);
+	} else if (res == 0) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "%s already exist", lua_tostring(L, 1));
+		return 2;
+	} else {
+		lua_pushboolean(L, 1);
+		return 1;
+	}
+}
+
+static int
+lmkdir(lua_State * L) {
+	const char *path = luaL_checkstring(L, 1);
+	return pushresult(L, mkdir_utf8(path));
+}
 
 int
 luaopen_localfs(lua_State *L) {
@@ -415,6 +508,7 @@ luaopen_localfs(lua_State *L) {
 		{ "chdir", lchdir },
 		{ "attributes", file_info },	// the same with lfs, but support utf-8 filename
 		{ "realpath", lrealpath },
+		{ "mkdir", lmkdir },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

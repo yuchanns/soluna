@@ -19,6 +19,17 @@
 #include "loginfo.h"
 #include "appevent.h"
 
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+
+#define PLATFORM "windows"
+
+#else
+
+#define PLATFORM "unknown"
+
+#endif
+
+
 struct app_context {
 	lua_State *L;
 	lua_State *quitL;
@@ -140,9 +151,13 @@ luaopen_soluna_app(lua_State *L) {
 		{ "set_window_title", lset_window_title },
 		{ "quit", lquit_signal },
 		{ "close_window", lclose_window },
+		{ "platform", NULL },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
+	lua_pushliteral(L, PLATFORM);
+	lua_setfield(L, -2, "platform");
+
 	return 1;
 }
 
