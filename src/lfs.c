@@ -191,9 +191,7 @@ ldir(lua_State *L) {
 static int
 lpersonaldir(lua_State *L) {
 	wchar_t document[LONGPATH_MAX] = {0};
-	LPITEMIDLIST pidl = NULL;
-	SHGetSpecialFolderLocation(NULL, CSIDL_PERSONAL, &pidl);
-	if (pidl && SHGetPathFromIDListW(pidl, document)) {
+	if (SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, document) == S_OK) {
 		char utf8path[LONGPATH_MAX];
 		int sz = utf8_filename(L, document, -1, utf8path, LONGPATH_MAX);
 		lua_pushlstring(L, utf8path, sz-1);
