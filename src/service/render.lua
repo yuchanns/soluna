@@ -137,7 +137,6 @@ local function frame(count)
 	STATE.drawmgr:reset()
 	STATE.bindings:voffset(0, 0)
 	STATE.quad_bindings:voffset(0, 0)
-	STATE.uniform.baseinst = 0
 	for i = 1, batch_n do
 		local ptr, size = batch[i][1]()
 		if ptr then
@@ -224,19 +223,13 @@ function S.init(arg)
 		type = "vertex",
 		usage = "stream",
 		label = "texquad-instance",
-		size = render.buffer_size("inst", setting.draw_instance),
+		size = defmat.instance_size * setting.draw_instance,	-- textmat.instance_size is the same
 	}
 	local sr_buffer = render.buffer {
 		type = "storage",
 		usage = "dynamic",
 		label = "texquad-scalerot",
 		size = render.buffer_size("srbuffer", setting.srbuffer_size),
-	}
-	local sprite_buffer = render.buffer {
-		type = "storage",
-		usage = "stream",
-		label =  "texquad-sprite",
-		size = render.buffer_size("sprite", setting.draw_instance),
 	}
 
 	-- todo: don't load texture here
@@ -249,7 +242,6 @@ function S.init(arg)
 	local bindings = render.bindings()
 	bindings:vbuffer(0, inst_buffer)
 	bindings:sbuffer(0, sr_buffer)
-	bindings:sbuffer(1, sprite_buffer)
 	bindings:image(0, img)
 	bindings:sampler(0, render.sampler { label = "texquad-sampler" })	-- todo : ref this sampler
 	
@@ -262,7 +254,6 @@ function S.init(arg)
 	
 	STATE.inst = assert(inst_buffer)
 	STATE.srbuffer = assert(sr_buffer)
-	STATE.sprite = assert(sprite_buffer)
 
 	STATE.srbuffer_mem = render.srbuffer(setting.srbuffer_size)
 	STATE.bindings = bindings
@@ -278,7 +269,6 @@ function S.init(arg)
 		local quadbind = render.bindings()
 		quadbind:vbuffer(0, STATE.quad_inst)
 		quadbind:sbuffer(0, sr_buffer)
-		quadbind:sbuffer(1, sprite_buffer)
 		 		
 		STATE.quad_bindings = quadbind
 	end
@@ -286,7 +276,7 @@ function S.init(arg)
 	STATE.drawmgr = drawmgr.new(arg.bank_ptr, setting.draw_instance)
 	
 	STATE.uniform = render.uniform {
-		16,	-- size
+		12,	-- size
 		framesize = {
 			offset = 0,
 			type = "float",
@@ -296,18 +286,12 @@ function S.init(arg)
 			offset = 8,
 			type = "float",
 		},
-		baseinst = {
-			offset = 12,
-			type = "int",
-		},
 	}
 	STATE.uniform.framesize = { 2/arg.width, -2/arg.height }
 	STATE.uniform.tex_size = 1/texture_size
-	STATE.uniform.baseinst = 0
 
 	STATE.material = defmat.new {
 		inst_buffer = STATE.inst,
-		sprite_buffer = STATE.sprite,
 		bindings = STATE.bindings,
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
@@ -316,7 +300,6 @@ function S.init(arg)
 	
 	STATE.material_text = textmat.normal {
 		inst_buffer = STATE.inst,
-		sprite_buffer = STATE.sprite,
 		bindings = STATE.bindings,
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,

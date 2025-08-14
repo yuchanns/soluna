@@ -27,17 +27,18 @@ struct text {
 struct inst_object {
 	float x, y;
 	float sr_index;
+    uint32_t offset;
+    uint32_t u;
+    uint32_t v;
 };
 
 struct buffer_data {
-	sprite_t spr[BATCHN];
 	struct inst_object inst[BATCHN];
 };
 
 struct material_text {
 	sg_pipeline pip;
 	sg_buffer inst;
-	sg_buffer sprite;
 	sg_bindings *bind;
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
@@ -58,9 +59,9 @@ submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n
 		struct font_glyph g, og;
 		const char* err = font_manager_glyph(m->font, t->font, t->codepoint, t->size, &g, &og);
 		if (err == NULL) {
-			tmp.spr[count].offset = (-og.offset_x + 0x8000) << 16 | (-og.offset_y + 0x8000);
-			tmp.spr[count].u = og.u << 16 | FONT_MANAGER_GLYPHSIZE;
-			tmp.spr[count].v = og.v << 16 | FONT_MANAGER_GLYPHSIZE;
+			tmp.inst[count].offset = (-og.offset_x + 0x8000) << 16 | (-og.offset_y + 0x8000);
+			tmp.inst[count].u = og.u << 16 | FONT_MANAGER_GLYPHSIZE;
+			tmp.inst[count].v = og.v << 16 | FONT_MANAGER_GLYPHSIZE;
 			
 			uint32_t scale_fix = og.w == 0 ? 0 : (g.w << 12) / og.w;
 			sprite_apply_scale(p, scale_fix);
@@ -79,7 +80,6 @@ submit(lua_State *L, struct material_text *m, struct draw_primitive *prim, int n
 		}
 	}
 	sg_append_buffer(m->inst, &(sg_range) { tmp.inst , count * sizeof(tmp.inst[0]) });
-	sg_append_buffer(m->sprite, &(sg_range) { tmp.spr , count * sizeof(tmp.spr[0]) });
 }
 
 static int
@@ -104,7 +104,6 @@ draw_text(struct material_text *m, uint32_t color, int count) {
 	sg_apply_bindings(m->bind);
 	sg_draw(0, 4, count);
 	
-	m->uniform->baseinst += count;
 	m->bind->vertex_buffer_offsets[0] += count * sizeof(struct inst_object);
 }
 
@@ -154,6 +153,9 @@ init_pipeline(struct material_text *m) {
 			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
 			.attrs = {
 					[ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT3,
+					[ATTR_texquad_offset].format = SG_VERTEXFORMAT_UINT,
+					[ATTR_texquad_u].format = SG_VERTEXFORMAT_UINT,
+					[ATTR_texquad_v].format = SG_VERTEXFORMAT_UINT,
 				}
         },
 		.colors[0].blend = (sg_blend_state) {
@@ -172,12 +174,11 @@ init_pipeline(struct material_text *m) {
 static int
 lnew_material_text_normal(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	struct material_text *m = (struct material_text *)lua_newuserdatauv(L, sizeof(*m), 5);
+	struct material_text *m = (struct material_text *)lua_newuserdatauv(L, sizeof(*m), 4);
 	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
-	ref_object(L, &m->sprite, 2, "sprite_buffer", "SOKOL_BUFFER", 0);
-	ref_object(L, &m->bind, 3, "bindings", "SOKOL_BINDINGS", 1);
-	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 1);
-	ref_object(L, &m->srbuffer, 5, "sr_buffer", "SOLUNA_SRBUFFER", 1);
+	ref_object(L, &m->bind, 2, "bindings", "SOKOL_BINDINGS", 1);
+	ref_object(L, &m->uniform, 3, "uniform", "SOKOL_UNIFORM", 1);
+	ref_object(L, &m->srbuffer, 4, "sr_buffer", "SOLUNA_SRBUFFER", 1);
 	init_pipeline(m);
 
 	if (lua_getfield(L, 1, "font_manager") != LUA_TLIGHTUSERDATA) {
@@ -611,6 +612,7 @@ luaopen_material_text(lua_State *L) {
 		{ "char", NULL },
 		{ "block", ltext_block },
 		{ "normal", lnew_material_text_normal },
+		{ "instance_size", NULL },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
@@ -623,5 +625,7 @@ luaopen_material_text(lua_State *L) {
 	lua_pushcclosure(L, lchar_for_batch, 1);
 	lua_setfield(L, -2, "char");
 	
+	lua_pushinteger(L, sizeof(struct inst_object));
+	lua_setfield(L, -2, "instance_size");
 	return 1;
 }

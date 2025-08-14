@@ -1,6 +1,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <assert.h>
+#include <stdint.h>
 
 #include "sokol/sokol_gfx.h"
 #include "texquad.glsl.h"
@@ -14,17 +15,18 @@
 struct inst_object {
 	float x, y;
 	float sr_index;
+	uint32_t offset;
+	uint32_t u;
+	uint32_t v;
 };
 
 struct buffer_data {
-	sprite_t spr[BATCHN];
 	struct inst_object inst[BATCHN];
 };
 
 struct material_default {
 	sg_pipeline pip;
 	sg_buffer inst;
-	sg_buffer sprite;
 	sg_bindings *bind;
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
@@ -52,12 +54,11 @@ submit(lua_State *L, struct material_default *m, struct draw_primitive *prim, in
 		int index = p->sprite - 1;
 		assert(index >= 0);
 		struct sprite_rect *r = &rect[index];
-		tmp.spr[i].offset = r->off;
-		tmp.spr[i].u = r->u;
-		tmp.spr[i].v = r->v;
+		tmp.inst[i].offset = r->off;
+		tmp.inst[i].u = r->u;
+		tmp.inst[i].v = r->v;
 	}
 	sg_append_buffer(m->inst, &(sg_range) { tmp.inst , n * sizeof(tmp.inst[0]) });
-	sg_append_buffer(m->sprite, &(sg_range) { tmp.spr , n * sizeof(tmp.spr[0]) });
 }
 
 static int
@@ -86,7 +87,6 @@ lmaterial_default_draw(lua_State *L) {
 	sg_apply_bindings(m->bind);
 	sg_draw(0, 4, prim_n);
 	
-	m->uniform->baseinst += prim_n;
 	m->bind->vertex_buffer_offsets[0] += prim_n * sizeof(struct inst_object);
 
 	return 0;
@@ -101,6 +101,9 @@ init_pipeline(struct material_default *p) {
 			.buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
 			.attrs = {
 					[ATTR_texquad_position].format = SG_VERTEXFORMAT_FLOAT3,
+					[ATTR_texquad_offset].format = SG_VERTEXFORMAT_UINT,
+					[ATTR_texquad_u].format = SG_VERTEXFORMAT_UINT,
+					[ATTR_texquad_v].format = SG_VERTEXFORMAT_UINT,
 				}
         },
 		.colors[0].blend = (sg_blend_state) {
@@ -119,13 +122,12 @@ init_pipeline(struct material_default *p) {
 static int
 lnew_material_default(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	struct material_default *m = (struct material_default *)lua_newuserdatauv(L, sizeof(*m), 5);
+	struct material_default *m = (struct material_default *)lua_newuserdatauv(L, sizeof(*m), 4);
 	init_pipeline(m);
 	ref_object(L, &m->inst, 1, "inst_buffer", "SOKOL_BUFFER", 0);
-	ref_object(L, &m->sprite, 2, "sprite_buffer", "SOKOL_BUFFER", 0);
-	ref_object(L, &m->bind, 3, "bindings", "SOKOL_BINDINGS", 1);
-	ref_object(L, &m->uniform, 4, "uniform", "SOKOL_UNIFORM", 1);
-	ref_object(L, &m->srbuffer, 5, "sr_buffer", "SOLUNA_SRBUFFER", 1);
+	ref_object(L, &m->bind, 2, "bindings", "SOKOL_BINDINGS", 1);
+	ref_object(L, &m->uniform, 3, "uniform", "SOKOL_UNIFORM", 1);
+	ref_object(L, &m->srbuffer, 4, "sr_buffer", "SOLUNA_SRBUFFER", 1);
 	if (lua_getfield(L, 1, "sprite_bank") != LUA_TLIGHTUSERDATA) {
 		return luaL_error(L, "Missing .sprite_bank");
 	}
@@ -153,8 +155,12 @@ luaopen_material_default(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "new", lnew_material_default },
+		{ "instance_size", NULL },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
+	
+	lua_pushinteger(L, sizeof(struct inst_object));
+	lua_setfield(L, -2, "instance_size");
 	return 1;
 }

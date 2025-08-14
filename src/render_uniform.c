@@ -189,11 +189,12 @@ luniform_new(lua_State *L) {
 	}
 	int size = lua_tointeger(L, -1);
 	lua_pop(L, 1);
-	if (size <= 0 || size % 16 != 0) {
-		return luaL_error(L, "Invalid the _size (%d) of uniform should align to 16", size);
-	}
-	void * u = lua_newuserdatauv(L, size, 1);
-	memset(u, 0, size);
+//	if (size <= 0 || size % 16 != 0) {
+//		return luaL_error(L, "Invalid the _size (%d) of uniform should align to 16", size);
+//	}
+	int align_size = (size + 15) / 16 * 16;
+	void * u = lua_newuserdatauv(L, align_size, 1);
+	memset(u, 0, align_size);
 
 	get_typeinfo(L, 1, u, size);
 	lua_setiuservalue(L, -2, 1);

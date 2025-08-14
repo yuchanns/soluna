@@ -2,7 +2,6 @@
 layout(binding=0) uniform vs_params {
 	vec2 framesize;
 	float texsize;
-	int baseinst;
 };
 
 struct sr_mat {
@@ -13,26 +12,18 @@ layout(binding=0) readonly buffer sr_lut {
 	sr_mat sr[];
 };
 
-struct sprite {
-	uint offset;
-	uint u;
-	uint v;
-};
-
-layout(binding=1) readonly buffer sprite_buffer {
-	sprite spr[];
-};
-
 in vec3 position;
+in uint offset;
+in uint u;
+in uint v;
 
 out vec2 uv;
 
 void main() {
-	sprite s = spr[gl_InstanceIndex+baseinst];
-	ivec2 uv_base = ivec2(s.u >> 16, s.v >> 16);
-	ivec2 u2 = ivec2(0 , s.u & 0xffff);
-	ivec2 v2 = ivec2(0 , s.v & 0xffff);
-	ivec2 off = ivec2(s.offset >> 16 , s.offset & 0xffff) - 0x8000;
+	ivec2 uv_base = ivec2(u >> 16, v >> 16);
+	ivec2 u2 = ivec2(0 , u & 0xffff);
+	ivec2 v2 = ivec2(0 , v & 0xffff);
+	ivec2 off = ivec2(offset >> 16 , offset & 0xffff) - 0x8000;
 	vec2 uv_offset = vec2(u2[gl_VertexIndex & 1] , v2[gl_VertexIndex >> 1]);
 	vec2 pos = ((uv_offset - off) * sr[int(position.z)].m + position.xy) * framesize;
 	gl_Position = vec4(pos.x - 1.0f, pos.y + 1.0f, 0, 1);
