@@ -96,6 +96,7 @@ do
 				color = attr.color,
 				align = attr.text_align,
 				background = attr.background,
+				env = attr.env,
 			}
 			doc._yoga[obj] = cobj
 			doc._list[#doc._list + 1] = obj
