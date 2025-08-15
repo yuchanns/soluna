@@ -231,7 +231,7 @@ get_icon(struct font_manager *F, int cp, struct font_glyph *glyph) {
 		return -1;
 	}
 	glyph->offset_x = 0;
-	glyph->offset_y = 0;
+	glyph->offset_y = -DISTANCE_OFFSET/2;
 	glyph->advance_x = FONT_MANAGER_GLYPHSIZE;
 	glyph->advance_y = FONT_MANAGER_GLYPHSIZE;
 	glyph->w = FONT_MANAGER_GLYPHSIZE;
