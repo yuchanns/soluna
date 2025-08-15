@@ -126,8 +126,10 @@ local function init(arg)
 			ltask.call(render, "frame", count)
 		end
 		
+		local traceback = debug.traceback
+		
 		function app.frame(count)
-			local ok, err = pcall(frame, count)
+			local ok, err = xpcall(frame, traceback, count)
 			event.trigger(ev.frame)
 			assert(ok, err)
 		end
