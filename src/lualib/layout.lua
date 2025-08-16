@@ -87,17 +87,11 @@ do
 			doc._yoga[id] = cobj
 		end
 		
-		if attr.image or attr.text or attr.background or attr.area then
-			local obj = {
-				image = attr.image,
-				area = attr.area,
-				text = attr.text,
-				size = attr.size,
-				color = attr.color,
-				align = attr.text_align,
-				background = attr.background,
-				env = attr.env,
-			}
+		if attr.image or attr.text or attr.background or attr.region then
+			local obj = {}
+			for k,v in pairs(attr) do
+				obj[k] = v
+			end
 			doc._yoga[obj] = cobj
 			doc._list[#doc._list + 1] = obj
 		end
