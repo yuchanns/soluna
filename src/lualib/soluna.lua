@@ -52,4 +52,12 @@ function soluna.gamedir(name)
 	end
 end
 
+function soluna.load_sprites(filename)
+	local loader = ltask.uniqueservice "loader"
+	local sprites = ltask.call(loader, "loadbundle", filename)
+	local render = ltask.uniqueservice "render"
+	ltask.call(render, "load_sprites", filename)
+	return sprites
+end
+
 return soluna
