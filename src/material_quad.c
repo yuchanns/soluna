@@ -17,6 +17,7 @@ struct color {
 };
 
 struct quad {
+	struct draw_primitive_external header;
 	float w;
 	float h;
 	struct color c;
@@ -171,6 +172,7 @@ lquad(lua_State *L) {
 	uint32_t color = luaL_checkinteger(L, 3);
 	if (!(color & 0xff000000))
 		color |= 0xff000000;
+	prim.u.q.header.sprite = -1;
 	prim.u.q.c.channel[0] = (color >> 16) & 0xff;
 	prim.u.q.c.channel[1] = (color >> 8) & 0xff;
 	prim.u.q.c.channel[2] = color & 0xff;

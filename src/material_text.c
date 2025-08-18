@@ -18,6 +18,7 @@
 #define BATCHN 4096
 
 struct text {
+	struct draw_primitive_external header;
 	int codepoint;
 	uint16_t font;
 	uint16_t size;
@@ -212,6 +213,7 @@ lnew_material_text_normal(lua_State *L) {
 static int
 lchar_for_batch(lua_State *L) {
 	struct text * t = (struct text *)lua_touserdata(L, lua_upvalueindex(1));
+	t->header.sprite = -1;
 	t->codepoint = luaL_checkinteger(L, 1);
 	t->font = luaL_checkinteger(L, 2);
 	t->size = luaL_checkinteger(L, 3);
@@ -510,6 +512,7 @@ ltext(lua_State *L) {
 					prim[n].pos.y = ctx.y * 256;
 					advance(&ctx, g.advance_x);
 				}
+				prim[n].u.text.header.sprite = -1;
 				prim[n].u.text.codepoint = codepoint;
 				prim[n].u.text.font = font;
 				prim[n].u.text.size = fontsize;

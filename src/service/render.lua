@@ -119,8 +119,7 @@ local materials = {
 			STATE.material_mask:submit(ptr, n)
 		end,
 		draw = function(ptr, n, tex)
-			-- todo
-			STATE.mask_bindings:image(0, STATE.textures[1])
+			STATE.mask_bindings:image(0, STATE.textures[tex+1])
 			STATE.material_mask:draw(ptr, n, tex)
 		end,
 	}

@@ -26,7 +26,7 @@ struct inst_object {
 };
 
 struct mask {
-	int sprite;
+	struct draw_primitive_external header;
 	struct color c;
 };
 
@@ -65,7 +65,7 @@ submit(lua_State *L, struct material_mask *m, struct draw_primitive *prim, int n
 		tmp.inst[i].sr_index = (float)sr_index;
 		tmp.inst[i].maskcolor = mask->c;
 		
-		int index = mask->sprite;
+		int index = mask->header.sprite;
 		assert(index >= 0);
 		struct sprite_rect *r = &rect[index];
 		tmp.inst[i].offset = r->off;
@@ -180,7 +180,7 @@ lmask(lua_State *L) {
 	prim.pos.y = 0;
 	prim.pos.sr = 0;
 	prim.pos.sprite = -MATERIAL_MASK;
-	prim.u.m.sprite = luaL_checkinteger(L, 1) - 1;
+	prim.u.m.header.sprite = luaL_checkinteger(L, 1) - 1;
 	uint32_t color = luaL_checkinteger(L, 2);
 	if (!(color & 0xff000000))
 		color |= 0xff000000;

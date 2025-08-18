@@ -10,6 +10,10 @@ struct draw_primitive {
 	int32_t sprite;		// negative : material 
 };
 
+struct draw_primitive_external {
+	int sprite;
+};
+
 struct draw_batch;
 
 struct draw_batch * batch_new(int size);

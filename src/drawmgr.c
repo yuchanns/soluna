@@ -9,6 +9,7 @@ struct draw_element {
 	struct draw_primitive * base;
 	int n;
 	int material;
+	int texture;
 };
 
 struct drawmgr {
@@ -34,15 +35,11 @@ ldrawmgr_index(lua_State *L) {
 		return 0;
 	}
 	struct draw_element *e = &(d->data[idx]);
-	if (e->material < 0) {
-		lua_pushinteger(L, -e->material);
-	} else {
-		lua_pushinteger(L, 0);
-	}
+	lua_pushinteger(L, e->material);
 	lua_pushlightuserdata(L, e->base);
 	lua_pushinteger(L, e->n);
-	if (e->material >= 0) {
-		lua_pushinteger(L, e->material);
+	if (e->texture >= 0) {
+		lua_pushinteger(L, e->texture);
 		return 4;
 	} else {
 		return 3;
@@ -58,17 +55,25 @@ ldrawmgr_reset(lua_State *L) {
 }
 
 static int
-append_external_material(struct drawmgr * d, struct draw_primitive *base, int n, int matid) {
+append_external_material(struct drawmgr * d, struct draw_primitive *base, int n, int matid, int texid) {
 	int i;
+	struct sprite_rect * rect = d->bank->rect;
+
 	for (i=1;i<n;i++) {
 		if (base[i*2].sprite != matid) {
+			break;
+		}
+		struct draw_primitive_external * ext = (struct draw_primitive_external *)&base[i*2+1];
+		int sprite = ext->sprite;
+		if (sprite >= 0 && rect[sprite].texid != texid) {
 			break;
 		}
 	}
 	struct draw_element *e = &d->data[d->n++];
 	e->base = base;
 	e->n = i;
-	e->material = matid;
+	e->material = -matid;
+	e->texture = texid;
 	return i;
 }
 
@@ -89,7 +94,8 @@ append_default_material(struct drawmgr * d, struct draw_primitive *base, int n, 
 	struct draw_element *e = &d->data[d->n++];
 	e->base = base;
 	e->n = i;
-	e->material = texid;
+	e->material = 0;
+	e->texture = texid;
 	return i;
 }
 
@@ -115,7 +121,13 @@ ldrawmgr_append(lua_State *L) {
 			if (i == prim_n || index == 0) {
 				return luaL_error(L, "Invalid batch stream");
 			}
-			i += append_external_material(d, p, (end_ptr - p)/2, index) * 2;
+			struct draw_primitive_external * ext = (struct draw_primitive_external *)&prim[i+1];
+			int sprite = ext->sprite;
+			int texid = -1;
+			if (sprite >= 0) {
+				texid = rect[sprite].texid;
+			}
+			i += append_external_material(d, p, (end_ptr - p)/2, index, texid) * 2;
 		} else {
 			--index;
 			if (index >= rect_n)
