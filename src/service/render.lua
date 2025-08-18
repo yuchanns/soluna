@@ -6,12 +6,14 @@ local drawmgr = require "soluna.drawmgr"
 local defmat = require "soluna.material.default"
 local textmat = require "soluna.material.text"
 local quadmat = require "soluna.material.quad"
+local maskmat = require "soluna.material.mask"
 
 local setting = require "soluna".settings()
 
 local DEFAULT_MAT <const> = 0
 local TEXT_MAT <const> = 1
 local QUAD_MAT <const> = 2
+local MASK_MAT <const> = 3
 
 local font = {} ;  do
 	local mgr = require "soluna.font.manager"
@@ -109,8 +111,17 @@ local materials = {
 			STATE.material_quad:submit(ptr, n)
 		end,
 		draw = function(ptr, n)
-			STATE.bindings:image(0, STATE.font_texture)
 			STATE.material_quad:draw(ptr, n)
+		end,
+	},
+	[MASK_MAT] = {
+		submit = function(ptr, n)
+			STATE.material_mask:submit(ptr, n)
+		end,
+		draw = function(ptr, n, tex)
+			-- todo
+			STATE.mask_bindings:image(0, STATE.textures[1])
+			STATE.material_mask:draw(ptr, n, tex)
 		end,
 	}
 }
@@ -137,6 +148,7 @@ local function frame(count)
 	STATE.drawmgr:reset()
 	STATE.bindings:voffset(0, 0)
 	STATE.quad_bindings:voffset(0, 0)
+	STATE.mask_bindings:voffset(0, 0)
 	for i = 1, batch_n do
 		local ptr, size = batch[i][1]()
 		if ptr then
@@ -238,12 +250,13 @@ function S.init(arg)
 		pass = render.pass {
 			color0 = 0x4080c0,
 		},
+		default_sampler = render.sampler { label = "texquad-sampler" },
 	}
 	local bindings = render.bindings()
 	bindings:vbuffer(0, inst_buffer)
 	bindings:sbuffer(0, sr_buffer)
 	bindings:image(0, img)
-	bindings:sampler(0, render.sampler { label = "texquad-sampler" })	-- todo : ref this sampler
+	bindings:sampler(0, STATE.default_sampler)
 	
 	STATE.textures = { img }
 	STATE.font_texture = render.image {
@@ -273,6 +286,24 @@ function S.init(arg)
 		STATE.quad_bindings = quadbind
 	end
 	
+	do
+		STATE.mask_inst = render.buffer {
+			type = "vertex",
+			usage = "stream",
+			label = "mask-instance",
+			size = maskmat.instance_size * setting.draw_instance,
+		}
+
+		local maskbind = render.bindings()
+
+		maskbind:vbuffer(0, STATE.mask_inst)
+		maskbind:sbuffer(0, sr_buffer)
+		maskbind:image(0, img)
+		maskbind:sampler(0, STATE.default_sampler)
+		 		
+		STATE.mask_bindings = maskbind
+	end
+	
 	STATE.drawmgr = drawmgr.new(arg.bank_ptr, setting.draw_instance)
 	
 	STATE.uniform = render.uniform {
@@ -293,6 +324,14 @@ function S.init(arg)
 	STATE.material = defmat.new {
 		inst_buffer = STATE.inst,
 		bindings = STATE.bindings,
+		uniform = STATE.uniform,
+		sr_buffer = STATE.srbuffer_mem,
+		sprite_bank = arg.bank_ptr,
+	}
+
+	STATE.material_mask = maskmat.new {
+		inst_buffer = STATE.mask_inst,
+		bindings = STATE.mask_bindings,
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
 		sprite_bank = arg.bank_ptr,

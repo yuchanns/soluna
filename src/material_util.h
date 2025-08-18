@@ -6,6 +6,7 @@
 
 #define MATERIAL_TEXT_NORMAL 1
 #define MATERIAL_QUAD 2
+#define MATERIAL_MASK 3
 
 static inline void
 ref_object(lua_State *L, void *ptr, int uv_index, const char *key, const char *luatype, int direct) {
