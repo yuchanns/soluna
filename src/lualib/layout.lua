@@ -54,14 +54,20 @@ function element:get()
 end
 
 do
-	local function parse_node(v)
+	local function parse_node(v, scripts)
 		local attr = {}
 		local content = {}
 		local n = 1
 		for i = 1, #v, 2 do
 			local name = v[i]
 			local value = v[i+1]
-			if type(value) == "table" then
+			if name == "children" then
+				local c = scripts(value)
+				local len = #c
+				assert(type(c) == "table" and len % 2 == 0)
+				table.move(c, 1, len, n, content)
+				n = n + len
+			elseif type(value) == "table" then
 				content[n] = name
 				content[n+1] = value
 				n = n + 2
@@ -97,19 +103,19 @@ do
 		end
 	end
 
-	local function add_children(doc, parent, list)
+	local function add_children(doc, parent, list, scripts)
 		for i = 1, #list, 2 do
 			local name = list[i]	-- ignore
-			local content, attr = parse_node(list[i+1])
+			local content, attr = parse_node(list[i+1], scripts)
 			local cobj = yoga.node_new(parent)
 			new_element(doc, cobj, attr)
 			if content then
-				add_children(doc, cobj, content)
+				add_children(doc, cobj, content, scripts)
 			end
 		end
 	end
 
-	function layout.load(filename_or_list)
+	function layout.load(filename_or_list, scripts)
 		local list
 		if type(filename_or_list) == "string" then
 			list = datalist.parse_list(file.loader(filename_or_list))
@@ -123,10 +129,10 @@ do
 			_element = {},
 		}
 		
-		local children, attr = parse_node(list)
+		local children, attr = parse_node(list, scripts)
 		new_element(doc, doc._root, attr)
 		if children then
-			add_children(doc, doc._root, children)
+			add_children(doc, doc._root, children, scripts)
 		end
 
 		return setmetatable(doc, document)
