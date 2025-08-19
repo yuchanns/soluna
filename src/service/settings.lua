@@ -42,16 +42,25 @@ local function patch(s, k, v)
 	end
 end
 
-function S.init(args)
-	assert(setting == nil)
-	local default_settings = datalist.parse(source.data.settingdefault)
-	local filename = args[1]
+local function settings_filename(filename)
 	if filename then
 		local realname = lfs.realpath(filename)
 		local curpath = realname:match "(.*)[/\\][^/\\]+$"
 		if curpath then
 			lfs.chdir(curpath)
 		end
+		return realname
+	end
+	if file.exist "main.game" then
+		return "main.game"
+	end
+end
+
+function S.init(args)
+	assert(setting == nil)
+	local default_settings = datalist.parse(source.data.settingdefault)
+	local realname = settings_filename(args[1])
+	if realname then
 		local loader = file.loader(realname)
 		local game_settings = datalist.parse(loader)
 		for k,v in pairs(game_settings) do
