@@ -131,7 +131,10 @@ local function init(arg)
 		function app.frame(count)
 			local ok, err = xpcall(frame, traceback, count)
 			event.trigger(ev.frame)
-			assert(ok, err)
+			if not ok then
+				frame = function() end
+				error(err)
+			end
 		end
 	end
 	
