@@ -542,6 +542,12 @@ lsetRight(lua_State *L, YGNodeRef node) {
 }
 
 static void
+lsetAspectRatio(lua_State *L, YGNodeRef node) {
+	float v = luaL_checknumber(L, -1);
+	YGNodeStyleSetAspectRatio(node, v);
+}
+
+static void
 set_array(lua_State *L, YGNodeRef node) {
 	lua_pushnil(L);
 	int top = lua_gettop(L);
@@ -625,6 +631,7 @@ luaopen_layout_yoga(lua_State *L) {
 		{ "bottom", lsetBottom },
 		{ "left", lsetLeft },
 		{ "right", lsetRight },
+		{ "aspectRatio", lsetAspectRatio },
 	};
 	int n = sizeof(setter) / sizeof(setter[0]);
 	int i;
