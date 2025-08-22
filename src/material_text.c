@@ -465,7 +465,7 @@ ltext(lua_State *L) {
 					break;
 			} else {
 				struct font_glyph g, og;
-				if (font_manager_glyph(mgr, fontid, 32, fontsize, &g, &og) == NULL) {
+				if (font_manager_glyph(mgr, fontid, ' ', fontsize, &g, &og) == NULL) {
 					if (ctx.x > ctx.line_width)
 						ctx.line_width = ctx.x;
 					if (advance(&ctx, g.advance_x)) {
@@ -487,19 +487,21 @@ ltext(lua_State *L) {
 					++str;
 				}
 			}
-			prim[n].pos.x = ctx.x * 256;
-			prim[n].pos.y = ctx.y * 256;
-			prim[n].pos.sr = 0;
-			prim[n].pos.sprite = -MATERIAL_TEXT_NORMAL;
-			
+			int dy = 0;
 			int codepoint = val;
 			int font = fontid;
 			
 			if (icon > 0) {
 				codepoint = icon -1;
 				font = FONT_ICON;
-				prim[n].pos.y -= ( ctx.ascent ) * 256;
+				
+				dy = - ( ctx.ascent ) * 256;
 			}
+			
+			prim[n].pos.x = ctx.x * 256;
+			prim[n].pos.y = ctx.y * 256 + dy;
+			prim[n].pos.sr = 0;
+			prim[n].pos.sprite = -MATERIAL_TEXT_NORMAL;
 			
 			struct font_glyph g, og;
 			if (font_manager_glyph(mgr, font, codepoint, fontsize, &g, &og) == NULL) {
@@ -509,7 +511,7 @@ ltext(lua_State *L) {
 					if (newline(&ctx, prim, n))
 						break;
 					prim[n].pos.x = ctx.x * 256;
-					prim[n].pos.y = ctx.y * 256;
+					prim[n].pos.y = ctx.y * 256 + dy;
 					advance(&ctx, g.advance_x);
 				}
 				prim[n].u.text.header.sprite = -1;
