@@ -526,7 +526,7 @@ ltext(lua_State *L) {
 	}
 	if (ctx.x > ctx.line_width)
 		ctx.line_width = ctx.x;
-	int height = ctx.y + ctx.decent;
+	int height = ctx.y + ctx.decent - gap;
 	
 	newline(&ctx, prim, n);
 	int offy;
