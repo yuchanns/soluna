@@ -2,6 +2,8 @@ local image = require "soluna.image"
 local spritemgr = require "soluna.spritemgr"
 local spritebundle = require "soluna.spritebundle"
 
+global setmetatable, ipairs, pairs, assert
+
 local sprite_bank
 
 -- todo: make weak table

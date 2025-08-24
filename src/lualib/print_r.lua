@@ -1,5 +1,9 @@
 local ltask = require "ltask"
 local log_info = ltask.log.info
+local table = table
+local math = math
+
+global pairs, tostring, type, assert, pcall, error, select
 
 local function keys(o)
 	local len = #o

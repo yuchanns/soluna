@@ -1,5 +1,7 @@
 local co = require "coroutine"
 
+global assert, setmetatable, error
+
 local coroutine_create = co.create
 local coroutine_resume = co.resume
 local coroutine_close = co.close

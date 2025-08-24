@@ -1,5 +1,7 @@
 local app = require "soluna.app"
 
+global none
+
 local window = {}
 
 function window.set_title(text)

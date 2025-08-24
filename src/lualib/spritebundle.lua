@@ -2,6 +2,8 @@ local image = require "soluna.image"
 local file = require "soluna.file"
 local datalist = require "soluna.datalist"
 
+global type, tonumber, error, assert, ipairs, print
+
 local M = {}
 
 local function load_bundle(filename)

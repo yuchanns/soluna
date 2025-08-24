@@ -1,6 +1,9 @@
 local yoga = require "soluna.layout.yoga"
 local datalist = require "soluna.datalist"
 local file = require "soluna.file"
+local table = table
+
+global next, error, assert, type, setmetatable, pairs
 
 local layout = {}
 
@@ -146,6 +149,7 @@ do
 			local obj = list[i]
 			local cobj = yogaobj[obj]
 			do local _ENV = obj
+				global x, y, w, h
 				x,y,w,h = yoga.node_get(cobj)
 			end
 		end

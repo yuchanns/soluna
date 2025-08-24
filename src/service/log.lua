@@ -1,5 +1,8 @@
 local ltask = require "ltask"
 local writelog = require "soluna.log"
+local io = io
+
+global none
 
 local S = {}
 

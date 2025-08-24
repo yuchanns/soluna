@@ -8,6 +8,8 @@ local textmat = require "soluna.material.text"
 local quadmat = require "soluna.material.quad"
 local maskmat = require "soluna.material.mask"
 
+global require, assert, pairs, pcall, ipairs
+
 local setting = require "soluna".settings()
 
 local DEFAULT_MAT <const> = 0

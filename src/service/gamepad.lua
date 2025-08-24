@@ -1,6 +1,8 @@
 local ltask = require "ltask"
 local device = require "soluna.gamepad.device"
 
+global pairs
+
 local S = {}
 
 local listener = {}

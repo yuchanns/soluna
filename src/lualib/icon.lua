@@ -3,6 +3,8 @@ local datalist = require "soluna.datalist"
 local file = require "soluna.file"
 local mattext = require "soluna.material.text"
 
+global error, tostring
+
 local icon = {}
 
 function icon.bundle(filename)

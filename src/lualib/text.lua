@@ -1,6 +1,8 @@
 local font = require "soluna.font"
 local icon = require "soluna.icon"
 
+global setmetatable
+
 local text = {}
 
 local bundle_data

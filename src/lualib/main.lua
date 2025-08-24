@@ -2,6 +2,10 @@ local boot = require "ltask.bootstrap"
 local embedsource = require "soluna.embedsource"
 local event = require "soluna.event"
 local soluna_app = require "soluna.app"
+local package = package
+local table = table
+
+global load, require, assert, select
 
 local init_func_temp = [=[
 	local name = ...

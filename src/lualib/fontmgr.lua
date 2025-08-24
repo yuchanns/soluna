@@ -1,4 +1,10 @@
 local ttf = require "soluna.font.truetype"
+local string = string
+local utf8 = utf8
+local table = table
+local debug = debug
+
+global pairs, ipairs, assert, rawget, setmetatable
 
 local MAXFONT <const> = 64
 

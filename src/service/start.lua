@@ -5,6 +5,10 @@ local soluna = require "soluna"
 local soluna_app = require "soluna.app"
 local event = require "soluna.event"
 local util = require "soluna.util"
+local table = table
+local debug = debug
+
+global error, tostring, assert, load, type, ipairs, pairs, xpcall, print, pcall
 
 local message_unpack = soluna_app.unpackmessage
 

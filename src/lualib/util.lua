@@ -1,3 +1,7 @@
+local table = table
+
+global setmetatable
+
 local util = {}
 
 local func_chain = {}; func_chain.__index = func_chain

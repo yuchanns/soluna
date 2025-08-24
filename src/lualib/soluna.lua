@@ -1,6 +1,8 @@
 local ltask = require "ltask"
 local app = require "soluna.app"
 
+global require, error
+
 local soluna = {
 	platform = app.platform
 }

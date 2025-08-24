@@ -4,6 +4,8 @@ local source = require "soluna.embedsource"
 local lfs = require "soluna.lfs"
 local file = require "soluna.file"
 
+global type, error, pairs, assert
+
 local S = {}
 
 local setting
