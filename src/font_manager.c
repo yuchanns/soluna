@@ -264,6 +264,9 @@ font_manager_touch_unsafe(struct font_manager *F, int font, int codepoint, struc
 	struct priority_list *last_node = &F->priority[last_slot];
 	
 	if (font == FONT_ICON) {
+		if (last_node->version != F->version) {
+			F->dirty = 1;
+		}
 		return get_icon(F, codepoint, glyph);
 	}
 	
