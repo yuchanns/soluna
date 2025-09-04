@@ -3,7 +3,7 @@
 BUILD=build
 BIN=bin
 APPNAME=soluna.exe
-CC=gcc
+CC?=gcc
 # msvc support
 #CC=cl
 LD=$(CC)
