@@ -8,7 +8,7 @@ local table = table
 global load, require, assert, select
 
 local init_func_temp = [=[
-	local name = ...
+	local name, service_path = ...
 	local embedsource = require "soluna.embedsource"
 	package.path = [[${lua_path}]]
 	package.cpath = [[${lua_cpath}]]
@@ -36,7 +36,7 @@ local init_func_temp = [=[
 	if embedcode then
 		return load(embedcode(),"=("..name..")")
 	end
-	local filename, err = package.searchpath(name, "${service_path}")
+	local filename, err = package.searchpath(name, service_path or "${service_path}")
 	if not filename then
 		return nil, err
 	end

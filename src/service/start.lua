@@ -64,7 +64,9 @@ local function init(arg)
 	ltask.call(settings, "init", arg)
 	
 	local setting = soluna.settings()
-
+	if setting.service_path then
+		ltask.servicepath(setting.service_path)
+	end
 	local loader = ltask.uniqueservice "loader"
 	
 	arg.app.bank_ptr = ltask.call(loader, "init", {

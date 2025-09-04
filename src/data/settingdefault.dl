@@ -5,3 +5,4 @@ batch_size : 65536
 draw_instance : 65536
 entry : main.lua
 project : soluna
+service_path : "./?.lua"
