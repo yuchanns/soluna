@@ -1,5 +1,6 @@
 #include "srbuffer.h"
 #include <math.h>
+#include <stdlib.h>
 
 static inline int
 pow2(int n) {
