@@ -45,7 +45,8 @@ out vec4 frag_color;
 
 void main() {
 	float alpha = texture(sampler2D(tex,smp), uv).a; 
-	frag_color = maskcolor * alpha;
+	frag_color = maskcolor;
+	frag_color.a = alpha * maskcolor.a;
 }
 @end
 

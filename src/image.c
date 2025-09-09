@@ -50,15 +50,50 @@ free_image(void *ud, void *ptr, size_t osize, size_t nsize) {
 }
 
 static int
-image_load(lua_State *L) {
+load_image(lua_State *L, int *x, int *y, stbi_uc **output) {
 	size_t sz;
+	int c;
 	const stbi_uc *buffer = luaL_getbuffer(L, &sz);
-	int x,y,c;
-	stbi_uc * img = stbi_load_from_memory(buffer, sz, &x, &y, &c, 4);
+	stbi_uc * img = stbi_load_from_memory(buffer, sz, x, y, &c, 4);
 	if (img == NULL) {
 		lua_pushnil(L);
 		lua_pushstring(L, stbi_failure_reason());
 		return 2;
+	}
+	*output = img;
+	return 0;
+}
+
+static int
+image_load(lua_State *L) {
+	int x, y;
+	stbi_uc * img = NULL;
+	int r = load_image(L, &x, &y, &img);
+	if (r)
+		return r;
+	lua_pushexternalstring(L, (const char *)img, x * y * 4, free_image, NULL);
+	lua_pushinteger(L, x);
+	lua_pushinteger(L, y);
+	return 3;
+};
+
+static int
+image_load_alpha(lua_State *L) {
+	int x, y;
+	stbi_uc * img = NULL;
+	int r = load_image(L, &x, &y, &img);
+	if (r)
+		return r;
+	int i, j;
+	stbi_uc * ptr = img;
+	for (i=0;i<y;i++) {
+		for (j=0;j<x;j++) {
+			ptr[3] = 255 - ptr[0];
+			ptr[0] = 0;
+			ptr[1] = 0;
+			ptr[2] = 0;
+			ptr += 4;
+		}
 	}
 	lua_pushexternalstring(L, (const char *)img, x * y * 4, free_image, NULL);
 	lua_pushinteger(L, x);
@@ -498,6 +533,7 @@ luaopen_image(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "load", image_load },
+		{ "load_alpha", image_load_alpha },
 		{ "info", image_info },
 		{ "crop", image_crop },
 		{ "canvas", image_canvas },

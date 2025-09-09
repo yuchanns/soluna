@@ -114,7 +114,11 @@ function M.loadimage(filecache, filename)
 		end
 		return
 	end
-	local data, w, h = image.load(content)
+	local load = image.load
+	if filename:find "%.alpha%." then
+		load = image.load_alpha
+	end
+	local data, w, h = load(content)
 	if data == nil then
 		if not filecache.__missing[filename] then
 			filecache.__missing[filename] = true
