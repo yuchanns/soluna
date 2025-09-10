@@ -1,11 +1,12 @@
 local boot = require "ltask.bootstrap"
+local mqueue = require "ltask.mqueue"
 local embedsource = require "soluna.embedsource"
 local event = require "soluna.event"
 local soluna_app = require "soluna.app"
 local package = package
 local table = table
 
-global load, require, assert, select
+global load, require, assert, select, error, tostring, print
 
 local init_func_temp = [=[
 	local name, service_path = ...
@@ -88,14 +89,41 @@ local function start(config)
 	end
 	local logger, logger_ud = bootstrap.log_sender(ctx)
 	local unpackevent = assert(soluna_app.unpackevent)
+	local appmsg_queue = mqueue.new(128)
+	local recvmsg = mqueue.recv
+	
+	local appmsg = {}
+	
+	function appmsg.set_title(text)
+		soluna_app.set_window_title(text)
+	end
+	
+	local function do_appmsg(what, ...)
+		local f = appmsg[what] or error ("Unknown app message " .. tostring(what))
+		f(...)
+	end
+	
+	local function dispatch_appmsg(v)
+		while v do
+			do_appmsg(boot.unpack_remove(v))
+			v = recvmsg(appmsg_queue, appmsg)
+		end
+	end
 	return {
 		send_log = logger,
 		send_log_ud = logger_ud,
+		mqueue = appmsg_queue,
 		cleanup = function()
 			send_message "cleanup"
 			bootstrap.wait(ctx)
+			mqueue.delete(appmsg_queue)
+			appmsg_queue = nil
 		end,
 		frame = function(count)
+			local v = recvmsg(appmsg_queue)
+			if v then
+				dispatch_appmsg(v)
+			end
 			send_message("frame", count)
 			frame_barrier:wait()
 		end,

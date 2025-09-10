@@ -1,5 +1,6 @@
 local ltask = require "ltask"
 local app = require "soluna.app"
+local mqueue = require "ltask.mqueue"
 
 global require, error
 
@@ -33,8 +34,7 @@ function soluna.settings()
 end
 
 function soluna.set_window_title(text)
-	local window = ltask.uniqueservice "window"
-	ltask.send(window, "set_title", text)
+	mqueue.send(app.mqueue(), ltask.pack("set_title", text))
 end
 
 function soluna.gamedir(name)

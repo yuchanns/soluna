@@ -35,6 +35,7 @@ struct app_context {
 	lua_State *quitL;
 	int (*send_log)(void *ud, unsigned int id, void *data, uint32_t sz);
 	void *send_log_ud;
+	void *mqueue;
 };
 
 static struct app_context *CTX = NULL;
@@ -141,10 +142,20 @@ lclose_window(lua_State *L) {
 	return 0;
 }
 
+static int
+lmqueue(lua_State *L) {
+	if (CTX == NULL || CTX->mqueue == NULL) {
+		return luaL_error(L, "Not init mqueue");
+	}
+	lua_pushlightuserdata(L, CTX->mqueue);
+	return 1;
+}
+
 int
 luaopen_soluna_app(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
+		{ "mqueue", lmqueue },
 		{ "unpackmessage", lmessage_unpack },
 		{ "sendmessage", lmessage_send },
 		{ "unpackevent", levent_unpack },
@@ -259,6 +270,7 @@ init_callback(lua_State *L, struct app_context * ctx) {
 	}
 	ctx->send_log = get_ud(L, "send_log");
 	ctx->send_log_ud = get_ud(L, "send_log_ud");
+	ctx->mqueue = get_ud(L, "mqueue");
 	if (get_function(L, "frame", FRAME_CALLBACK))
 		return 1;
 	if (get_function(L, "cleanup", CLEANUP_CALLBACK))
@@ -300,6 +312,7 @@ app_init() {
 	app.quitL = NULL;
 	app.send_log = NULL;
 	app.send_log_ud = NULL;
+	app.mqueue = NULL;
 	
 	CTX = &app;
 	
@@ -340,7 +353,7 @@ invoke_callback(lua_State *L, int index, int nargs) {
 		lua_insert(L, -nargs-1);
 	}
 	if (lua_pcall(L, nargs, 0, 0) != LUA_OK) {
-		fprintf(stderr, "Error : %s", lua_tostring(L, -1));
+		fprintf(stderr, "Error : %s\n", lua_tostring(L, -1));
 		lua_pop(L, 1);
 	}
 }

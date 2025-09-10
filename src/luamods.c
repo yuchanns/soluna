@@ -3,7 +3,8 @@
 
 int luaopen_ltask(lua_State *L);
 int luaopen_ltask_root(lua_State *L);
-int luaopen_ltask_bootstrap(lua_State* L);
+int luaopen_ltask_bootstrap(lua_State *L);
+int luaopen_ltask_mqueue(lua_State *L);
 int luaopen_embedsource(lua_State *L);
 int luaopen_appmessage(lua_State *L);
 int luaopen_applog(lua_State *L);
@@ -34,6 +35,7 @@ void soluna_embed(lua_State* L) {
 		{ "ltask", luaopen_ltask},
 		{ "ltask.root", luaopen_ltask_root},
 		{ "ltask.bootstrap", luaopen_ltask_bootstrap},
+		{ "ltask.mqueue", luaopen_ltask_mqueue},
 		{ "soluna.app", luaopen_soluna_app },
 		{ "soluna.embedsource", luaopen_embedsource},
 		{ "soluna.log", luaopen_applog },
