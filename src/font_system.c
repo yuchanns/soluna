@@ -62,6 +62,122 @@ lttfdata(lua_State *L) {
 	return 1;
 }
 
+#elif defined(__APPLE__)
+
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreText/CoreText.h>
+
+#define kCTFontTableTtcf 'ttcf'
+
+static void *
+free_data(void *ud, void *ptr, size_t oszie, size_t nsize) {
+	free(ptr);
+	return NULL;
+}
+
+static CFDataRef read_font_file_data(CFURLRef url) {
+	CFReadStreamRef stream = CFReadStreamCreateWithFile(kCFAllocatorDefault, url);
+	if (!stream) {
+		return NULL;
+	}
+	
+	if (!CFReadStreamOpen(stream)) {
+		CFRelease(stream);
+		return NULL;
+	}
+	
+	CFMutableDataRef data = CFDataCreateMutable(kCFAllocatorDefault, 0);
+	UInt8 buffer[8192];
+	CFIndex bytesRead;
+	
+	while ((bytesRead = CFReadStreamRead(stream, buffer, sizeof(buffer))) > 0) {
+		CFDataAppendBytes(data, buffer, bytesRead);
+	}
+	
+	CFReadStreamClose(stream);
+	CFRelease(stream);
+	
+	if (bytesRead < 0) {
+		CFRelease(data);
+		return NULL;
+	}
+	
+	return data;
+}
+
+static int
+lttfdata(lua_State *L) {
+	const char *familyName = luaL_checkstring(L, 1);
+	
+	CFStringRef fontNameStr = CFStringCreateWithCString(kCFAllocatorDefault, 
+														familyName, 
+														kCFStringEncodingUTF8);
+	if (!fontNameStr) {
+		return luaL_error(L, "Failed to create font name string");
+	}
+	
+	CFDictionaryRef attributes = CFDictionaryCreate(
+		kCFAllocatorDefault,
+		(const void**)&kCTFontFamilyNameAttribute,
+		(const void**)&fontNameStr,
+		1,
+		&kCFTypeDictionaryKeyCallBacks,
+		&kCFTypeDictionaryValueCallBacks
+	);
+	
+	CTFontDescriptorRef descriptor = CTFontDescriptorCreateWithAttributes(attributes);
+	CFRelease(attributes);
+	CFRelease(fontNameStr);
+	
+	if (!descriptor) {
+		return luaL_error(L, "Failed to create font descriptor");
+	}
+	
+	CTFontRef font = CTFontCreateWithFontDescriptor(descriptor, 12.0, NULL);
+	CFRelease(descriptor);
+	
+	if (!font) {
+		return luaL_error(L, "Failed to create font for family: %s", familyName);
+	}
+	
+	CFDataRef fontData = NULL;
+	
+	CFDataRef ttcfData = CTFontCopyTable(font, kCTFontTableTtcf, kCTFontTableOptionNoOptions);
+	if (ttcfData) {
+		fontData = ttcfData;
+	} else {
+		CTFontDescriptorRef fontDesc = CTFontCopyFontDescriptor(font);
+		if (fontDesc) {
+			CFURLRef fontURL = CTFontDescriptorCopyAttribute(fontDesc, kCTFontURLAttribute);
+			if (fontURL) {
+				fontData = read_font_file_data(fontURL);
+				CFRelease(fontURL);
+			}
+			CFRelease(fontDesc);
+		}
+	}
+	
+	CFRelease(font);
+	
+	if (!fontData) {
+		return luaL_error(L, "Failed to get font data for family: %s", familyName);
+	}
+	
+	CFIndex dataLength = CFDataGetLength(fontData);
+	char *buf = malloc(dataLength + 1);
+	if (!buf) {
+		CFRelease(fontData);
+		return luaL_error(L, "Out of memory : sysfont");
+	}
+	
+	CFDataGetBytes(fontData, CFRangeMake(0, dataLength), (UInt8*)buf);
+	buf[dataLength] = 0;
+	CFRelease(fontData);
+	
+	lua_pushexternalstring(L, buf, dataLength, free_data, NULL);
+	return 1;
+}
+
 #else
 
 static int

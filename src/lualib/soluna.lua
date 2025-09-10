@@ -49,6 +49,13 @@ function soluna.gamedir(name)
 		dir = dir .. "\\" .. name
 		lfs.mkdir(dir)
 		return dir .. "\\"
+	elseif soluna.platform == "macos" then
+    local lfs = require "soluna.lfs"
+		local dir = lfs.personaldir() .. "/.local/share"
+		lfs.mkdir(dir)
+		dir = dir .. "/" .. name
+		lfs.mkdir(dir)
+		return dir .. "/"
 	else
 		error "TODO: support none windows"
 	end

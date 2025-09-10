@@ -52,6 +52,136 @@ gamepad_getstate(int index, struct gamepad_state *state) {
 	return 1;
 }
 
+#elif defined(__APPLE__)
+
+#include <IOKit/hid/IOHIDManager.h>
+#include <IOKit/hid/IOHIDDevice.h>
+#include <CoreFoundation/CoreFoundation.h>
+
+static IOHIDManagerRef hid_manager = NULL;
+static CFMutableArrayRef gamepad_devices = NULL;
+
+static void gamepad_init() {
+    if (hid_manager != NULL) return;
+
+    hid_manager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
+    gamepad_devices = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
+
+    CFMutableDictionaryRef matching = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, 
+        &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+    int usage_page = kHIDPage_GenericDesktop;
+    int usage = kHIDUsage_GD_GamePad;
+
+    CFNumberRef page_ref = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &usage_page);
+    CFNumberRef usage_ref = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &usage);
+
+    CFDictionarySetValue(matching, CFSTR(kIOHIDDeviceUsagePageKey), page_ref);
+    CFDictionarySetValue(matching, CFSTR(kIOHIDDeviceUsageKey), usage_ref);
+
+    IOHIDManagerSetDeviceMatching(hid_manager, matching);
+    IOHIDManagerOpen(hid_manager, kIOHIDOptionsTypeNone);
+
+    CFSetRef device_set = IOHIDManagerCopyDevices(hid_manager);
+    if (device_set) {
+        CFIndex count = CFSetGetCount(device_set);
+        IOHIDDeviceRef *devices = malloc(count * sizeof(IOHIDDeviceRef));
+        CFSetGetValues(device_set, (const void**)devices);
+
+        for (CFIndex i = 0; i < count; i++) {
+            CFArrayAppendValue(gamepad_devices, devices[i]);
+        }
+
+        free(devices);
+        CFRelease(device_set);
+    }
+
+    CFRelease(page_ref);
+    CFRelease(usage_ref);
+    CFRelease(matching);
+}
+
+static int
+gamepad_getstate(int index, struct gamepad_state *state) {
+    gamepad_init();
+    
+    memset(state, 0, sizeof(struct gamepad_state));
+    
+    if (index < 0 || index >= CFArrayGetCount(gamepad_devices)) {
+        return 1;
+    }
+    
+    IOHIDDeviceRef device = (IOHIDDeviceRef)CFArrayGetValueAtIndex(gamepad_devices, index);
+    if (!device) {
+        return 1;
+    }
+    
+    CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device, NULL, kIOHIDOptionsTypeNone);
+    if (!elements) {
+        return 1;
+    }
+    
+    CFIndex element_count = CFArrayGetCount(elements);
+    
+    for (CFIndex i = 0; i < element_count; i++) {
+        IOHIDElementRef element = (IOHIDElementRef)CFArrayGetValueAtIndex(elements, i);
+        IOHIDElementType type = IOHIDElementGetType(element);
+        
+        if (type == kIOHIDElementTypeInput_Button || 
+            type == kIOHIDElementTypeInput_Axis) {
+            
+            IOHIDValueRef value_ref;
+            if (IOHIDDeviceGetValue(device, element, &value_ref) == kIOReturnSuccess) {
+                CFIndex value = IOHIDValueGetIntegerValue(value_ref);
+                uint32_t usage_page = IOHIDElementGetUsagePage(element);
+                uint32_t usage = IOHIDElementGetUsage(element);
+                
+                if (usage_page == kHIDPage_Button) {
+                    if (usage >= 1 && usage <= 16) {
+                        if (value) {
+                            state->buttons |= (1 << (usage - 1));
+                        }
+                    }
+                }
+                else if (usage_page == kHIDPage_GenericDesktop) {
+                    CFIndex min = IOHIDElementGetLogicalMin(element);
+                    CFIndex max = IOHIDElementGetLogicalMax(element);
+                    
+                    int16_t normalized = (int16_t)(((value - min) * 65535) / (max - min) - 32768);
+                    
+                    switch (usage) {
+                        case kHIDUsage_GD_X:
+                            state->ls_x = normalized;
+                            break;
+                        case kHIDUsage_GD_Y:
+                            state->ls_y = -normalized;
+                            break;
+                        case kHIDUsage_GD_Z:
+                            state->rs_x = normalized;
+                            break;
+                        case kHIDUsage_GD_Rz:
+                            state->rs_y = -normalized;
+                            break;
+                        case kHIDUsage_GD_Rx:
+                            state->lt = (uint8_t)((normalized + 32768) >> 8);
+                            break;
+                        case kHIDUsage_GD_Ry:
+                            state->rt = (uint8_t)((normalized + 32768) >> 8);
+                            break;
+                    }
+                }
+            }
+        }
+    }
+    
+    CFRelease(elements);
+    
+    static uint32_t packet_counter = 0;
+    state->packet = ++packet_counter;
+    
+    return 0;
+}
+
 #else
 
 // todo : linux and mac support
