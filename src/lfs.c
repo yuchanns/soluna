@@ -459,7 +459,318 @@ pusherror(lua_State * L) {
 
 #else
 
-#error todo : support linux etc
+#define LONGPATH_MAX 4096
+
+#include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
+#include <pwd.h>
+
+#define STAT_STRUCT struct stat
+#define STAT_FUNC stat
+
+#define DIR_METATABLE "SOLUNA_DIR"
+
+struct dir_data {
+	DIR* dir;
+	int closed;
+};
+
+static void
+system_error(lua_State *L, int errcode) {
+	lua_pushstring(L, strerror(errcode));
+}
+
+static int
+error_return(lua_State *L) {
+	lua_pushnil(L);
+	system_error(L, errno);
+	return 2;
+}
+
+static int
+dir_iter(lua_State *L) {
+	struct dir_data *d = luaL_checkudata(L, 1, DIR_METATABLE);
+	luaL_argcheck(L, d->closed == 0, 1, "closed directory");
+	if (d->dir == NULL) {
+		// no find found
+		d->closed = 1;
+		return 0;
+	}
+	if (lua_getuservalue(L, 1) == LUA_TSTRING) {
+		// first time
+		lua_pushnil(L);
+		lua_setuservalue(L, 1);
+		return 1;
+	} else {
+		struct dirent *entry = readdir(d->dir);
+		if (entry) {
+			lua_pushstring(L, entry->d_name);
+			return 1;
+		} else {
+			closedir(d->dir);
+			d->dir = NULL;
+			d->closed = 1;
+			return 0;
+		}
+	}
+}
+
+static int
+dir_close(lua_State *L) {
+	struct dir_data *d = luaL_checkudata(L, 1, DIR_METATABLE);
+	if (d->dir != NULL) {
+		closedir(d->dir);
+		d->dir = NULL;
+	}
+	d->closed = 1;
+	return 0;
+}
+
+static int
+ldir(lua_State *L) {
+	size_t sz;
+	const char * pathname = luaL_checklstring(L, 1, &sz);
+	DIR* dir = opendir(pathname);
+	
+	lua_pushcfunction(L, dir_iter);
+	
+	if (dir == NULL) {
+		if (errno == ENOENT) {
+			struct dir_data *d = lua_newuserdata(L, sizeof(*d));
+			d->dir = NULL;
+			d->closed = 0;
+		} else {
+			system_error(L, errno);
+			return lua_error(L);
+		}
+	} else {
+		struct dirent *entry = readdir(dir);
+		struct dir_data *d = lua_newuserdata(L, sizeof(*d));
+		d->dir = dir;
+		d->closed = 0;
+		if (entry) {
+			lua_pushstring(L, entry->d_name);
+			lua_setuservalue(L, -2);	// set firstname
+		}
+	}
+
+	if (luaL_newmetatable(L, DIR_METATABLE)) {
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+
+		lua_pushcfunction(L, dir_iter);
+		lua_setfield(L, -2, "next");
+		lua_pushcfunction(L, dir_close);
+		lua_setfield(L, -2, "close");
+		lua_pushcfunction(L, dir_close);
+		lua_setfield(L, -2, "__gc");
+	}
+	lua_setmetatable(L, -2);
+	return 2;
+}
+
+static int
+lpersonaldir(lua_State *L) {
+	struct passwd *pw = getpwuid(getuid());
+	if (pw && pw->pw_dir) {
+		lua_pushstring(L, pw->pw_dir);
+		return 1;
+	} else {
+		return error_return(L);
+	}
+}
+
+static int
+lcurrentdir(lua_State *L) {
+	char path[LONGPATH_MAX];
+	if (getcwd(path, LONGPATH_MAX) == NULL) {
+		return error_return(L);
+	}
+	lua_pushstring(L, path);
+	return 1;
+}
+
+static int
+lchdir(lua_State *L) {
+	size_t sz;
+	const char * path = luaL_checklstring(L, 1, &sz);
+	if (chdir(path) != 0) {
+		return error_return(L);
+	}
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static const char *
+mode2string(mode_t mode) {
+	if (S_ISREG(mode))
+		return "file";
+	else if (S_ISDIR(mode))
+		return "directory";
+	else if (S_ISLNK(mode))
+		return "link";
+	else if (S_ISSOCK(mode))
+		return "socket";
+	else if (S_ISFIFO(mode))
+		return "named pipe";
+	else if (S_ISCHR(mode))
+		return "char device";
+	else if (S_ISBLK(mode))
+		return "block device";
+	else
+		return "other";
+}
+
+/* inode protection mode */
+static void push_st_mode(lua_State *L, STAT_STRUCT *info) {
+	lua_pushstring(L, mode2string(info->st_mode));
+}
+/* device inode resides on */
+static void push_st_dev(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer) info->st_dev);
+}
+/* inode's number */
+static void push_st_ino(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer) info->st_ino);
+}
+/* number of hard links to the file */
+static void push_st_nlink(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer)info->st_nlink);
+}
+/* user-id of owner */
+static void push_st_uid(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer)info->st_uid);
+}
+/* group-id of owner */
+static void push_st_gid(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer)info->st_gid);
+}
+/* device type, for special file inode */
+static void push_st_rdev(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer) info->st_rdev);
+}
+/* time of last access */
+static void push_st_atime(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer) info->st_atime);
+}
+/* time of last data modification */
+static void push_st_mtime(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer) info->st_mtime);
+}
+/* time of last file status change */
+static void push_st_ctime(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer) info->st_ctime);
+}
+/* file size, in bytes */
+static void push_st_size(lua_State *L, STAT_STRUCT *info) {
+	lua_pushinteger(L, (lua_Integer)info->st_size);
+}
+
+static const char *perm2string(mode_t mode) {
+	static char perms[10] = "---------";
+	int i;
+	for (i=0;i<9;i++) perms[i]='-';
+	
+	if (mode & S_IRUSR) perms[0] = 'r';
+	if (mode & S_IWUSR) perms[1] = 'w';
+	if (mode & S_IXUSR) perms[2] = 'x';
+	if (mode & S_IRGRP) perms[3] = 'r';
+	if (mode & S_IWGRP) perms[4] = 'w';
+	if (mode & S_IXGRP) perms[5] = 'x';
+	if (mode & S_IROTH) perms[6] = 'r';
+	if (mode & S_IWOTH) perms[7] = 'w';
+	if (mode & S_IXOTH) perms[8] = 'x';
+	
+	return perms;
+}
+
+/* permissions string */
+static void push_st_perm(lua_State *L, STAT_STRUCT *info) {
+	lua_pushstring(L, perm2string(info->st_mode));
+}
+
+typedef void (*_push_function) (lua_State *L, STAT_STRUCT *info);
+
+struct _stat_members {
+	const char *name;
+	_push_function push;
+};
+
+struct _stat_members members[] = {
+	{ "mode",         push_st_mode },
+	{ "dev",          push_st_dev },
+	{ "ino",          push_st_ino },
+	{ "nlink",        push_st_nlink },
+	{ "uid",          push_st_uid },
+	{ "gid",          push_st_gid },
+	{ "rdev",         push_st_rdev },
+	{ "access",       push_st_atime },
+	{ "modification", push_st_mtime },
+	{ "change",       push_st_ctime },
+	{ "size",         push_st_size },
+	{ "permissions",  push_st_perm },
+	{ NULL, NULL }
+};
+
+/*
+** Get file or symbolic link information
+*/
+static int
+file_info(lua_State *L) {
+	STAT_STRUCT info;
+	size_t sz;
+	int i;
+	const char * path = luaL_checklstring(L, 1, &sz);
+
+	if (STAT_FUNC(path, &info)) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "cannot obtain information from file '%s': %s", path, strerror(errno));
+		lua_pushinteger(L, errno);
+		return 3;
+	}
+	if (lua_isstring(L, 2)) {
+		const char *member = lua_tostring(L, 2);
+		for (i = 0; members[i].name; i++) {
+			if (strcmp(members[i].name, member) == 0) {
+				/* push member value and return */
+				members[i].push(L, &info);
+				return 1;
+			}
+		}
+		/* member not found */
+		return luaL_error(L, "invalid attribute name '%s'", member);
+	}
+	/* creates a table if none is given, removes extra arguments */
+	lua_settop(L, 2);
+	if (!lua_istable(L, 2)) {
+		lua_newtable(L);
+	}
+	/* stores all members in table on top of the stack */
+	for (i = 0; members[i].name; i++) {
+		lua_pushstring(L, members[i].name);
+		members[i].push(L, &info);
+		lua_rawset(L, -3);
+	}
+	return 1;
+}
+
+static int
+lrealpath(lua_State *L) {
+	size_t sz;
+	const char * pathname = luaL_checklstring(L, 1, &sz);
+	char resolved[LONGPATH_MAX];
+	
+	if (realpath(pathname, resolved) == NULL) {
+		return error_return(L);
+	}
+	
+	lua_pushstring(L, resolved);
+	return 1;
+}
 
 #define mkdir_utf8(path) (mkdir((path), \
     S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IXOTH))

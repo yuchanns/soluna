@@ -2,6 +2,7 @@
 #define soluna_srbuffer_h
 
 #include <stdint.h>
+#include <stdlib.h>
 
 struct sr_mat {
 	float v[4];

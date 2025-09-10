@@ -1,5 +1,18 @@
 #define SOKOL_IMPL
+
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+
 #define SOKOL_D3D11
+
+#elif defined(__APPLE__)
+
+#define SOKOL_METAL
+
+#else
+
+#error Unsupport platform
+
+#endif
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -22,6 +35,10 @@
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 
 #define PLATFORM "windows"
+
+#elif defined(__APPLE__)
+
+#define PLATFORM "macos"
 
 #else
 
