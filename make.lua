@@ -80,3 +80,5 @@ lm:exe "soluna" {
     "datalist_src",
   },
 }
+
+lm:default "soluna"
