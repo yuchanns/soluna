@@ -263,7 +263,18 @@ image_crop(lua_State *L) {
 	remove_bottom(&r);
 	int left = remove_left(&r);
 	int right = remove_right(&r);
-	
+	// reserve border for alpha channel
+	if (left > 1)
+		--left;
+	if (right > 1)
+		--right;
+	if (top > 1) {
+		--top;
+		++r.line;
+	}
+	if (top + r.line < y - 1) {
+		++r.line;
+	}
 	lua_pushinteger(L, left);
 	lua_pushinteger(L, top);
 	lua_pushinteger(L, r.width - (left + right));
