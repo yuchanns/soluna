@@ -8,6 +8,10 @@
 
 #define SOKOL_METAL
 
+#elif defined(__linux__)
+
+#define SOKOL_GLCORE
+
 #else
 
 #error Unsupport platform
@@ -39,6 +43,10 @@
 #elif defined(__APPLE__)
 
 #define PLATFORM "macos"
+
+#elif defined(__linux__)
+
+#define PLATFORM "linux"
 
 #else
 
