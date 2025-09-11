@@ -22,7 +22,8 @@ end
 
 for path in fs.pairs("src") do
   local lang = lm.os == "windows" and "hlsl4" or
-    lm.os == "macos" and "metal_macos" or "unknown"
+    lm.os == "macos" and "metal_macos" or
+    lm.os == "linux" and "glsl410" or "unknown"
   if path:extension() == ".glsl" then
     local base = path:stem():string()
     compile_shader(path:string(), base .. ".glsl.h", lang)
