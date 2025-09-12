@@ -26,7 +26,7 @@ jobs:
           ref: "c240bd1d17d4192572ee6e0cdb6e2477e4a7df80"
           path: sokol-tools-bin
           fetch-depth: 1
-      - name: Setup sokol-tools
+      - name: Setup sokol-shdc
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -50,6 +50,22 @@ jobs:
           luamake-version: "5bedfce66f075a9f68b1475747738b81b3b41c25"
       - name: Build
         shell: bash
+        id: build
         run: |
           luamake precompile
           luamake soluna
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            SOLUNA_BINARY="soluna.exe"
+          else
+            SOLUNA_BINARY="soluna"
+          fi
+          SOLUNA_PATH=$(find bin -name $SOLUNA_BINARY | head -n 1)
+          echo "SOLUNA_PATH=$SOLUNA_PATH" >> $GITHUB_OUTPUT
+          echo "SOLUNA_BINARY=$SOLUNA_BINARY" >> $GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        name: Upload
+        with:
+          name: "soluna-${{ matrix.os }}-${{ steps.build.outputs.SOLUNA_BINARY }}"
+          if-no-files-found: "error"
+          path: "${{ steps.build.outputs.SOLUNA_PATH }}"
+          overwrite: "true"
