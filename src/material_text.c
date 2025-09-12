@@ -188,11 +188,12 @@ lnew_material_text_normal(lua_State *L) {
 	m->font = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
-	m->fs_uniform = (fs_params_t) {
-		.edge_mask = font_manager_sdf_mask(m->font),
-		.dist_multiplier = 1.0f,
-		.color= 0xff000000,
-	};
+  fs_params_t temp = {
+      .edge_mask = font_manager_sdf_mask(m->font),
+      .dist_multiplier = 1.0f,
+      .color = 0xff000000,
+  };
+  memcpy(&m->fs_uniform, &temp, sizeof(fs_params_t));
 
 	if (luaL_newmetatable(L, "SOLUNA_MATERIAL_TEXT")) {
 		luaL_Reg l[] = {
