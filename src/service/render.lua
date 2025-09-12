@@ -7,6 +7,7 @@ local defmat = require "soluna.material.default"
 local textmat = require "soluna.material.text"
 local quadmat = require "soluna.material.quad"
 local maskmat = require "soluna.material.mask"
+local soluna_app = require "soluna.app"
 
 global require, assert, pairs, pcall, ipairs
 
@@ -154,6 +155,7 @@ local function frame(count)
 	-- todo: do not wait all batch commits
 	local batch_n = #batch
 	batch.wait()
+  soluna_app.context_acquire()
 	if update_image then update_image() end
 	STATE.drawmgr:reset()
 	STATE.bindings:voffset(0, 0)
@@ -180,6 +182,7 @@ local function frame(count)
 			obj.draw(ptr, n, tex)
 		end
 	STATE.pass:finish()
+  soluna_app.context_release()
 end
 
 function S.frame(count)

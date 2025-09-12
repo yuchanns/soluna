@@ -176,10 +176,28 @@ lmqueue(lua_State *L) {
 	return 1;
 }
 
+static int
+lcontext_acquire(lua_State *L) {
+#if defined(__linux__)
+  _sapp_glx_make_current();
+#endif
+  return 0;
+}
+
+static int
+lcontext_release(lua_State *L) {
+#if defined(__linux__)
+  _sapp.glx.MakeCurrent(_sapp.x11.display, None, NULL);
+#endif
+  return 0;
+}
+
 int
 luaopen_soluna_app(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
+    { "context_acquire", lcontext_acquire },
+    { "context_release", lcontext_release },
 		{ "mqueue", lmqueue },
 		{ "unpackmessage", lmessage_unpack },
 		{ "sendmessage", lmessage_send },
