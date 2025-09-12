@@ -3,9 +3,6 @@ local lm = require "luamake"
 lm.rootdir = lm.basedir .. "/3rd/ltask"
 
 lm:source_set "ltask_src" {
-  deps = {
-    "soluna_src",
-  },
   sources = {
     "src/*.c",
   },
