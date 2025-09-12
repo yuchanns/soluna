@@ -63,8 +63,9 @@ pack_sprite(struct sprite_bank *b, stbrp_context *ctx, stbrp_node *tmp, stbrp_re
 		if ((rect->texid == 0 || rect->texid == last_texid) && rect->frame == current_frame) {
 			stbrp_rect * sr = &srect[rect_i++];
 			sr->id = i;
-			sr->w = rect->u & 0xffff;
-			sr->h = rect->v & 0xffff;
+			// reserve 1 pixel border
+			sr->w = (rect->u + 1) & 0xffff;
+			sr->h = (rect->v + 1) & 0xffff;
 		}
 	}
 	if (stbrp_pack_rects(ctx, srect, rect_i)) {
@@ -73,8 +74,8 @@ pack_sprite(struct sprite_bank *b, stbrp_context *ctx, stbrp_node *tmp, stbrp_re
 		for (j=0;j<rect_i;j++) {
 			stbrp_rect * sr = &srect[j];
 			struct sprite_rect *rect = &b->rect[sr->id];
-			rect->u = sr->x << 16 | sr->w;
-			rect->v = sr->y << 16 | sr->h;
+			rect->u = sr->x << 16 | (sr->w - 1);
+			rect->v = sr->y << 16 | (sr->h - 1);
 			rect->texid = last_texid;
 		}
 		*reserved_n = 0;
@@ -86,8 +87,8 @@ pack_sprite(struct sprite_bank *b, stbrp_context *ctx, stbrp_node *tmp, stbrp_re
 			stbrp_rect * sr = &srect[j];
 			struct sprite_rect *rect = &b->rect[sr->id];
 			if (sr->was_packed) {
-				rect->u = sr->x << 16 | sr->w;
-				rect->v = sr->y << 16 | sr->h;
+				rect->u = sr->x << 16 | (sr->w - 1);
+				rect->v = sr->y << 16 | (sr->h - 1);
 				rect->texid = last_texid;
 			} else {
 				stbrp_rect * tmp = &srect[n];
