@@ -65,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         name: Upload
         with:
-          name: "soluna-${{ matrix.os }}-${{ steps.build.outputs.SOLUNA_BINARY }}"
+          name: "soluna-${{ runner.os }}-${{ steps.build.outputs.SOLUNA_BINARY }}"
           if-no-files-found: "error"
           path: "${{ steps.build.outputs.SOLUNA_PATH }}"
           overwrite: "true"
