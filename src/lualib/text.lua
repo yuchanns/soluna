@@ -1,7 +1,6 @@
 local font = require "soluna.font"
 local icon = require "soluna.icon"
-
-global setmetatable, print
+global setmetatable, print, tonumber
 
 local text = {}
 
@@ -25,17 +24,35 @@ local colors = {
 	bracket = "[bracket]",
 }
 
+local function user_color(self, name)
+	if name:byte() == 99 then	-- 'c'
+		local cvalue = name:sub(2)
+		local c = tonumber(cvalue, 16)
+		if c then
+			local cname = "[" .. cvalue .. "]"
+			self[name] = cname
+			return cname
+		end
+	end
+end
+
+setmetatable(colors, { __index = user_color })
+
 local function icon_id(name)
+	local cname = colors[name]
+	if cname then
+		return cname
+	end
 	local id = icon.names[name]
 	if not id then
-		return colors[name] or ("["..name.."]")
+		return "["..name.."]"
 	end
 	return "[i"..id.."]"
 end
 
 local function convert(tbl, key)
 	local escape = key:gsub("%[%[", "[bracket]")
-	local value = escape:gsub("%[(%l+)%]", icon_id)
+	local value = escape:gsub("%[(%w+)%]", icon_id)
 	if escape ~= key then
 		value = value:gsub("%[bracket%]", "[[")
 	elseif value == key then

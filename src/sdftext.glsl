@@ -50,12 +50,13 @@ void main() {
 	float dis = texture(sampler2D(tex,smp), uv).r;
 	float smoothing = length(fwidth(uv)) * 128.0 * dist_multiplier;
 	float alpha = smoothstep(edge_mask - smoothing, edge_mask + smoothing, dis);
+	float color_alpha = ((color >> 24) & 0xff) / 255.0f;
 	vec4 c = vec4(
 		((color >> 16) & 0xff) / 255.0f,
 		((color >> 8) & 0xff) / 255.0f,
 		((color) & 0xff) / 255.0f,
-		((color >> 24) & 0xff) / 255.0f);
-	frag_color = c * alpha;
+		color_alpha * alpha);
+	frag_color = c;
 }
 @end
 

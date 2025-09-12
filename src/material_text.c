@@ -161,7 +161,7 @@ init_pipeline(struct material_text *m) {
         },
 		.colors[0].blend = (sg_blend_state) {
 			.enabled = true,
-			.src_factor_rgb = SG_BLENDFACTOR_ONE,
+			.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
 			.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
 			.src_factor_alpha = SG_BLENDFACTOR_ONE,
 			.dst_factor_alpha = SG_BLENDFACTOR_ZERO
