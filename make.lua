@@ -77,8 +77,15 @@ lm:exe "soluna" {
     "soluna_src",
     "ltask_src",
     "yoga_src",
+    "compile_lua_code",
+    "compile_shaders",
     "datalist_src",
   },
 }
 
-lm:default "soluna"
+lm:phony "precompile" {
+  deps = {
+    "compile_shaders",
+    "compile_lua_code",
+  },
+}

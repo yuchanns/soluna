@@ -1,0 +1,248 @@
+name: Nightly Build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'  # Runs every day at midnight UTC
+
+jobs:
+  check:
+    name: Determine Build Necessity
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Get the last nightly commit
+        id: last_nightly
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            const nightlyRelease = releases.data.find(release => release.tag_name.includes('nightly') || release.name.includes('Nightly'));
+            if (nightlyRelease) {
+              const tagName = nightlyRelease.tag_name;
+              const tag = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tagName}`
+              });
+              const commitSha = tag.data.object.sha;
+              return commitSha;
+            } else {
+              return null;
+            }
+      - name: Check the proceed condition
+        id: check
+        run: |
+          LAST_NIGHTLY_COMMIT="${{ steps.last_nightly.outputs.result }}"
+          CURRENT_COMMIT="${GITHUB_SHA}"
+          echo "Last nightly commit: $LAST_NIGHTLY_COMMIT"
+          echo "Current commit: $CURRENT_COMMIT"
+          if [ -z "$LAST_NIGHTLY_COMMIT" ]; then
+            echo "No previous nightly release found. Proceeding with build."
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          elif [ "$LAST_NIGHTLY_COMMIT" != "$CURRENT_COMMIT" ]; then
+            echo "New commits found since last nightly release. Proceeding with build."
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No new commits since last nightly release. Skipping build."
+            echo "proceed=false" >> $GITHUB_OUTPUT
+          fi
+  build:
+    name: Nightly Build on ${{ matrix.os }}
+    needs: check
+    if: needs.check.outputs.proceed == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/checkout@v5
+        with:
+          repository: floooh/sokol-tools-bin
+          ref: "c240bd1d17d4192572ee6e0cdb6e2477e4a7df80"
+          path: sokol-tools-bin
+          fetch-depth: 1
+      - name: Setup sokol-shdc
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            TARGET_DIR="C:/Windows/System32"
+            SHDC_BINARY="sokol-shdc.exe"
+            FIND_PATH="bin/win32"
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            TARGET_DIR="/usr/local/bin"
+            SHDC_BINARY="sokol-shdc"
+            FIND_PATH="bin/osx_arm64"
+          else  # Linux
+            TARGET_DIR="/usr/local/bin"
+            SHDC_BINARY="sokol-shdc"
+            FIND_PATH="bin/linux"
+          fi
+          echo "Setting up sokol-tools from sokol-tools-bin/$FIND_PATH"
+          find sokol-tools-bin/$FIND_PATH -name $SHDC_BINARY -exec cp {} $TARGET_DIR \;
+          $SHDC_BINARY -h
+      - uses: yuchanns/actions-luamake@v1.0.0
+        with:
+          luamake-version: "5bedfce66f075a9f68b1475747738b81b3b41c25"
+      - name: Build
+        shell: bash
+        id: build
+        run: |
+          luamake precompile
+          luamake soluna
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            SOLUNA_BINARY="soluna.exe"
+            RENAME_BINARY="soluna-windows-amd64.exe"
+          else
+            SOLUNA_BINARY="soluna"
+            RENAME_BINARY="soluna-macos-arm64"
+          fi
+          SOLUNA_PATH=$(find bin -name $SOLUNA_BINARY | head -n 1)
+          cp "$SOLUNA_PATH" "bin/$RENAME_BINARY"
+          echo "SOLUNA_PATH=bin/$RENAME_BINARY" >> $GITHUB_OUTPUT
+          echo "SOLUNA_BINARY=$RENAME_BINARY" >> $GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        name: Upload
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        with:
+          name: "soluna-${{ runner.os }}-${{ steps.build.outputs.SOLUNA_BINARY }}"
+          if-no-files-found: "error"
+          path: "${{ steps.build.outputs.SOLUNA_PATH }}"
+          overwrite: "true"
+  release:
+    name: Create Nightly Release
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f -name "soluna*" -exec cp {} release-assets/ \;
+          ls -la release-assets/
+      - name: Delete existing nightly releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            for (const release of releases.data) {
+              if (release.tag_name.includes('nightly') || release.name.includes('Nightly')) {
+                console.log(`Deleting release: ${release.tag_name}`);
+                try {
+                  await github.rest.repos.deleteRelease({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: release.id
+                  });
+                  
+                  try {
+                    await github.rest.git.deleteRef({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      ref: `tags/${release.tag_name}`
+                    });
+                  } catch (error) {
+                    console.log(`Tag ${release.tag_name} might not exist or already deleted`);
+                  }
+                } catch (error) {
+                  console.log(`Failed to delete release ${release.tag_name}: ${error.message}`);
+                }
+              }
+            }
+      - name: Create nightly release
+        id: create-release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const commitSha = context.sha.substring(0, 7);
+            const tagName = 'nightly';
+            const releaseNotes = `🌙 **Nightly Build**
+
+            **Build Information:**
+            - **Commit:** \`${context.sha}\`
+            - **Branch:** \`${context.ref.replace('refs/heads/', '')}\`
+            - **Build Time:** \`${new Date().toISOString()}\`
+            - **Workflow:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+
+            **Assets:**
+            - soluna-windows-amd64.exe
+            - soluna-macos-arm64
+
+            > ⚠️ **Note:** This is an automated nightly build. It may contain unstable features and bugs.
+            > 
+            > 📦 **Previous nightly releases are automatically removed to keep the repository clean.`;
+            
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tagName,
+              name: `Nightly Build (${timestamp})`,
+              body: releaseNotes,
+              prerelease: true,
+              make_latest: 'false'
+            });
+            
+            console.log(`Created release: ${data.html_url}`);
+            return data.id;
+      - name: Upload release assets
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const releaseId = ${{ steps.create-release.outputs.result }};
+            
+            const assetsDir = 'release-assets';
+            const files = fs.readdirSync(assetsDir);
+            
+            for (const file of files) {
+              const filePath = path.join(assetsDir, file);
+              const stats = fs.statSync(filePath);
+              
+              if (stats.isFile()) {
+                console.log(`Uploading ${file}...`);
+                
+                const content = fs.readFileSync(filePath);
+                
+                await github.rest.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: releaseId,
+                  name: file,
+                  data: content
+                });
+                
+                console.log(`✅ Uploaded ${file}`);
+              }
+            }
