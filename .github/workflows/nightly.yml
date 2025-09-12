@@ -12,10 +12,62 @@ on:
     - cron: '0 0 * * *'  # Runs every day at midnight UTC
 
 jobs:
+  check:
+    name: Determine Build Necessity
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Get the last nightly commit
+        id: last_nightly
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            const nightlyRelease = releases.data.find(release => release.tag_name.includes('nightly') || release.name.includes('Nightly'));
+            if (nightlyRelease) {
+              const tagName = nightlyRelease.tag_name;
+              const tag = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tagName}`
+              });
+              const commitSha = tag.data.object.sha;
+              return commitSha;
+            } else {
+              return null;
+            }
+      - name: Check the proceed condition
+        id: check
+        run: |
+          LAST_NIGHTLY_COMMIT="${{ steps.last_nightly.outputs.result }}"
+          CURRENT_COMMIT="${GITHUB_SHA}"
+          echo "Last nightly commit: $LAST_NIGHTLY_COMMIT"
+          echo "Current commit: $CURRENT_COMMIT"
+          if [ -z "$LAST_NIGHTLY_COMMIT" ]; then
+            echo "No previous nightly release found. Proceeding with build."
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          elif [ "$LAST_NIGHTLY_COMMIT" != "$CURRENT_COMMIT" ]; then
+            echo "New commits found since last nightly release. Proceeding with build."
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No new commits since last nightly release. Skipping build."
+            echo "proceed=false" >> $GITHUB_OUTPUT
+          fi
   build:
     name: Nightly Build on ${{ matrix.os }}
+    needs: check
+    if: needs.check.outputs.proceed == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
     steps:
@@ -58,12 +110,15 @@ jobs:
           luamake soluna
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             SOLUNA_BINARY="soluna.exe"
+            RENAME_BINARY="soluna-windows-amd64.exe"
           else
             SOLUNA_BINARY="soluna"
+            RENAME_BINARY="soluna-macos-arm64"
           fi
           SOLUNA_PATH=$(find bin -name $SOLUNA_BINARY | head -n 1)
-          echo "SOLUNA_PATH=$SOLUNA_PATH" >> $GITHUB_OUTPUT
-          echo "SOLUNA_BINARY=$SOLUNA_BINARY" >> $GITHUB_OUTPUT
+          cp "$SOLUNA_PATH" "bin/$RENAME_BINARY"
+          echo "SOLUNA_PATH=bin/$RENAME_BINARY" >> $GITHUB_OUTPUT
+          echo "SOLUNA_BINARY=$RENAME_BINARY" >> $GITHUB_OUTPUT
       - uses: actions/upload-artifact@v4
         name: Upload
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
@@ -74,7 +129,7 @@ jobs:
           overwrite: "true"
   release:
     name: Create Nightly Release
-    needs: build
+    needs: [check, build]
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     permissions:
@@ -141,8 +196,8 @@ jobs:
             - **Workflow:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
 
             **Assets:**
-            - soluna-Windows-soluna.exe
-            - soluna-macOS-soluna
+            - soluna-windows-amd64.exe
+            - soluna-macos-arm64
 
             > ⚠️ **Note:** This is an automated nightly build. It may contain unstable features and bugs.
             > 
