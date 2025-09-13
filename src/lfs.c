@@ -40,7 +40,8 @@ utf8_filename(lua_State *L, const wchar_t * winfilename, int wsz, char *utf8buff
 	sz = WideCharToMultiByte(CP_UTF8, 0, winfilename, wsz, utf8buffer, sz, NULL, NULL);
 	if (sz == 0)
 		return luaL_error(L, "convert to utf-8 filename fail");
-	return sz;
+	// not include end \0
+	return sz - 1;
 }
 
 #define DIR_METATABLE "SOLUNA_DIR"
@@ -55,7 +56,7 @@ windows_filename(lua_State *L, const char * utf8filename, int usz, wchar_t * win
 	wsz = MultiByteToWideChar(CP_UTF8, 0, utf8filename, usz, winbuffer, wsz);
 	if (wsz == 0)
 		return luaL_error(L, "convert to windows utf-16 filename fail");
-	return wsz;
+	return wsz - 1;
 }
 
 static void
@@ -95,7 +96,6 @@ static void
 push_filename(lua_State *L, WIN32_FIND_DATAW *data) {
 	char firstname[LONGPATH_MAX];
 	int ulen = utf8_filename(L, data->cFileName, -1, firstname, LONGPATH_MAX);
-
 	lua_pushlstring(L, firstname, ulen);
 }
 
