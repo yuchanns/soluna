@@ -102,19 +102,28 @@ jobs:
       - uses: yuchanns/actions-luamake@v1.0.0
         with:
           luamake-version: "5bedfce66f075a9f68b1475747738b81b3b41c25"
-      - name: Build
-        shell: bash
-        id: build
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        id: build-windows
         run: |
           luamake precompile
           luamake soluna
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            SOLUNA_BINARY="soluna.exe"
-            RENAME_BINARY="soluna-windows-amd64.exe"
-          else
-            SOLUNA_BINARY="soluna"
-            RENAME_BINARY="soluna-macos-arm64"
-          fi
+          $SOLUNA_BINARY = "soluna.exe"
+          $RENAME_BINARY = "soluna-windows-amd64.exe"
+          $SOLUNA_PATH = (Get-ChildItem -Path "bin" -Name $SOLUNA_BINARY -Recurse | Select-Object -First 1)
+          Copy-Item "bin\$SOLUNA_PATH" "bin\$RENAME_BINARY"
+          echo "SOLUNA_PATH=bin/$RENAME_BINARY" >> $env:GITHUB_OUTPUT
+          echo "SOLUNA_BINARY=$RENAME_BINARY" >> $env:GITHUB_OUTPUT
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        id: build-unix
+        run: |
+          luamake precompile
+          luamake soluna
+          SOLUNA_BINARY="soluna"
+          RENAME_BINARY="soluna-macos-arm64"
           SOLUNA_PATH=$(find bin -name $SOLUNA_BINARY | head -n 1)
           cp "$SOLUNA_PATH" "bin/$RENAME_BINARY"
           echo "SOLUNA_PATH=bin/$RENAME_BINARY" >> $GITHUB_OUTPUT
@@ -123,9 +132,9 @@ jobs:
         name: Upload
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         with:
-          name: "soluna-${{ runner.os }}-${{ steps.build.outputs.SOLUNA_BINARY }}"
+          name: "soluna-${{ runner.os }}-${{ runner.os == 'Windows' && steps.build-windows.outputs.SOLUNA_BINARY || steps.build-unix.outputs.SOLUNA_BINARY }}"
           if-no-files-found: "error"
-          path: "${{ steps.build.outputs.SOLUNA_PATH }}"
+          path: "${{ runner.os == 'Windows' && steps.build-windows.outputs.SOLUNA_PATH || steps.build-unix.outputs.SOLUNA_PATH }}"
           overwrite: "true"
   release:
     name: Create Nightly Release
