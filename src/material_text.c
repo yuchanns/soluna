@@ -148,6 +148,9 @@ lmateraial_text_draw(lua_State *L) {
 static void
 init_pipeline(struct material_text *m) {
 	sg_shader shd = sg_make_shader(texquad_shader_desc(sg_query_backend()));
+  if (sg_query_shader_state(shd) != SG_RESOURCESTATE_VALID) {
+    fprintf(stderr, "failed to create shader for text material\n");
+  }
 
 	m->pip = sg_make_pipeline(&(sg_pipeline_desc) {
 		.layout = {
@@ -170,6 +173,9 @@ init_pipeline(struct material_text *m) {
 		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .label = "text-pipeline"
     });
+  if (sg_query_pipeline_state(m->pip) != SG_RESOURCESTATE_VALID) {
+    fprintf(stderr, "Failed to create pipeline for text material!\n");
+  }
 }
 
 static int

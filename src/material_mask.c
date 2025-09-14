@@ -109,6 +109,9 @@ lmaterial_mask_draw(lua_State *L) {
 static void
 init_pipeline(struct material_mask *p) {
 	sg_shader shd = sg_make_shader(maskquad_shader_desc(sg_query_backend()));
+  if (sg_query_shader_state(shd) != SG_RESOURCESTATE_VALID) {
+    fprintf(stderr, "Failed to create shader for mask material!\n");
+  }
 
 	p->pip = sg_make_pipeline(&(sg_pipeline_desc) {
 		.layout = {
@@ -132,6 +135,9 @@ init_pipeline(struct material_mask *p) {
 		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .label = "mask-pipeline"
     });
+  if (sg_query_pipeline_state(p->pip) != SG_RESOURCESTATE_VALID) {
+    fprintf(stderr, "Failed to create pipeline for mask material!\n");
+  }
 }
 
 static int
