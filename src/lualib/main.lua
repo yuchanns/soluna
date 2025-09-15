@@ -124,8 +124,10 @@ local function start(config)
 			if v then
 				dispatch_appmsg(v)
 			end
+			soluna_app.context_release()
 			send_message("frame", count)
 			frame_barrier:wait()
+			soluna_app.context_acquire()
 		end,
 		event = function(ev)
 			send_message(unpackevent(ev))

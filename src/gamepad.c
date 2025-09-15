@@ -182,6 +182,70 @@ gamepad_getstate(int index, struct gamepad_state *state) {
     return 0;
 }
 
+#elif defined(__linux__)
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <linux/joystick.h>
+#include <sys/ioctl.h>
+
+static int
+gamepad_getstate(int index, struct gamepad_state *state) {
+    char device_path[32];
+    snprintf(device_path, sizeof(device_path), "/dev/input/js%d", index);
+
+    int fd = open(device_path, O_RDONLY | O_NONBLOCK);
+    if (fd < 0) {
+        return 1;
+    }
+
+    static struct {
+        uint16_t buttons;
+        uint8_t lt, rt;
+        int16_t ls_x, ls_y, rs_x, rs_y;
+        uint32_t packet;
+    } cache = {0};
+
+    struct js_event event;
+
+    while (read(fd, &event, sizeof(event)) == sizeof(event)) {
+        cache.packet++;
+
+        if (event.type & JS_EVENT_BUTTON) {
+            if (event.number < 16) {
+                if (event.value) {
+                    cache.buttons |= (1 << event.number);
+                } else {
+                    cache.buttons &= ~(1 << event.number);
+                }
+            }
+        } else if (event.type & JS_EVENT_AXIS) {
+            int16_t value = event.value;
+            switch (event.number) {
+                case 0: cache.ls_x = value; break;
+                case 1: cache.ls_y = -value; break;
+                case 2: cache.lt = (value + 32768) >> 8; break;
+                case 3: cache.rs_x = value; break;
+                case 4: cache.rs_y = -value; break;
+                case 5: cache.rt = (value + 32768) >> 8; break;
+            }
+        }
+    }
+
+    close(fd);
+
+    state->packet = cache.packet;
+    state->buttons = cache.buttons;
+    state->lt = cache.lt;
+    state->rt = cache.rt;
+    state->ls_x = cache.ls_x;
+    state->ls_y = cache.ls_y;
+    state->rs_x = cache.rs_x;
+    state->rs_y = cache.rs_y;
+
+    return 0;
+}
+
 #else
 
 // todo : linux and mac support

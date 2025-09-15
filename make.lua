@@ -62,6 +62,9 @@ lm:conf({
       lm.os ~= "windows" and "fontconfig",
     },
   },
+  defines = {
+    -- "SOKOL_DEBUG",
+  }
 })
 
 lm:import "clibs/lua/make.lua"

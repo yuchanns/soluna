@@ -148,6 +148,9 @@ lmateraial_text_draw(lua_State *L) {
 static void
 init_pipeline(struct material_text *m) {
 	sg_shader shd = sg_make_shader(texquad_shader_desc(sg_query_backend()));
+  if (sg_query_shader_state(shd) != SG_RESOURCESTATE_VALID) {
+    fprintf(stderr, "failed to create shader for text material\n");
+  }
 
 	m->pip = sg_make_pipeline(&(sg_pipeline_desc) {
 		.layout = {
@@ -170,6 +173,9 @@ init_pipeline(struct material_text *m) {
 		.primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
         .label = "text-pipeline"
     });
+  if (sg_query_pipeline_state(m->pip) != SG_RESOURCESTATE_VALID) {
+    fprintf(stderr, "Failed to create pipeline for text material!\n");
+  }
 }
 
 static int
@@ -188,11 +194,12 @@ lnew_material_text_normal(lua_State *L) {
 	m->font = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
-	m->fs_uniform = (fs_params_t) {
-		.edge_mask = font_manager_sdf_mask(m->font),
-		.dist_multiplier = 1.0f,
-		.color= 0xff000000,
-	};
+  fs_params_t temp = {
+      .edge_mask = font_manager_sdf_mask(m->font),
+      .dist_multiplier = 1.0f,
+      .color = 0xff000000,
+  };
+  memcpy(&m->fs_uniform, &temp, sizeof(fs_params_t));
 
 	if (luaL_newmetatable(L, "SOLUNA_MATERIAL_TEXT")) {
 		luaL_Reg l[] = {

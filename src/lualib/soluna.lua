@@ -49,7 +49,7 @@ function soluna.gamedir(name)
 		dir = dir .. "\\" .. name
 		lfs.mkdir(dir)
 		return dir .. "\\"
-	elseif soluna.platform == "macos" then
+	elseif soluna.platform == "macos" or soluna.platform == "linux" then
     local lfs = require "soluna.lfs"
 		local dir = lfs.personaldir() .. "/.local/share"
 		lfs.mkdir(dir)

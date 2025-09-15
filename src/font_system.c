@@ -178,6 +178,94 @@ lttfdata(lua_State *L) {
 	return 1;
 }
 
+#elif defined(__linux__)
+
+#include <fontconfig/fontconfig.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+static void *
+free_data(void *ud, void *ptr, size_t oszie, size_t nsize) {
+	free(ptr);
+	return NULL;
+}
+
+static int
+lttfdata(lua_State *L) {
+	const char *familyName = luaL_checkstring(L, 1);
+
+	if (!FcInit()) {
+		return luaL_error(L, "Failed to initialize fontconfig");
+	}
+
+	FcPattern *pattern = FcNameParse((const FcChar8*)familyName);
+	if (!pattern) {
+		FcFini();
+		return luaL_error(L, "Failed to parse font name: %s", familyName);
+	}
+
+	FcConfigSubstitute(NULL, pattern, FcMatchPattern);
+	FcDefaultSubstitute(pattern);
+
+	FcResult result;
+	FcPattern *match = FcFontMatch(NULL, pattern, &result);
+	FcPatternDestroy(pattern);
+
+	if (!match || result != FcResultMatch) {
+		if (match) FcPatternDestroy(match);
+		FcFini();
+		return luaL_error(L, "Font not found: %s", familyName);
+	}
+
+	FcChar8 *filename;
+	if (FcPatternGetString(match, FC_FILE, 0, &filename) != FcResultMatch) {
+		FcPatternDestroy(match);
+		FcFini();
+		return luaL_error(L, "Failed to get font file path for: %s", familyName);
+	}
+
+	FILE *file = fopen((const char*)filename, "rb");
+	if (!file) {
+		FcPatternDestroy(match);
+		FcFini();
+		return luaL_error(L, "Failed to open font file: %s", filename);
+	}
+
+	fseek(file, 0, SEEK_END);
+	long fileSize = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	if (fileSize <= 0) {
+		fclose(file);
+		FcPatternDestroy(match);
+		FcFini();
+		return luaL_error(L, "Invalid font file size: %s", filename);
+	}
+
+	char *buf = malloc(fileSize + 1);
+	if (!buf) {
+		fclose(file);
+		FcPatternDestroy(match);
+		FcFini();
+		return luaL_error(L, "Out of memory : sysfont");
+	}
+
+	size_t bytesRead = fread(buf, 1, fileSize, file);
+	fclose(file);
+	FcPatternDestroy(match);
+	FcFini();
+
+	if (bytesRead != fileSize) {
+		free(buf);
+		return luaL_error(L, "Failed to read font file: %s", filename);
+	}
+
+	buf[fileSize] = 0;
+
+	lua_pushexternalstring(L, buf, fileSize, free_data, NULL);
+	return 1;
+}
+
 #else
 
 static int
