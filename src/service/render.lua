@@ -234,6 +234,7 @@ function S.load_sprites(name)
 end
 
 function S.init(arg)
+  soluna_app.context_acquire()
 	font.init()
 
 	local texture_size = setting.texture_size
@@ -363,6 +364,7 @@ function S.init(arg)
 		uniform = STATE.uniform,
 		sr_buffer = STATE.srbuffer_mem,
 	}
+  soluna_app.context_release()
 end
 
 function S.resize(w, h)
