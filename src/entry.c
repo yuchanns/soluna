@@ -196,8 +196,8 @@ int
 luaopen_soluna_app(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
-    { "context_acquire", lcontext_acquire },
-    { "context_release", lcontext_release },
+		{ "context_acquire", lcontext_acquire },
+		{ "context_release", lcontext_release },
 		{ "mqueue", lmqueue },
 		{ "unpackmessage", lmessage_unpack },
 		{ "sendmessage", lmessage_send },

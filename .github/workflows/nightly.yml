@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -102,11 +102,20 @@ jobs:
       - uses: yuchanns/actions-luamake@v1.0.0
         with:
           luamake-version: "5bedfce66f075a9f68b1475747738b81b3b41c25"
+      - name: Install Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential \
+            libgl1-mesa-dev libglu1-mesa-dev libx11-dev \
+            libxrandr-dev libxi-dev libxxf86vm-dev libxcursor-dev \
+            libasound2-dev libfontconfig1-dev
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         id: build-windows
         run: |
+          luamake clean
           luamake precompile
           luamake soluna
           $SOLUNA_BINARY = "soluna.exe"
@@ -122,8 +131,15 @@ jobs:
         run: |
           luamake precompile
           luamake soluna
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            RENAME_BINARY="soluna-linux-amd64"
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            RENAME_BINARY="soluna-macos-arm64"
+          else
+            echo "Unsupported OS: $RUNNER_OS"
+            exit 1
+          fi
           SOLUNA_BINARY="soluna"
-          RENAME_BINARY="soluna-macos-arm64"
           SOLUNA_PATH=$(find bin -name $SOLUNA_BINARY | head -n 1)
           cp "$SOLUNA_PATH" "bin/$RENAME_BINARY"
           echo "SOLUNA_PATH=bin/$RENAME_BINARY" >> $GITHUB_OUTPUT

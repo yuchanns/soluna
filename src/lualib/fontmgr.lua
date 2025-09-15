@@ -40,8 +40,8 @@ local ids = {
 			UNICODE_2_0_FULL = 4,
 		},
 		lang = {
-      default = 0,
-      ENGLISH = 0,
+			default = 0,
+			ENGLISH = 0,
 			CHINESE = 1,
 			FRENCH = 2,
 			GERMAN = 3,
@@ -52,7 +52,7 @@ local ids = {
 			DUTCH = 8,
 			SWEDISH = 9,
 			RUSSIAN = 10,
-    },
+		},
 	},
 	MICROSOFT = {
 		id = 3,
