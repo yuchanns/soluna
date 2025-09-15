@@ -140,12 +140,21 @@ function S.app(settings)
 	end
 end
 
+local update_image
+local function delay_update_image(imgmem)
+	function update_image()
+		STATE.textures[1]:update(imgmem)
+		update_image = nil
+	end
+end
+
 local function frame(count)
 	local batch_size = setting.batch_size
 
 	-- todo: do not wait all batch commits
 	local batch_n = #batch
 	batch.wait()
+	if update_image then update_image() end
 	STATE.drawmgr:reset()
 	STATE.bindings:voffset(0, 0)
 	STATE.quad_bindings:voffset(0, 0)
@@ -218,8 +227,7 @@ function S.load_sprites(name)
 		local src = image.canvas(v.data, v.w, v.h, v.stride)
 		image.blit(canvas, src, v.x, v.y)
 	end
-	
-	STATE.textures[1]:update(imgmem)
+	delay_update_image(imgmem)
 end
 
 function S.init(arg)
