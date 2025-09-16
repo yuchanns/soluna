@@ -1,5 +1,4 @@
 local lm = require "luamake"
-local fs = require "bee.filesystem"
 
 local plat = (function ()
     if lm.os == "windows" then
@@ -67,13 +66,12 @@ lm:conf({
   }
 })
 
-for path in fs.pairs(lm.basedir .. "/clibs") do
-  if fs.exists(path / "make.lua") then
-    local name = path:stem():string()
-    local makefile = ("%s/clibs/%s/make.lua"):format(lm.basedir, name)
-    lm:import(makefile)
-  end
-end
+lm:import "clibs/lua/make.lua"
+lm:import "clibs/yoga/make.lua"
+lm:import "clibs/datalist/make.lua"
+lm:import "clibs/sokol/make.lua"
+lm:import "clibs/ltask/make.lua"
+lm:import "clibs/soluna/make.lua"
 
 lm:exe "soluna" {
   deps = {

@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -94,12 +94,16 @@ jobs:
           else  # Linux
             TARGET_DIR="/usr/local/bin"
             SHDC_BINARY="sokol-shdc"
-            FIND_PATH="bin/linux"
+            if [[ "$RUNNER_ARCH" == "ARM64" ]]; then
+              FIND_PATH="bin/linux_arm64"
+            else
+              FIND_PATH="bin/linux"
+            fi
           fi
           echo "Setting up sokol-tools from sokol-tools-bin/$FIND_PATH"
           find sokol-tools-bin/$FIND_PATH -name $SHDC_BINARY -exec cp {} $TARGET_DIR \;
           $SHDC_BINARY -h
-      - uses: yuchanns/actions-luamake@v1.0.0
+      - uses: yuchanns/actions-luamake@v1
         with:
           luamake-version: "5bedfce66f075a9f68b1475747738b81b3b41c25"
       - name: Install Dependencies (Linux)
@@ -132,7 +136,11 @@ jobs:
           luamake precompile
           luamake soluna
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            RENAME_BINARY="soluna-linux-amd64"
+            if [[ "$RUNNER_ARCH" == "ARM64" ]]; then
+              RENAME_BINARY="soluna-linux-arm64"
+            else
+              RENAME_BINARY="soluna-linux-amd64"
+            fi
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
             RENAME_BINARY="soluna-macos-arm64"
           else
@@ -219,10 +227,6 @@ jobs:
             - **Branch:** \`${context.ref.replace('refs/heads/', '')}\`
             - **Build Time:** \`${new Date().toISOString()}\`
             - **Workflow:** [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
-
-            **Assets:**
-            - soluna-windows-amd64.exe
-            - soluna-macos-arm64
 
             > ⚠️ **Note:** This is an automated nightly build. It may contain unstable features and bugs.
             > 
