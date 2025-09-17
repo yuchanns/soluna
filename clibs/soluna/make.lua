@@ -31,7 +31,8 @@ lm:source_set "soluna_src" {
     links = {
       "pthread",
       "dl",
-      "GL",
+      "EGL",
+      "GLESv2",
       "X11",
       "Xrandr",
       "Xi",

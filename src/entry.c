@@ -10,7 +10,7 @@
 
 #elif defined(__linux__)
 
-#define SOKOL_GLCORE
+#define SOKOL_GLES3
 
 #else
 
@@ -179,7 +179,7 @@ lmqueue(lua_State *L) {
 static int
 lcontext_acquire(lua_State *L) {
 #if defined(__linux__)
-  _sapp_glx_make_current();
+  eglMakeCurrent(_sapp.egl.display, _sapp.egl.surface, _sapp.egl.surface, _sapp.egl.context);
 #endif
   return 0;
 }
@@ -187,7 +187,7 @@ lcontext_acquire(lua_State *L) {
 static int
 lcontext_release(lua_State *L) {
 #if defined(__linux__)
-  _sapp.glx.MakeCurrent(_sapp.x11.display, None, NULL);
+  eglMakeCurrent(_sapp.egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 #endif
   return 0;
 }

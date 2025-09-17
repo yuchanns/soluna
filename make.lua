@@ -62,7 +62,7 @@ lm:conf({
     },
   },
   defines = {
-    -- "SOKOL_DEBUG",
+    "SOKOL_DEBUG",
   }
 })
 
