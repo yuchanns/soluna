@@ -221,15 +221,20 @@ local function import(fontdata)
 					local fname, sname = ttf.namestring(fontdata, index, obj.id, encoding_id, lang_id)
 					if fname then
 						fname = utf16toutf8(fname)
-						sname = utf16toutf8(sname)
-						local fullname = fname .. " " .. sname
+						local fullname = fname
+						fname = string.lower(fname)
+						if sname then
+						  sname = utf16toutf8(sname)
+						  fullname = fullname .. " " .. sname
+						  sname = string.lower(sname)
+						end
 						if not cache[fullname] then
 							cache[fullname] = true
 							table.insert(namelist, {
 								fontdata = fontdata,
 								index = index,
-								family = string.lower(fname),
-								sfamily = string.lower(sname),	-- sub family name
+								family = fname,
+								sfamily = sname,	-- sub family name
 								name = string.lower(fullname),
 							})
 						end
