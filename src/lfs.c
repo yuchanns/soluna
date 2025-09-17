@@ -151,7 +151,7 @@ ldir(lua_State *L) {
 	size_t sz;
 	const char * pathname = luaL_checklstring(L, 1, &sz);
 	wchar_t winname[LONGPATH_MAX-3];
-	int winsz = windows_filename(L, pathname, sz+1, winname, LONGPATH_MAX-3);
+	int winsz = windows_filename(L, pathname, sz, winname, LONGPATH_MAX-3);
 	winname[winsz] = '\\';
 	winname[winsz+1] = '*';
 	winname[winsz+2] = 0;
