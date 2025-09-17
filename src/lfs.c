@@ -197,7 +197,7 @@ lpersonaldir(lua_State *L) {
 	if (SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, document) == S_OK) {
 		char utf8path[LONGPATH_MAX];
 		int sz = utf8_filename(L, document, -1, utf8path, LONGPATH_MAX);
-		lua_pushlstring(L, utf8path, sz-1);
+		lua_pushlstring(L, utf8path, sz);
 		return 1;
 	} else {
 		return error_return(L);
