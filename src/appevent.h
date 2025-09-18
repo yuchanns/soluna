@@ -67,7 +67,7 @@ key_message(struct event_message *em, const sapp_event *ev) {
 		break;
 	default:
 		em->typestr = "key";
-		em->p1 = ev->key_code;
+		em->p1 = (int)ev->key_code;
 		em->p2 = ev->type == SAPP_EVENTTYPE_KEY_DOWN;
 		break;
 	}
