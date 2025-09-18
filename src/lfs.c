@@ -43,7 +43,8 @@ utf8_filename(lua_State *L, const wchar_t * winfilename, int wsz, char *utf8buff
 		return luaL_error(L, "convert to utf-8 filename fail");
 	if (wsz < 0)	// not include end \0
 		return result - 1;
-	assert(result < sz);
+	if (result >= sz)
+		return luaL_error(L, "convert to utf-8 filename : buffer overflow");
 	utf8buffer[result] = 0;
 	return result;
 }
@@ -62,7 +63,8 @@ windows_filename(lua_State *L, const char * utf8filename, int usz, wchar_t * win
 		return luaL_error(L, "convert to windows utf-16 filename fail");
 	if (result < 0)
 		return result - 1;
-	assert(result < wsz);
+	if (result >= wsz)
+		return luaL_error(L, "convert to windows utf-16 filename : buffer overflow");
 	winbuffer[result] = 0;
 	return result;
 }
