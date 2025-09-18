@@ -1,5 +1,6 @@
 #include <lua.h>
 #include <lauxlib.h>
+#include <assert.h>
 
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 
@@ -37,12 +38,14 @@
 
 static int
 utf8_filename(lua_State *L, const wchar_t * winfilename, int wsz, char *utf8buffer, int sz) {
-	sz = WideCharToMultiByte(CP_UTF8, 0, winfilename, wsz, utf8buffer, sz, NULL, NULL);
-	if (sz == 0)
+	int result = WideCharToMultiByte(CP_UTF8, 0, winfilename, wsz, utf8buffer, sz, NULL, NULL);
+	if (result == 0)
 		return luaL_error(L, "convert to utf-8 filename fail");
 	if (wsz < 0)	// not include end \0
-		return sz - 1;
-	return sz;
+		return result - 1;
+	assert(result < sz);
+	utf8buffer[result] = 0;
+	return result;
 }
 
 #define DIR_METATABLE "SOLUNA_DIR"
@@ -54,12 +57,14 @@ struct dir_data {
 
 static int
 windows_filename(lua_State *L, const char * utf8filename, int usz, wchar_t * winbuffer, int wsz) {
-	wsz = MultiByteToWideChar(CP_UTF8, 0, utf8filename, usz, winbuffer, wsz);
-	if (wsz == 0)
+	int result = MultiByteToWideChar(CP_UTF8, 0, utf8filename, usz, winbuffer, wsz);
+	if (result == 0)
 		return luaL_error(L, "convert to windows utf-16 filename fail");
-	if (usz < 0)
-		return wsz - 1;
-	return wsz;
+	if (result < 0)
+		return result - 1;
+	assert(result < wsz);
+	winbuffer[result] = 0;
+	return result;
 }
 
 static void
@@ -222,7 +227,7 @@ lchdir(lua_State *L) {
 	size_t sz;
 	const char * utf8path = luaL_checklstring(L, 1, &sz);
 	wchar_t path[LONGPATH_MAX];
-	windows_filename(L, utf8path, sz+1, path, LONGPATH_MAX);
+	windows_filename(L, utf8path, sz, path, LONGPATH_MAX);
 	if (SetCurrentDirectoryW(path) == 0) {
 		return error_return(L);
 	}
@@ -346,7 +351,9 @@ file_info (lua_State *L) {
 	int i;
 	const char * utf8path = luaL_checklstring(L, 1, &sz);
 	wchar_t file[LONGPATH_MAX];
-	windows_filename(L, utf8path, sz+1, file, LONGPATH_MAX);
+	windows_filename(L, utf8path, sz, file, LONGPATH_MAX);
+	printf("UTF8 %s\n", utf8path);
+	wprintf(L"%s\n", file);
 
 	if (STAT_FUNC(file,	&info))	{
 			lua_pushnil(L);
@@ -386,7 +393,7 @@ lrealpath(lua_State *L) {
 	const char * pathname = luaL_checklstring(L, 1, &sz);
 	wchar_t winname[LONGPATH_MAX];
 	wchar_t fullname[LONGPATH_MAX];
-	windows_filename(L, pathname, sz+1, winname, LONGPATH_MAX);
+	windows_filename(L, pathname, sz, winname, LONGPATH_MAX);
 	DWORD r = GetFullPathNameW(winname, LONGPATH_MAX, fullname, NULL);
 	if (r == 0) {
 		return error_return(L);
