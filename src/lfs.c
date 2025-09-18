@@ -352,8 +352,6 @@ file_info (lua_State *L) {
 	const char * utf8path = luaL_checklstring(L, 1, &sz);
 	wchar_t file[LONGPATH_MAX];
 	windows_filename(L, utf8path, sz, file, LONGPATH_MAX);
-	printf("UTF8 %s\n", utf8path);
-	wprintf(L"%s\n", file);
 
 	if (STAT_FUNC(file,	&info))	{
 			lua_pushnil(L);
