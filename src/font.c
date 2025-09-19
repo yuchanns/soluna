@@ -105,6 +105,31 @@ limport_icon(lua_State *L) {
 	return 0;
 }
 
+static int
+lsize(lua_State *L) {
+	struct font_manager *F = getF(L);
+	int font_id = luaL_checkinteger(L, 1);
+	if (font_id <= 0) {
+		return luaL_error(L, "Invalid font_id %d", font_id);
+	}
+	int size = luaL_checkinteger(L, 2);
+	int ascent, descent, lineGap;
+	font_manager_fontheight(F, font_id, size, &ascent, &descent, &lineGap);
+	if (!lua_istable(L, 3)) {
+		lua_settop(L, 2);
+		lua_createtable(L, 0, 3);
+	} else {
+		lua_settop(L, 3);
+	}
+	lua_pushinteger(L, ascent);
+	lua_setfield(L, 3, "ascent");
+	lua_pushinteger(L, descent);
+	lua_setfield(L, 3, "descent");
+	lua_pushinteger(L, lineGap);
+	lua_setfield(L, 3, "lineGap");
+	return 1;
+}
+
 int
 luaopen_font(lua_State *L) {
 	luaL_checkversion(L);
@@ -115,6 +140,7 @@ luaopen_font(lua_State *L) {
 		{ "touch",				ltouch },	// for debug
 		{ "import",				limport },
 		{ "name",				lname },
+		{ "size",				lsize },
 		{ "submit",				lsubmit },
 		{ "cobj",				lcobj },
 		{ "texture_size",		NULL },
