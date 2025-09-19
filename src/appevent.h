@@ -67,7 +67,8 @@ key_message(struct event_message *em, const sapp_event *ev) {
 		break;
 	default:
 		em->typestr = "key";
-		em->p1 = ev->type;
+		em->p1 = (int)ev->key_code;
+		em->p2 = ev->type == SAPP_EVENTTYPE_KEY_DOWN;
 		break;
 	}
 }
@@ -87,6 +88,8 @@ app_event_unpack(struct event_message *em, const sapp_event* ev) {
 		window_message(em, ev);
 		break;
 	case SAPP_EVENTTYPE_CHAR:
+	case SAPP_EVENTTYPE_KEY_DOWN:
+	case SAPP_EVENTTYPE_KEY_UP:
 		key_message(em, ev);
 		break;
 	default:
