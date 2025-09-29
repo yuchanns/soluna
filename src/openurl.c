@@ -15,11 +15,41 @@ open_url(lua_State *L, const char *url) {
 	ShellExecuteW(NULL, L"open", (WCHAR *)buf, NULL, NULL, SW_SHOWNORMAL);
 }
 
+#elif defined(__APPLE__) || defined(__linux__)
+
+#include <unistd.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void
+open_url(lua_State *L, const char *url) {
+  pid_t pid = fork();
+  if (pid < 0) {
+    luaL_error(L, "fork() failed");
+  } else if (pid == 0) {
+    // child
+#if defined(__APPLE__)
+    execl("/usr/bin/open", "open", url, (char *)NULL);
+#else
+    execl("/usr/bin/xdg-open", "xdg-open", url, (char *)NULL);
+#endif
+    // if execl return, it's error
+    _exit(127);
+  } else {
+    // parent
+    int status;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+      luaL_error(L, "failed to open url: %s", url);
+    }
+  }
+}
+
 #else
 
 static void
 open_url(lua_State *L, const char *url) {
-// todo : support mac/linux
 }
 
 #endif
