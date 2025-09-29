@@ -29,6 +29,7 @@ int luaopen_localfs(lua_State *L);
 int luaopen_soluna_event(lua_State *L);
 int luaopen_image_sdf(lua_State *L);
 int luaopen_layout_yoga(lua_State *L);
+int luaopen_url(lua_State *L);
 
 void soluna_embed(lua_State* L) {
     static const luaL_Reg modules[] = {
@@ -59,6 +60,7 @@ void soluna_embed(lua_State* L) {
 		{ "soluna.event", luaopen_soluna_event },
 		{ "soluna.image.sdf", luaopen_image_sdf },
 		{ "soluna.layout.yoga", luaopen_layout_yoga },
+		{ "soluna.url", luaopen_url },
 //		{ "luaforward", luaopen_luaforward },
 		{ NULL, NULL },
     };
