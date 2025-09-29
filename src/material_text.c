@@ -555,7 +555,8 @@ ltext(lua_State *L) {
 		}
 	}
 	lua_pushexternalstring(L, buffer, n * sizeof(struct text_primitive), free_primitive, NULL);
-	return 1;
+	lua_pushinteger(L, height);
+	return 2;
 }
 
 static uint32_t
