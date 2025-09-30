@@ -9,6 +9,7 @@ CC?=gcc
 LD=$(CC)
 LUA_EXE=$(BUILD)/lua.exe
 SHDC=sokol-shdc.exe
+VERSION=$(shell git rev-parse HEAD)
 
 #for msvc
 ifeq ($(CC),cl)
@@ -101,6 +102,9 @@ $(BUILD)/%.dl.h : src/data/%.dl
 
 $(BUILD)/soluna_embedlua.o : src/embedlua.c $(LTASK_LUACODE) $(DATALIST_CODE)
 	$(COMPILE_C) -I$(BUILD) $(LUAINC)
+
+$(BUILD)/soluna_entry.o : src/entry.c src/version.h
+	$(COMPILE_C) $(LUAINC) $(3RDINC) -DSOLUNA_HASH_VERSION=\"$(VERSION)\"
 
 $(BUILD)/soluna_%.o : src/%.c
 	$(COMPILE_C) $(LUAINC) $(3RDINC) $(SHADERINC) $(YOGAINC)
