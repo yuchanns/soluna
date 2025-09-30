@@ -2,7 +2,7 @@ local ltask = require "ltask"
 local app = require "soluna.app"
 local mqueue = require "ltask.mqueue"
 
-global require, error
+global require, error, string
 
 local soluna = {
 	platform = app.platform
@@ -68,5 +68,12 @@ function soluna.load_sprites(filename)
 	ltask.call(render, "load_sprites", filename)
 	return sprites
 end
+
+local function version()
+	local api, hash = app.version()
+	return string.format("%03x", api) .. hash:sub(1, 7)
+end
+
+soluna.version = version()
 
 return soluna

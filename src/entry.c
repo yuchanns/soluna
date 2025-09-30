@@ -22,6 +22,7 @@
 #include <lauxlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "version.h"
 
 #define FRAME_CALLBACK 1
 #define CLEANUP_CALLBACK 2
@@ -192,6 +193,13 @@ lcontext_release(lua_State *L) {
   return 0;
 }
 
+static int
+lversion(lua_State *L) {
+	lua_pushinteger(L, SOLUNA_API_VERSION);
+	lua_pushstring(L, SOLUNA_HASH_VERSION);
+	return 2;
+}
+
 int
 luaopen_soluna_app(lua_State *L) {
 	luaL_checkversion(L);
@@ -206,6 +214,7 @@ luaopen_soluna_app(lua_State *L) {
 		{ "quit", lquit_signal },
 		{ "close_window", lclose_window },
 		{ "platform", NULL },
+		{ "version", lversion },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
