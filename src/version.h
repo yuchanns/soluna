@@ -2,6 +2,6 @@
 #define soluna_version_h
 
 #define SOLUNA_API_VERSION 1
-#define SOLUNA_HASH_VERSION "34cc9155595c0f8e21c2962ac16b064afa9f2eaf"
+#define SOLUNA_HASH_VERSION "28c09f1133cd99d0802c9e4d3bfbc95486c6b4df"
 
 #endif

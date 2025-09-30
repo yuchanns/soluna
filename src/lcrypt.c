@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #define PADDING_MODE_ISO7816_4 0
 #define PADDING_MODE_PKCS7 1
@@ -1040,7 +1039,7 @@ luaopen_skynet_crypt(lua_State *L) {
 	if (!init) {
 		// Don't need call srandom more than once.
 		init = 1 ;
-		srand((rand() << 8) ^ (time(NULL) << 16) ^ getpid());
+		srand((rand() << 8) ^ (time(NULL) << 16));
 	}
 	luaL_Reg l[] = {
 		{ "hashkey", lhashkey },
