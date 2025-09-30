@@ -1,10 +1,32 @@
 local lm = require "luamake"
+local subprocess = require "bee.subprocess"
 
 lm.rootdir = lm.basedir
+
+local ok, process, errMsg = pcall(subprocess.spawn, {
+  lm.os ~= "windows" and "git" or "C:\\Program Files\\Git\\cmd\\git.exe",
+  "rev-parse",
+  "HEAD",
+  stdout = true,
+})
+local commit
+if ok then
+  if errMsg then
+    print("Failed to start git process: " .. errMsg)
+  else
+    local output = process.stdout:read "a"
+    commit = output:match "^%s*(.-)%s*$"
+    process:wait()
+    print("Hash version: " .. commit)
+  end
+end
 
 lm:source_set "soluna_src" {
   sources = {
     "src/*.c",
+  },
+  defines = {
+    commit and string.format('SOLUNA_HASH_VERSION=\\"%s\\"', commit),
   },
   includes = {
     "build",
