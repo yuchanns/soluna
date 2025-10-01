@@ -332,8 +332,8 @@ limage_update(lua_State *L) {
 	if (buffer == NULL)
 		return luaL_error(L, "Need data");
 	sg_image_data data = {
-		.subimage[0][0].ptr = buffer,
-		.subimage[0][0].size = p->size,
+		.mip_levels[0].ptr = buffer,
+		.mip_levels[0].size = p->size,
 	};
 	sg_update_image(p->img, &data);
 	return 0;
@@ -525,6 +525,7 @@ lbuffer_size(lua_State *L) {
 }
 
 int lbindings_new(lua_State *L);
+int lview_new(lua_State *L);
 int luniform_new(lua_State *L);
 
 int
@@ -540,6 +541,7 @@ luaopen_render(lua_State *L) {
 		{ "srbuffer", lsrbuffer },
 		{ "buffer_size", lbuffer_size },
 		{ "bindings", lbindings_new },
+		{ "view", lview_new },
 		{ "uniform", luniform_new },
 		{ NULL, NULL },
 	};

@@ -33,7 +33,7 @@ void main() {
 @end
 
 @fs fs
-layout(binding=0) uniform texture2D tex;
+layout(binding=1) uniform texture2D tex;
 layout(binding=0) uniform sampler smp;
 
 layout(binding=1) uniform fs_params {

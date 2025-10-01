@@ -9,7 +9,7 @@ local quadmat = require "soluna.material.quad"
 local maskmat = require "soluna.material.mask"
 local soluna_app = require "soluna.app"
 
-global require, assert, pairs, pcall, ipairs
+global require, assert, pairs, pcall, ipairs, print
 
 local setting = require "soluna".settings()
 
@@ -96,7 +96,7 @@ local materials = {
 			STATE.material:submit(ptr, n)
 		end,
 		draw = function(ptr, n, tex)
-			STATE.bindings:image(0, STATE.textures[tex+1])
+			STATE.bindings:view(1, STATE.views[tex+1])
 			STATE.material:draw(ptr, n, tex)
 		end,
 	},
@@ -105,7 +105,7 @@ local materials = {
 			STATE.material_text:submit(ptr, n)
 		end,
 		draw = function(ptr, n)
-			STATE.bindings:image(0, STATE.font_texture)
+			STATE.bindings:view(1, STATE.views.font)
 			STATE.material_text:draw(ptr, n)
 		end,
 	},
@@ -122,7 +122,7 @@ local materials = {
 			STATE.material_mask:submit(ptr, n)
 		end,
 		draw = function(ptr, n, tex)
-			STATE.mask_bindings:image(0, STATE.textures[tex+1])
+			STATE.mask_bindings:view(1, STATE.views[tex+1])
 			STATE.material_mask:draw(ptr, n, tex)
 		end,
 	}
@@ -175,7 +175,7 @@ local function frame(count)
 	end
 	STATE.srbuffer:update(STATE.srbuffer_mem:ptr())
 	STATE.pass:begin()
-	font.submit(STATE.font_texture)
+		font.submit(STATE.font_texture)
 		for i = 1, draw_n do
 			local mat, ptr, n, tex = STATE.drawmgr(i)
 			local obj = materials[mat]
@@ -187,6 +187,9 @@ end
 
 function S.frame(count)
 	local ok , err = pcall(frame, count)
+	if not ok then
+		print("RENDER ERR", err)
+	end
 	render.submit()
 	for i = 1, #batch do
 		local ptr, size, token = batch.consume(i)
@@ -259,24 +262,31 @@ function S.init(arg)
 
 	-- todo: don't load texture here
 
+	local font_texture = render.image {
+		width = font.texture_size,
+		height = font.texture_size,
+		pixel_format = "R8",
+	}
+	local views = {
+		[1] = render.view { texture = img },
+		storage = render.view { storage = sr_buffer },
+		font = render.view { texture = font_texture },
+	}
+
 	STATE = {
 		pass = render.pass {
 			color0 = 0x4080c0,
 		},
 		default_sampler = render.sampler { label = "texquad-sampler" },
+		textures = { img } ,
+		font_texture = font_texture,
+		views = views,
 	}
 	local bindings = render.bindings()
 	bindings:vbuffer(0, inst_buffer)
-	bindings:sbuffer(0, sr_buffer)
-	bindings:image(0, img)
+	bindings:view(0, views.storage)
+	bindings:view(1, views[1])
 	bindings:sampler(0, STATE.default_sampler)
-	
-	STATE.textures = { img }
-	STATE.font_texture = render.image {
-		width = font.texture_size,
-		height = font.texture_size,
-		pixel_format = "R8",
-	}
 	
 	STATE.inst = assert(inst_buffer)
 	STATE.srbuffer = assert(sr_buffer)
@@ -294,8 +304,8 @@ function S.init(arg)
 
 		local quadbind = render.bindings()
 		quadbind:vbuffer(0, STATE.quad_inst)
-		quadbind:sbuffer(0, sr_buffer)
-		 		
+		quadbind:view(0, views.storage)
+
 		STATE.quad_bindings = quadbind
 	end
 	
@@ -310,8 +320,8 @@ function S.init(arg)
 		local maskbind = render.bindings()
 
 		maskbind:vbuffer(0, STATE.mask_inst)
-		maskbind:sbuffer(0, sr_buffer)
-		maskbind:image(0, img)
+		maskbind:view(0, views.storage)
+		maskbind:view(1, views[1])
 		maskbind:sampler(0, STATE.default_sampler)
 		 		
 		STATE.mask_bindings = maskbind
