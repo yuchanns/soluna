@@ -358,8 +358,18 @@ advance(struct block_context *ctx, int x) {
 	return 0;
 }
 
+struct position {
+	// input
+	int n;
+	// output
+	int x;
+	int y;
+	int w;
+	int h;
+};
+
 static inline int
-newline(struct block_context *ctx, struct text_primitive * prim, int n) {
+newline(struct block_context *ctx, struct text_primitive * prim, int n, struct position *pos) {
 	int from = ctx->line_prim;
 	ctx->line_prim = n;
 	int line_width = ctx->line_width;
@@ -374,8 +384,11 @@ newline(struct block_context *ctx, struct text_primitive * prim, int n) {
 		offx = (ctx->width - line_width) * 256;
 		break;
 	}
+	if (pos && pos->n <= 0 && pos->y == ctx->y) {
+		pos->x += offx / 256;
+	}
 	
-	if (offx > 0) {
+	if (prim != NULL && offx > 0) {
 		int i;
 		for (i=from;i<n;i++) {
 			prim[i].pos.x += offx;
@@ -433,9 +446,20 @@ parse_bracket(struct block_context *ctx, const char *str, int *icon) {
 	return skip_bracket(str);
 }
 
+static inline void
+advance_position(struct position *pos, struct block_context *ctx) {
+	if (pos) {
+		if (pos->n == 0) {
+			pos->x = ctx->x;
+			pos->y = ctx->y;
+		}
+		--pos->n;
+	}
+}
+
 // todo: support color
 static int
-ltext(lua_State *L) {
+ltext_(lua_State *L, struct position *pos) {
 	const char * str = luaL_checkstring(L, 1);
 	int count = count_string(str);
 	struct block_context ctx;
@@ -456,19 +480,31 @@ ltext(lua_State *L) {
 	ctx.line_prim = 0;
 	ctx.line_width = 0;
 	ctx.alignment = lua_tointeger(L, lua_upvalueindex(5));
+	int pos_n = 0;
+	if (pos) {
+		if (pos->n < 0) {
+			pos->n = 0;
+		}
+		pos_n = pos->n;
+	}
 	
-	char * buffer = (char *)malloc(count * sizeof(struct text_primitive)+1);
-	struct text_primitive * prim = (struct text_primitive *)buffer;
+	char * buffer = NULL;
+	struct text_primitive * prim = NULL;
+	if (pos == NULL) {
+		buffer = (char *)malloc(count * sizeof(struct text_primitive)+1);
+		prim = (struct text_primitive *)buffer;
+	}
 	int i;
 	int n = 0;
 	for (i=0;i<count;) {
 		uint32_t val = 0;
 		str = utf8_decode(str, &val);
 		if (val <= 32) {
+			advance_position(pos, &ctx);
 			if (val == '\n') {
 				if (ctx.x > ctx.line_width)
 					ctx.line_width = ctx.x;
-				if (newline(&ctx, prim, n))
+				if (newline(&ctx, prim, n, pos))
 					break;
 			} else {
 				struct font_glyph g, og;
@@ -476,7 +512,7 @@ ltext(lua_State *L) {
 					if (ctx.x > ctx.line_width)
 						ctx.line_width = ctx.x;
 					if (advance(&ctx, g.advance_x)) {
-						if (newline(&ctx, prim, n))
+						if (newline(&ctx, prim, n, pos))
 							break;
 						advance(&ctx, g.advance_x);
 					}
@@ -505,27 +541,34 @@ ltext(lua_State *L) {
 				dy = - ( ctx.ascent ) * 256;
 			}
 			
-			prim[n].pos.x = ctx.x * 256;
-			prim[n].pos.y = ctx.y * 256 + dy;
-			prim[n].pos.sr = 0;
-			prim[n].pos.sprite = -MATERIAL_TEXT_NORMAL;
+			if (prim) {
+				prim[n].pos.x = ctx.x * 256;
+				prim[n].pos.y = ctx.y * 256 + dy;
+				prim[n].pos.sr = 0;
+				prim[n].pos.sprite = -MATERIAL_TEXT_NORMAL;
+			}
 			
 			struct font_glyph g, og;
 			if (font_manager_glyph(mgr, font, codepoint, fontsize, &g, &og) == NULL) {
+				advance_position(pos, &ctx);
 				if (ctx.x > ctx.line_width)
 					ctx.line_width = ctx.x;
 				if (advance(&ctx, g.advance_x)) {
-					if (newline(&ctx, prim, n))
+					if (newline(&ctx, prim, n, pos))
 						break;
-					prim[n].pos.x = ctx.x * 256;
-					prim[n].pos.y = ctx.y * 256 + dy;
+					if (prim) {
+						prim[n].pos.x = ctx.x * 256;
+						prim[n].pos.y = ctx.y * 256 + dy;
+					}
 					advance(&ctx, g.advance_x);
 				}
-				prim[n].u.text.header.sprite = -1;
-				prim[n].u.text.codepoint = codepoint;
-				prim[n].u.text.font = font;
-				prim[n].u.text.size = fontsize;
-				prim[n].u.text.color = ctx.color;
+				if (prim) {
+					prim[n].u.text.header.sprite = -1;
+					prim[n].u.text.codepoint = codepoint;
+					prim[n].u.text.font = font;
+					prim[n].u.text.size = fontsize;
+					prim[n].u.text.color = ctx.color;
+				}
 				++n;
 			}
 			++i;
@@ -535,7 +578,13 @@ ltext(lua_State *L) {
 		ctx.line_width = ctx.x;
 	int height = ctx.y + ctx.decent - gap;
 	
-	newline(&ctx, prim, n);
+	if (pos && pos->n >= 0) {
+		pos_n -= pos->n;
+		pos->n = 0;
+		advance_position(pos, &ctx);
+	}
+	
+	newline(&ctx, prim, n, pos);
 	int offy;
 	int valign = ctx.alignment & VALIGNMENT_MASK;
 	switch (valign) {
@@ -549,14 +598,45 @@ ltext(lua_State *L) {
 		offy = 0;
 		break;
 	}
-	if (offy != 0) {
-		for (i=0;i<n;i++) {
-			prim[i].pos.y += offy;
+	if (prim != NULL) {
+		if (offy != 0) {
+			for (i=0;i<n;i++) {
+				prim[i].pos.y += offy;
+			}
 		}
+		lua_pushexternalstring(L, buffer, n * sizeof(struct text_primitive), free_primitive, NULL);
+		lua_pushinteger(L, height);
+		return 2;
+	} else {
+		pos->y += offy / 256 - gap - ctx.ascent;
+		pos->w = 2;
+		pos->h = ctx.ascent + ctx.decent - gap;
+		pos->n = pos_n;
+		return 0;
 	}
-	lua_pushexternalstring(L, buffer, n * sizeof(struct text_primitive), free_primitive, NULL);
-	lua_pushinteger(L, height);
-	return 2;
+}
+
+static int
+ltext(lua_State *L) {
+	return ltext_(L, NULL);
+}
+
+static int
+ltext_position(lua_State *L) {
+	struct position pos;
+	pos.n = luaL_checkinteger(L, 2);
+	pos.x = 0;
+	pos.y = 0;
+	pos.w = 0;
+	pos.h = 0;
+	lua_remove(L, 2);
+	ltext_(L, &pos);
+	lua_pushinteger(L, pos.x);
+	lua_pushinteger(L, pos.y);
+	lua_pushinteger(L, pos.w);
+	lua_pushinteger(L, pos.h);
+	lua_pushinteger(L, pos.n);
+	return 5;
 }
 
 static uint32_t
@@ -615,7 +695,13 @@ ltext_block(lua_State *L) {
 	lua_pushinteger(L, color);	// 4
 	lua_pushinteger(L, alignment);	// 5
 	lua_pushcclosure(L, ltext, 5);
-	return 1;
+	lua_pushlightuserdata(L, font_mgr);	// 1
+	lua_pushinteger(L, fontid);	// 2
+	lua_pushinteger(L, fontsize);	// 3
+	lua_pushinteger(L, color);	// 4
+	lua_pushinteger(L, alignment);	// 5
+	lua_pushcclosure(L, ltext_position, 5);
+	return 2;
 }
 
 int
