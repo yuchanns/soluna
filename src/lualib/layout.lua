@@ -56,6 +56,12 @@ function element:get()
 	return yoga.node_get(cobj)
 end
 
+function element:attribs()
+	local _yoga = self._document._yoga
+	local cobj = (_yoga and _yoga[self._id]) or error ("No id : " .. self._id)
+	return _yoga[cobj]
+end
+
 do
 	local function parse_node(v, scripts)
 		local attr = {}
@@ -102,6 +108,7 @@ do
 				obj[k] = v
 			end
 			doc._yoga[obj] = cobj
+			doc._yoga[cobj] = obj
 			doc._list[#doc._list + 1] = obj
 		end
 	end

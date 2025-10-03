@@ -54,6 +54,8 @@ function callback.key(keycode, state)
 			CURSOR_N = CURSOR_N + 1
 		elseif keycode == 263 then	-- left
 			CURSOR_N = CURSOR_N - 1
+		else
+			print(keycode)
 		end
 	end
 end
