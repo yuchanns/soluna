@@ -22,6 +22,9 @@
 #include <lauxlib.h>
 #include <string.h>
 #include <stdio.h>
+#if defined(__APPLE__)
+#include <stdbool.h>
+#endif
 #include "version.h"
 
 #define FRAME_CALLBACK 1
@@ -36,6 +39,12 @@
 #include "sokol/sokol_args.h"
 #include "loginfo.h"
 #include "appevent.h"
+
+#if defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
+#import <objc/message.h>
+#endif
 
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 
@@ -56,6 +65,8 @@
 #endif
 
 
+static void app_event(const sapp_event* ev);
+
 struct app_context {
 	lua_State *L;
 	lua_State *quitL;
@@ -65,6 +76,36 @@ struct app_context {
 };
 
 static struct app_context *CTX = NULL;
+
+#if defined(__APPLE__)
+struct soluna_ime_rect_state {
+	float x;
+	float y;
+	float w;
+	float h;
+	bool valid;
+};
+
+static struct soluna_ime_rect_state g_soluna_ime_rect = { 0.0f, 0.0f, 0.0f, 0.0f, false };
+static int g_soluna_suppress_char_depth = 0;
+
+static inline void
+soluna_push_char_suppress(void) {
+	g_soluna_suppress_char_depth++;
+}
+
+static inline void
+soluna_pop_char_suppress(void) {
+	if (g_soluna_suppress_char_depth > 0) {
+		g_soluna_suppress_char_depth--;
+	}
+}
+
+static inline bool
+soluna_should_suppress_char(void) {
+	return g_soluna_suppress_char_depth > 0;
+}
+#endif
 
 struct soluna_message {
 	const char * type;
@@ -96,6 +137,276 @@ message_release(struct soluna_message *msg) {
 	free(msg);
 }
 
+#if defined(__APPLE__)
+static const void *const kSolunaMarkedTextKey = &kSolunaMarkedTextKey;
+static const void *const kSolunaSelectedRangeKey = &kSolunaSelectedRangeKey;
+static const void *const kSolunaConsumedFlagKey = &kSolunaConsumedFlagKey;
+
+static uint32_t
+soluna_modifiers_from_event(NSEvent *event) {
+	NSEventModifierFlags flags = event ? event.modifierFlags : NSEvent.modifierFlags;
+	uint32_t mods = 0;
+	if (flags & NSEventModifierFlagShift) {
+		mods |= SAPP_MODIFIER_SHIFT;
+	}
+	if (flags & NSEventModifierFlagControl) {
+		mods |= SAPP_MODIFIER_CTRL;
+	}
+	if (flags & NSEventModifierFlagOption) {
+		mods |= SAPP_MODIFIER_ALT;
+	}
+	if (flags & NSEventModifierFlagCommand) {
+		mods |= SAPP_MODIFIER_SUPER;
+	}
+	return mods;
+}
+
+static uint32_t
+soluna_utf32_from_substring(NSString *substr) {
+	if (substr == nil || substr.length == 0) {
+		return 0;
+	}
+	unichar buffer[2] = {0};
+	NSUInteger len = substr.length;
+	[substr getCharacters:buffer range:NSMakeRange(0, len)];
+	if (len >= 2 && buffer[0] >= 0xD800 && buffer[0] <= 0xDBFF && buffer[1] >= 0xDC00 && buffer[1] <= 0xDFFF) {
+		uint32_t high = buffer[0] - 0xD800;
+		uint32_t low = buffer[1] - 0xDC00;
+		return (high << 10) + low + 0x10000;
+	}
+	return buffer[0];
+}
+
+static NSString *
+soluna_plain_string(id string) {
+	if ([string isKindOfClass:[NSAttributedString class]]) {
+		return [(NSAttributedString *)string string];
+	}
+	if ([string isKindOfClass:[NSString class]]) {
+		return (NSString *)string;
+	}
+	return [string description];
+}
+
+static void
+soluna_store_marked_text(NSView *view, NSString *text, NSRange selected_range) {
+	if (text && text.length > 0) {
+		objc_setAssociatedObject(view, kSolunaMarkedTextKey, text, OBJC_ASSOCIATION_COPY_NONATOMIC);
+		NSValue *value = [NSValue valueWithRange:selected_range];
+		objc_setAssociatedObject(view, kSolunaSelectedRangeKey, value, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	} else {
+		objc_setAssociatedObject(view, kSolunaMarkedTextKey, nil, OBJC_ASSOCIATION_ASSIGN);
+		objc_setAssociatedObject(view, kSolunaSelectedRangeKey, nil, OBJC_ASSOCIATION_ASSIGN);
+	}
+}
+
+static NSString *
+soluna_current_marked_text(NSView *view) {
+	return objc_getAssociatedObject(view, kSolunaMarkedTextKey);
+}
+
+static bool
+soluna_view_has_marked_text(NSView *view) {
+	NSString *text = soluna_current_marked_text(view);
+	return text && text.length > 0;
+}
+
+static NSRange
+soluna_current_selected_range(NSView *view) {
+	NSValue *value = objc_getAssociatedObject(view, kSolunaSelectedRangeKey);
+	if (value == nil) {
+		return NSMakeRange(NSNotFound, 0);
+	}
+	return [value rangeValue];
+}
+
+static void
+soluna_set_event_consumed(NSView *view, bool consumed) {
+	if (consumed) {
+		objc_setAssociatedObject(view, kSolunaConsumedFlagKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	} else {
+		objc_setAssociatedObject(view, kSolunaConsumedFlagKey, nil, OBJC_ASSOCIATION_ASSIGN);
+	}
+}
+
+static bool
+soluna_event_consumed(NSView *view) {
+	NSNumber *flag = objc_getAssociatedObject(view, kSolunaConsumedFlagKey);
+	return flag && [flag boolValue];
+}
+
+static void
+soluna_emit_char(uint32_t codepoint, uint32_t modifiers, bool repeat) {
+	sapp_event ev;
+	memset(&ev, 0, sizeof(ev));
+	ev.type = SAPP_EVENTTYPE_CHAR;
+	ev.frame_count = sapp_frame_count();
+	ev.char_code = codepoint;
+	ev.modifiers = modifiers;
+	ev.key_repeat = repeat;
+	app_event(&ev);
+}
+
+static void
+soluna_emit_nsstring(NSString *text) {
+	if (text == nil || text.length == 0) {
+		return;
+	}
+	uint32_t mods = soluna_modifiers_from_event([NSApp currentEvent]);
+	[text enumerateSubstringsInRange:NSMakeRange(0, text.length)
+		options:NSStringEnumerationByComposedCharacterSequences
+		usingBlock:^(NSString * _Nullable substring, NSRange substringRange, NSRange enclosingRange, BOOL * _Nonnull stop) {
+			uint32_t codepoint = soluna_utf32_from_substring(substring);
+			if (codepoint != 0) {
+				soluna_emit_char(codepoint, mods, false);
+			}
+		}];
+}
+
+static NSRect
+soluna_current_caret_screen_rect(NSView *view) {
+	NSRect caret = NSMakeRect(0, 0, 1, 1);
+	if (g_soluna_ime_rect.valid) {
+		caret = NSMakeRect(g_soluna_ime_rect.x, g_soluna_ime_rect.y, g_soluna_ime_rect.w, g_soluna_ime_rect.h);
+	}
+	caret = [view convertRect:caret toView:nil];
+	if (view.window) {
+		caret = [view.window convertRectToScreen:caret];
+	}
+	return caret;
+}
+
+@interface _sapp_macos_view (SolunaIME) <NSTextInputClient>
+- (void)soluna_keyDown:(NSEvent *)event;
+@end
+
+@implementation _sapp_macos_view (SolunaIME)
+
+- (void)soluna_keyDown:(NSEvent *)event {
+	soluna_set_event_consumed(self, false);
+	BOOL handled = [[self inputContext] handleEvent:event];
+	bool consumed = soluna_event_consumed(self);
+	bool hasMarked = soluna_view_has_marked_text(self);
+	bool suppress = handled && (consumed || hasMarked);
+	if (suppress) {
+		soluna_push_char_suppress();
+	}
+	[self soluna_keyDown:event];
+	if (suppress) {
+		soluna_pop_char_suppress();
+	}
+	if (handled && (consumed || hasMarked)) {
+		return;
+	}
+}
+
+- (void)insertText:(id)string replacementRange:(NSRange)replacementRange {
+	NSString *plain = soluna_plain_string(string);
+	soluna_store_marked_text(self, nil, NSMakeRange(NSNotFound, 0));
+	if (plain.length > 0) {
+		soluna_emit_nsstring(plain);
+		soluna_set_event_consumed(self, true);
+	} else {
+		soluna_set_event_consumed(self, false);
+	}
+}
+
+- (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
+	NSString *plain = soluna_plain_string(string);
+	soluna_store_marked_text(self, plain, selectedRange);
+}
+
+- (void)unmarkText {
+	soluna_store_marked_text(self, nil, NSMakeRange(NSNotFound, 0));
+}
+
+- (NSRange)selectedRange {
+	NSRange range = soluna_current_selected_range(self);
+	if (range.location == NSNotFound) {
+		return NSMakeRange(0, 0);
+	}
+	return range;
+}
+
+- (NSRange)markedRange {
+	NSString *text = soluna_current_marked_text(self);
+	if (text && text.length > 0) {
+		return NSMakeRange(0, text.length);
+	}
+	return NSMakeRange(NSNotFound, 0);
+}
+
+- (BOOL)hasMarkedText {
+	NSString *text = soluna_current_marked_text(self);
+	return text && text.length > 0;
+}
+
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText {
+	return @[];
+}
+
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
+	NSString *text = soluna_current_marked_text(self);
+	if (text == nil) {
+		return nil;
+	}
+	if (range.location == NSNotFound) {
+		return nil;
+	}
+	NSUInteger end = range.location + range.length;
+	if (end > text.length) {
+		return nil;
+	}
+	NSString *substr = [text substringWithRange:range];
+	if (actualRange) {
+		*actualRange = range;
+	}
+	return [[[NSAttributedString alloc] initWithString:substr] autorelease];
+}
+
+- (NSUInteger)characterIndexForPoint:(NSPoint)point {
+	(void)point;
+	return 0;
+}
+
+- (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
+	if (actualRange) {
+		*actualRange = range;
+	}
+	return soluna_current_caret_screen_rect(self);
+}
+
+- (void)doCommandBySelector:(SEL)selector {
+	id nextResponder = [self nextResponder];
+	if ([nextResponder respondsToSelector:@selector(doCommandBySelector:)]) {
+		[nextResponder doCommandBySelector:selector];
+	}
+}
+
+- (BOOL)acceptsFirstResponder {
+	return YES;
+}
+
+@end
+
+static void
+soluna_macos_install_ime(void) {
+	static bool installed = false;
+	if (installed) {
+		return;
+	}
+	Class viewCls = NSClassFromString(@"_sapp_macos_view");
+	if (!viewCls) {
+		return;
+	}
+	Method original = class_getInstanceMethod(viewCls, @selector(keyDown:));
+	Method replacement = class_getInstanceMethod(viewCls, @selector(soluna_keyDown:));
+	if (original && replacement) {
+		method_exchangeImplementations(original, replacement);
+	}
+	installed = true;
+}
+#endif
 static int
 lmessage_send(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
@@ -163,6 +474,22 @@ lset_window_title(lua_State *L) {
 }
 
 static int
+lset_ime_rect(lua_State *L) {
+#if defined(__APPLE__)
+	if (lua_isnoneornil(L, 1)) {
+		g_soluna_ime_rect.valid = false;
+		return 0;
+	}
+	g_soluna_ime_rect.x = (float)luaL_checknumber(L, 1);
+	g_soluna_ime_rect.y = (float)luaL_checknumber(L, 2);
+	g_soluna_ime_rect.w = (float)luaL_checknumber(L, 3);
+	g_soluna_ime_rect.h = (float)luaL_checknumber(L, 4);
+	g_soluna_ime_rect.valid = true;
+#endif
+	return 0;
+}
+
+static int
 lclose_window(lua_State *L) {
 	sapp_quit();
 	return 0;
@@ -211,6 +538,7 @@ luaopen_soluna_app(lua_State *L) {
 		{ "sendmessage", lmessage_send },
 		{ "unpackevent", levent_unpack },
 		{ "set_window_title", lset_window_title },
+		{ "set_ime_rect", lset_ime_rect },
 		{ "quit", lquit_signal },
 		{ "close_window", lclose_window },
 		{ "platform", NULL },
@@ -367,6 +695,10 @@ app_init() {
 	app.mqueue = NULL;
 	
 	CTX = &app;
+
+#if defined(__APPLE__)
+	soluna_macos_install_ime();
+#endif
 	
 	sg_setup(&(sg_desc) {
         .environment = sglue_environment(),
@@ -430,6 +762,11 @@ app_cleanup() {
 
 static void
 app_event(const sapp_event* ev) {
+#if defined(__APPLE__)
+	if (soluna_should_suppress_char() && ev->type == SAPP_EVENTTYPE_CHAR) {
+		return;
+	}
+#endif
 	lua_State *L = get_L(CTX);
 	if (L) {
 		lua_pushlightuserdata(L, (void *)ev);
