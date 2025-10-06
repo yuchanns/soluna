@@ -44,6 +44,11 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <imm.h>
+#include <windowsx.h>
 #endif
 
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
@@ -77,7 +82,6 @@ struct app_context {
 
 static struct app_context *CTX = NULL;
 
-#if defined(__APPLE__)
 struct soluna_ime_rect_state {
 	float x;
 	float y;
@@ -86,7 +90,11 @@ struct soluna_ime_rect_state {
 	bool valid;
 };
 
+#if defined(__APPLE__) || defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 static struct soluna_ime_rect_state g_soluna_ime_rect = { 0.0f, 0.0f, 0.0f, 0.0f, false };
+#endif
+
+#if defined(__APPLE__)
 static int g_soluna_suppress_char_depth = 0;
 
 static inline void
@@ -407,6 +415,109 @@ soluna_macos_install_ime(void) {
 	installed = true;
 }
 #endif
+
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+static WNDPROC g_soluna_prev_wndproc = NULL;
+static bool g_soluna_wndproc_installed = false;
+
+static void
+soluna_win32_apply_ime_rect(void) {
+    HWND hwnd = (HWND)sapp_win32_get_hwnd();
+    if (!hwnd) {
+        return;
+    }
+    HIMC imc = ImmGetContext(hwnd);
+    if (!imc) {
+        fprintf(stderr, "ImmGetContext failed\n");
+        return;
+    }
+    if (g_soluna_ime_rect.valid) {
+        float scale = sapp_dpi_scale();
+        if (scale <= 0.0f) {
+            scale = 1.0f;
+        }
+        float win_height = (float)sapp_height();
+        float rect_top = win_height - (g_soluna_ime_rect.y + g_soluna_ime_rect.h);
+        if (rect_top < 0.0f) {
+            rect_top = 0.0f;
+        }
+        float rect_bottom = rect_top + (g_soluna_ime_rect.h > 0.0f ? g_soluna_ime_rect.h : 1.0f);
+
+        LONG caret_x = (LONG)(g_soluna_ime_rect.x * scale + 0.5f);
+        LONG caret_y = (LONG)(rect_top * scale + 0.5f);
+        LONG caret_w = (LONG)((g_soluna_ime_rect.w > 0.0f ? g_soluna_ime_rect.w : 1.0f) * scale + 0.5f);
+        LONG caret_h = (LONG)((rect_bottom - rect_top) * scale + 0.5f);
+
+        COMPOSITIONFORM cf;
+        memset(&cf, 0, sizeof(cf));
+        cf.dwStyle = CFS_POINT;
+        cf.ptCurrentPos.x = caret_x;
+        cf.ptCurrentPos.y = caret_y;
+        ImmSetCompositionWindow(imc, &cf);
+
+        RECT exclude_rect;
+        exclude_rect.left = caret_x;
+        exclude_rect.top = caret_y;
+        exclude_rect.right = caret_x + caret_w;
+        exclude_rect.bottom = caret_y + caret_h;
+
+        // convert to screen coordinates for exclusion rectangle
+        MapWindowPoints(hwnd, NULL, (LPPOINT)&exclude_rect, 2);
+
+        CANDIDATEFORM cand;
+        memset(&cand, 0, sizeof(cand));
+        cand.dwIndex = 0;
+        cand.dwStyle = CFS_EXCLUDE;
+        cand.rcArea = exclude_rect;
+        cand.ptCurrentPos.x = exclude_rect.left;
+        cand.ptCurrentPos.y = exclude_rect.bottom;
+        ImmSetCandidateWindow(imc, &cand);
+	}
+	ImmReleaseContext(hwnd, imc);
+}
+
+static LRESULT CALLBACK
+soluna_win32_wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
+	case WM_IME_STARTCOMPOSITION:
+	case WM_IME_COMPOSITION:
+		if (g_soluna_ime_rect.valid) {
+			soluna_win32_apply_ime_rect();
+		}
+		break;
+	case WM_DESTROY:
+		if (g_soluna_prev_wndproc) {
+			SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)g_soluna_prev_wndproc);
+			g_soluna_prev_wndproc = NULL;
+			g_soluna_wndproc_installed = false;
+		}
+		break;
+	default:
+		break;
+	}
+	if (g_soluna_prev_wndproc) {
+		return CallWindowProc(g_soluna_prev_wndproc, hwnd, msg, wParam, lParam);
+	}
+	return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+static void
+soluna_win32_install_wndproc(void) {
+	if (g_soluna_wndproc_installed) {
+		return;
+	}
+	HWND hwnd = (HWND)sapp_win32_get_hwnd();
+	if (!hwnd) {
+		return;
+	}
+	WNDPROC prev = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)soluna_win32_wndproc);
+	if (prev) {
+		g_soluna_prev_wndproc = prev;
+		g_soluna_wndproc_installed = true;
+	}
+}
+#endif
+
 static int
 lmessage_send(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
@@ -475,9 +586,12 @@ lset_window_title(lua_State *L) {
 
 static int
 lset_ime_rect(lua_State *L) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 	if (lua_isnoneornil(L, 1)) {
 		g_soluna_ime_rect.valid = false;
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+		soluna_win32_apply_ime_rect();
+#endif
 		return 0;
 	}
 	g_soluna_ime_rect.x = (float)luaL_checknumber(L, 1);
@@ -485,6 +599,9 @@ lset_ime_rect(lua_State *L) {
 	g_soluna_ime_rect.w = (float)luaL_checknumber(L, 3);
 	g_soluna_ime_rect.h = (float)luaL_checknumber(L, 4);
 	g_soluna_ime_rect.valid = true;
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+	soluna_win32_apply_ime_rect();
+#endif
 #endif
 	return 0;
 }
@@ -699,6 +816,9 @@ app_init() {
 #if defined(__APPLE__)
 	soluna_macos_install_ime();
 #endif
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+	soluna_win32_install_wndproc();
+#endif
 	
 	sg_setup(&(sg_desc) {
         .environment = sglue_environment(),
@@ -765,6 +885,11 @@ app_event(const sapp_event* ev) {
 #if defined(__APPLE__)
 	if (soluna_should_suppress_char() && ev->type == SAPP_EVENTTYPE_CHAR) {
 		return;
+	}
+#endif
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+	if (ev->type == SAPP_EVENTTYPE_FOCUSED && g_soluna_ime_rect.valid) {
+		soluna_win32_apply_ime_rect();
 	}
 #endif
 	lua_State *L = get_L(CTX);
