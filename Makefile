@@ -20,7 +20,7 @@ ifeq ($(CC),cl)
  STDC=-std:c11 -experimental:c11atomics
  STDCPP=-std:c++20
  SUBSYSTEM=-LINK -SUBSYSTEM:WINDOWS -ENTRY:"mainCRTStartup"
- LDFLAGS=$(SUBSYSTEM) xinput.lib Ws2_32.lib ntdll.lib
+ LDFLAGS=$(SUBSYSTEM) xinput.lib Ws2_32.lib ntdll.lib Imm32.lib
 else
  CCPP=g++
  CFLAGS=-Wall -O2
@@ -29,7 +29,7 @@ else
  STDC=-std=c99 -lm
  STDCPP=-std=c++20
  SUBSYSTEM=-Wl,-subsystem,windows
- LDFLAGS=-lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 -lwinmm -lws2_32 -lntdll -lxinput -lstdc++ $(SUBSYSTEM)
+ LDFLAGS=-lkernel32 -luser32 -lshell32 -lgdi32 -ldxgi -ld3d11 -lwinmm -lws2_32 -lntdll -lxinput -limm32 -lstdc++ $(SUBSYSTEM)
 endif
 
 all : $(BIN)/$(APPNAME)

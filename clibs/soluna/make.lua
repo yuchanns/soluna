@@ -69,6 +69,7 @@ lm:source_set "soluna_src" {
       "xinput.lib",
       "Ws2_32.lib",
       "ntdll.lib",
+      "Imm32.lib",
     },
   },
   mingw = {
@@ -83,6 +84,7 @@ lm:source_set "soluna_src" {
       "ws2_32",
       "ntdll",
       "xinput",
+      "imm32",
     },
     flags = {
       "-Wl,subsystem,windows",
