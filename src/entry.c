@@ -425,9 +425,10 @@ soluna_macos_install_ime(void) {
 
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 static WNDPROC g_soluna_prev_wndproc = NULL;
-static bool g_soluna_wndproc_installed = false;
+static BOOL g_soluna_wndproc_installed = FALSE;
 static LOGFONTW g_soluna_ime_font;
-static bool g_soluna_ime_font_valid = false;
+static BOOL g_soluna_ime_font_valid = FALSE;
+static BOOL g_soluna_composition = FALSE;
 
 static void
 soluna_win32_apply_ime_rect(void) {
@@ -504,19 +505,28 @@ soluna_win32_apply_ime_rect(void) {
 static LRESULT CALLBACK
 soluna_win32_wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
-	case WM_IME_STARTCOMPOSITION:
 	case WM_IME_COMPOSITION:
+	case WM_IME_STARTCOMPOSITION:
+		g_soluna_composition = TRUE;
 		if (g_soluna_ime_rect.valid) {
 			soluna_win32_apply_ime_rect();
 		}
 		break;
+	case WM_IME_ENDCOMPOSITION:
+		g_soluna_composition = FALSE;
+		break;
 	case WM_DESTROY:
+		g_soluna_composition = FALSE;
 		if (g_soluna_prev_wndproc) {
 			SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)g_soluna_prev_wndproc);
 			g_soluna_prev_wndproc = NULL;
-			g_soluna_wndproc_installed = false;
+			g_soluna_wndproc_installed = FALSE;
 		}
 		break;
+	case WM_KEYDOWN:
+	case WM_KEYUP:
+		if (g_soluna_composition)
+			return TRUE;
 	default:
 		break;
 	}
@@ -538,7 +548,7 @@ soluna_win32_install_wndproc(void) {
 	WNDPROC prev = (WNDPROC)SetWindowLongPtr(hwnd, GWLP_WNDPROC, (LONG_PTR)soluna_win32_wndproc);
 	if (prev) {
 		g_soluna_prev_wndproc = prev;
-		g_soluna_wndproc_installed = true;
+		g_soluna_wndproc_installed = TRUE;
 	}
 }
 
@@ -562,7 +572,7 @@ soluna_win32_set_ime_font(const char *font_name, float height_px) {
 		}
 	}
 	g_soluna_ime_font = lf;
-	g_soluna_ime_font_valid = true;
+	g_soluna_ime_font_valid = TRUE;
 }
 #endif
 
@@ -661,7 +671,7 @@ lset_ime_font(lua_State *L) {
 	int top = lua_gettop(L);
 	if (top == 0) {
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
-		g_soluna_ime_font_valid = false;
+		g_soluna_ime_font_valid = FALSE;
 #endif
 		return 0;
 	}
