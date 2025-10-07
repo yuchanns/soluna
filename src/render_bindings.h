@@ -8,4 +8,6 @@ struct soluna_render_bindings {
 	sg_bindings bindings;
 };
 
+#define DRAWFUNC(name) (sg_query_features().draw_base_instance ? name##_ex : name)
+
 #endif
