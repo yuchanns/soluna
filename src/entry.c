@@ -276,7 +276,13 @@ static NSRect
 soluna_current_caret_screen_rect(NSView *view) {
 	NSRect caret = NSMakeRect(0, 0, 1, 1);
 	if (g_soluna_ime_rect.valid) {
-		caret = NSMakeRect(g_soluna_ime_rect.x, g_soluna_ime_rect.y, g_soluna_ime_rect.w, g_soluna_ime_rect.h);
+		CGFloat dpi_scale = sapp_dpi_scale();
+		if (dpi_scale <= 0.0f) {
+			dpi_scale = 1.0f;
+		}
+		CGFloat logical_height = (CGFloat)sapp_height() / dpi_scale;
+		CGFloat caret_y = logical_height - (g_soluna_ime_rect.y + g_soluna_ime_rect.h);
+		caret = NSMakeRect(g_soluna_ime_rect.x, caret_y, g_soluna_ime_rect.w, g_soluna_ime_rect.h);
 	}
 	caret = [view convertRect:caret toView:nil];
 	if (view.window) {
@@ -439,17 +445,25 @@ soluna_win32_apply_ime_rect(void) {
         if (scale <= 0.0f) {
             scale = 1.0f;
         }
-        float win_height = (float)sapp_height();
-        float rect_top = win_height - (g_soluna_ime_rect.y + g_soluna_ime_rect.h);
+        float rect_top = g_soluna_ime_rect.y;
         if (rect_top < 0.0f) {
             rect_top = 0.0f;
         }
-        float rect_bottom = rect_top + (g_soluna_ime_rect.h > 0.0f ? g_soluna_ime_rect.h : 1.0f);
+        float rect_height = (g_soluna_ime_rect.h > 0.0f ? g_soluna_ime_rect.h : 1.0f);
+        float win_height = (float)sapp_height();
+        float rect_bottom = rect_top + rect_height;
+        if (win_height > 0.0f && rect_bottom > win_height) {
+            rect_bottom = win_height;
+        }
+        float actual_height = rect_bottom - rect_top;
+        if (actual_height <= 0.0f) {
+            actual_height = 1.0f;
+        }
 
         LONG caret_x = (LONG)(g_soluna_ime_rect.x * scale + 0.5f);
         LONG caret_y = (LONG)(rect_top * scale + 0.5f);
         LONG caret_w = (LONG)((g_soluna_ime_rect.w > 0.0f ? g_soluna_ime_rect.w : 1.0f) * scale + 0.5f);
-        LONG caret_h = (LONG)((rect_bottom - rect_top) * scale + 0.5f);
+        LONG caret_h = (LONG)(actual_height * scale + 0.5f);
 
         COMPOSITIONFORM cf;
         memset(&cf, 0, sizeof(cf));
