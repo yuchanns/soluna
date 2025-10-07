@@ -49,6 +49,7 @@
 #include <windows.h>
 #include <imm.h>
 #include <windowsx.h>
+#include <winnls.h>
 #endif
 
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
@@ -419,6 +420,8 @@ soluna_macos_install_ime(void) {
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 static WNDPROC g_soluna_prev_wndproc = NULL;
 static bool g_soluna_wndproc_installed = false;
+static LOGFONTW g_soluna_ime_font;
+static bool g_soluna_ime_font_valid = false;
 
 static void
 soluna_win32_apply_ime_rect(void) {
@@ -472,7 +475,15 @@ soluna_win32_apply_ime_rect(void) {
         cand.ptCurrentPos.x = exclude_rect.left;
         cand.ptCurrentPos.y = exclude_rect.bottom;
         ImmSetCandidateWindow(imc, &cand);
-	}
+
+        if (g_soluna_ime_font_valid) {
+            LOGFONTW lf = g_soluna_ime_font;
+            if (lf.lfHeight == 0) {
+                lf.lfHeight = -(LONG)caret_h;
+            }
+            ImmSetCompositionFontW(imc, &lf);
+        }
+    }
 	ImmReleaseContext(hwnd, imc);
 }
 
@@ -515,6 +526,29 @@ soluna_win32_install_wndproc(void) {
 		g_soluna_prev_wndproc = prev;
 		g_soluna_wndproc_installed = true;
 	}
+}
+
+static void
+soluna_win32_set_ime_font(const char *font_name, float height_px) {
+	float scale = sapp_dpi_scale();
+	if (scale <= 0.0f) {
+		scale = 1.0f;
+	}
+	LOGFONTW lf;
+	memset(&lf, 0, sizeof(lf));
+	lf.lfCharSet = DEFAULT_CHARSET;
+	lf.lfQuality = CLEARTYPE_QUALITY;
+	if (height_px > 0.0f) {
+		lf.lfHeight = -(LONG)(height_px * scale + 0.5f);
+	}
+	if (font_name && font_name[0]) {
+		int wlen = MultiByteToWideChar(CP_UTF8, 0, font_name, -1, NULL, 0);
+		if (wlen > 0 && wlen <= (int)(sizeof(lf.lfFaceName) / sizeof(wchar_t))) {
+			MultiByteToWideChar(CP_UTF8, 0, font_name, -1, lf.lfFaceName, wlen);
+		}
+	}
+	g_soluna_ime_font = lf;
+	g_soluna_ime_font_valid = true;
 }
 #endif
 
@@ -607,6 +641,37 @@ lset_ime_rect(lua_State *L) {
 }
 
 static int
+lset_ime_font(lua_State *L) {
+	const char *name = NULL;
+	float size = 0.0f;
+	int top = lua_gettop(L);
+	if (top == 0) {
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+		g_soluna_ime_font_valid = false;
+#endif
+		return 0;
+	}
+	if (top == 1) {
+		size = (float)luaL_checknumber(L, 1);
+	} else {
+		if (!lua_isnoneornil(L, 1)) {
+			if (lua_type(L, 1) != LUA_TSTRING) {
+				return luaL_error(L, "set_ime_font expects string font name");
+			}
+			name = lua_tostring(L, 1);
+		}
+		size = (float)luaL_checknumber(L, 2);
+	}
+	if (size < 0.0f) {
+		size = 0.0f;
+	}
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+	soluna_win32_set_ime_font(name, size);
+#endif
+	return 0;
+}
+
+static int
 lclose_window(lua_State *L) {
 	sapp_quit();
 	return 0;
@@ -656,6 +721,7 @@ luaopen_soluna_app(lua_State *L) {
 		{ "unpackevent", levent_unpack },
 		{ "set_window_title", lset_window_title },
 		{ "set_ime_rect", lset_ime_rect },
+		{ "set_ime_font", lset_ime_font },
 		{ "quit", lquit_signal },
 		{ "close_window", lclose_window },
 		{ "platform", NULL },
