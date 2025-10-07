@@ -385,6 +385,7 @@ struct position {
 	int y;
 	int w;
 	int h;
+	int ascent;
 };
 
 static inline int
@@ -631,6 +632,7 @@ ltext_(lua_State *L, struct position *pos) {
 		pos->w = 2;
 		pos->h = ctx.ascent + ctx.decent - gap;
 		pos->n = pos_n;
+		pos->ascent = ctx.ascent;
 		return 0;
 	}
 }
@@ -655,7 +657,8 @@ ltext_position(lua_State *L) {
 	lua_pushinteger(L, pos.w);
 	lua_pushinteger(L, pos.h);
 	lua_pushinteger(L, pos.n);
-	return 5;
+	lua_pushinteger(L, pos.ascent);
+	return 6;
 }
 
 static uint32_t
