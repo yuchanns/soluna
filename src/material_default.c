@@ -9,6 +9,7 @@
 #include "batch.h"
 #include "spritemgr.h"
 #include "material_util.h"
+#include "render_bindings.h"
 
 #define BATCHN 4096
 
@@ -27,7 +28,7 @@ struct buffer_data {
 struct material_default {
 	sg_pipeline pip;
 	sg_buffer inst;
-	sg_bindings *bind;
+	struct soluna_render_bindings *bind;
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
 	struct sprite_bank *bank;
@@ -84,10 +85,11 @@ lmaterial_default_draw(lua_State *L) {
 
 	sg_apply_pipeline(m->pip);
 	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
-	sg_apply_bindings(m->bind);
+	m->bind->bindings.vertex_buffer_offsets[0] = m->bind->base * sizeof(struct inst_object);
+	sg_apply_bindings(&m->bind->bindings);
 	sg_draw(0, 4, prim_n);
 	
-	m->bind->vertex_buffer_offsets[0] += prim_n * sizeof(struct inst_object);
+	m->bind->base += prim_n;
 
 	return 0;
 }

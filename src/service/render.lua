@@ -158,9 +158,9 @@ local function frame(count)
 	soluna_app.context_acquire()
 	if update_image then update_image() end
 	STATE.drawmgr:reset()
-	STATE.bindings:voffset(0, 0)
-	STATE.quad_bindings:voffset(0, 0)
-	STATE.mask_bindings:voffset(0, 0)
+	STATE.bindings:base(0)
+	STATE.quad_bindings:base(0)
+	STATE.mask_bindings:base(0)
 	for i = 1, batch_n do
 		local ptr, size = batch[i][1]()
 		if ptr then

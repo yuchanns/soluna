@@ -14,6 +14,7 @@
 #include "font_manager.h"
 #include "sprite_submit.h"
 #include "material_util.h"
+#include "render_bindings.h"
 
 #define BATCHN 4096
 
@@ -40,7 +41,7 @@ struct buffer_data {
 struct material_text {
 	sg_pipeline pip;
 	sg_buffer inst;
-	sg_bindings *bind;
+	struct soluna_render_bindings *bind;
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
 	struct font_manager *font;
@@ -102,10 +103,11 @@ draw_text(struct material_text *m, uint32_t color, int count) {
 	m->fs_uniform.color = color;
 	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
 	sg_apply_uniforms(UB_fs_params, &(sg_range){ &m->fs_uniform, sizeof(fs_params_t) });
-	sg_apply_bindings(m->bind);
+	m->bind->bindings.vertex_buffer_offsets[0] = m->bind->base * sizeof(struct inst_object);
+	sg_apply_bindings(&m->bind->bindings);
 	sg_draw(0, 4, count);
-	
-	m->bind->vertex_buffer_offsets[0] += count * sizeof(struct inst_object);
+
+	m->bind->base += count;
 }
 
 static int
