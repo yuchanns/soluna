@@ -107,9 +107,11 @@ draw_text(struct material_text *m, uint32_t color, int count, int ex) {
 		sg_apply_bindings(&m->bind->bindings);
 		sg_draw_ex(0, 4, count, 0, m->bind->base);
 	} else {
-		m->bind->bindings.vertex_buffer_offsets[0] = m->bind->base * sizeof(struct inst_object);
+		size_t base = m->bind->base * sizeof(struct inst_object);
+		m->bind->bindings.vertex_buffer_offsets[0] += base;
 		sg_apply_bindings(&m->bind->bindings);
 		sg_draw(0, 4, count);
+		m->bind->bindings.vertex_buffer_offsets[0] -= base;
 	}
 
 	m->bind->base += count;

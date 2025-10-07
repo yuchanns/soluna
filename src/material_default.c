@@ -90,9 +90,11 @@ lmaterial_default_draw_(lua_State *L, int ex) {
 		sg_apply_bindings(&m->bind->bindings);
 		sg_draw_ex(0, 4, prim_n, 0, m->bind->base);
 	} else {
-		m->bind->bindings.vertex_buffer_offsets[0] = m->bind->base * sizeof(struct inst_object);
+		size_t base = m->bind->base * sizeof(struct inst_object);
+		m->bind->bindings.vertex_buffer_offsets[0] += base;
 		sg_apply_bindings(&m->bind->bindings);
 		sg_draw(0, 4, prim_n);
+		m->bind->bindings.vertex_buffer_offsets[0] -= base;
 	}
 	m->bind->base += prim_n;
 
