@@ -14,6 +14,7 @@
 #include "font_manager.h"
 #include "sprite_submit.h"
 #include "material_util.h"
+#include "render_bindings.h"
 
 #define BATCHN 4096
 
@@ -40,7 +41,7 @@ struct buffer_data {
 struct material_text {
 	sg_pipeline pip;
 	sg_buffer inst;
-	sg_bindings *bind;
+	struct soluna_render_bindings *bind;
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
 	struct font_manager *font;
@@ -97,19 +98,27 @@ lmateraial_text_submit(lua_State *L) {
 	return 0;
 }
 
-static void
-draw_text(struct material_text *m, uint32_t color, int count) {
+static inline void
+draw_text(struct material_text *m, uint32_t color, int count, int ex) {
 	m->fs_uniform.color = color;
 	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
 	sg_apply_uniforms(UB_fs_params, &(sg_range){ &m->fs_uniform, sizeof(fs_params_t) });
-	sg_apply_bindings(m->bind);
-	sg_draw(0, 4, count);
-	
-	m->bind->vertex_buffer_offsets[0] += count * sizeof(struct inst_object);
+	if (ex) {
+		sg_apply_bindings(&m->bind->bindings);
+		sg_draw_ex(0, 4, count, 0, m->bind->base);
+	} else {
+		size_t base = m->bind->base * sizeof(struct inst_object);
+		m->bind->bindings.vertex_buffer_offsets[0] += base;
+		sg_apply_bindings(&m->bind->bindings);
+		sg_draw(0, 4, count);
+		m->bind->bindings.vertex_buffer_offsets[0] -= base;
+	}
+
+	m->bind->base += count;
 }
 
-static int
-lmateraial_text_draw(lua_State *L) {
+static inline int
+lmateraial_text_draw_(lua_State *L, int ex) {
 	struct material_text *m = (struct material_text *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_TEXT");
 	struct draw_primitive *prim = lua_touserdata(L, 2);
 	int prim_n = luaL_checkinteger(L, 3);
@@ -130,7 +139,7 @@ lmateraial_text_draw(lua_State *L) {
 				color = t->color;
 				count = 1;
 			} else if (t->color != color) {
-				draw_text(m, color, count);
+				draw_text(m, color, count, ex);
 				color = t->color;
 				count = 1;
 			} else {
@@ -138,11 +147,21 @@ lmateraial_text_draw(lua_State *L) {
 			}
 		}
 	}
-	draw_text(m, color, count);
+	draw_text(m, color, count, ex);
 
 	m->uniform->texsize = texsize;
 
 	return 0;
+}
+
+static int
+lmateraial_text_draw(lua_State *L) {
+	return lmateraial_text_draw_(L, 0);
+}
+
+static int
+lmateraial_text_draw_ex(lua_State *L) {
+	return lmateraial_text_draw_(L, 1);
 }
 
 static void
@@ -205,7 +224,7 @@ lnew_material_text_normal(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "submit", lmateraial_text_submit },
-			{ "draw", lmateraial_text_draw },
+			{ "draw", DRAWFUNC(lmateraial_text_draw) },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);

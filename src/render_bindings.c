@@ -2,11 +2,25 @@
 #include <lauxlib.h>
 #include <string.h>
 
-#include "sokol/sokol_gfx.h"
+#include "render_bindings.h"
+
+static inline sg_bindings *
+get_bindings(lua_State *L) {
+	struct soluna_render_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	return &b->bindings;	
+}
+
+static int
+lbindings_set_base(lua_State *L) {
+	struct soluna_render_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	int base = luaL_checkinteger(L, 2);
+	b->base = base;
+	return 0;
+}
 
 static int
 lbindings_set_vb(lua_State *L) {
-	sg_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	sg_bindings *b = get_bindings(L);
 	int index = luaL_checkinteger(L, 2);
 	if (index < 0 || index >= SG_MAX_VERTEXBUFFER_BINDSLOTS)
 		return luaL_error(L, "Invalid vbuffer slot %d", index);
@@ -19,7 +33,7 @@ lbindings_set_vb(lua_State *L) {
 
 static int
 lbindings_set_voff(lua_State *L) {
-	sg_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	sg_bindings *b = get_bindings(L);
 	int index = luaL_checkinteger(L, 2);
 	if (index < 0 || index >= SG_MAX_VERTEXBUFFER_BINDSLOTS)
 		return luaL_error(L, "Invalid vbuffer slot %d", index);
@@ -29,7 +43,7 @@ lbindings_set_voff(lua_State *L) {
 
 static int
 lbindings_set_ib(lua_State *L) {
-	sg_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	sg_bindings *b = get_bindings(L);
 	luaL_checkudata(L, 2, "SOKOL_BUFFER");
 	lua_settop(L, 2);
 	lua_pushlightuserdata(L, &b->index_buffer);
@@ -39,7 +53,7 @@ lbindings_set_ib(lua_State *L) {
 
 static int
 lbindings_set_ioff(lua_State *L) {
-	sg_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	sg_bindings *b = get_bindings(L);
 	b->index_buffer_offset = luaL_checkinteger(L, 2);
 	return 0;
 }
@@ -51,7 +65,7 @@ struct view {
 
 static int
 lbindings_set_view(lua_State *L) {
-	sg_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	sg_bindings *b = get_bindings(L);
 	int index = luaL_checkinteger(L, 2);
 	if (index < 0 || index >= SG_MAX_VIEW_BINDSLOTS)
 		return luaL_error(L, "Invalid view slot %d", index);
@@ -62,7 +76,7 @@ lbindings_set_view(lua_State *L) {
 
 static int
 lbindings_set_sampler(lua_State *L) {
-	sg_bindings *b = luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	sg_bindings *b = get_bindings(L);
 	int index = luaL_checkinteger(L, 2);
 	if (index < 0 || index >= SG_MAX_SAMPLER_BINDSLOTS)
 		return luaL_error(L, "Invalid sampler slot %d", index);
@@ -75,7 +89,7 @@ lbindings_set_sampler(lua_State *L) {
 
 static int
 lbindings_apply(lua_State *L) {
-	sg_bindings *b = (sg_bindings *)luaL_checkudata(L, 1, "SOKOL_BINDINGS");
+	sg_bindings *b = get_bindings(L);
 	sg_apply_bindings(b);
 	return 0;
 }
@@ -173,11 +187,12 @@ lview_new(lua_State *L) {
 
 int
 lbindings_new(lua_State *L) {
-	sg_bindings * b = (sg_bindings *)lua_newuserdatauv(L, sizeof(*b), 0);
+	struct soluna_render_bindings *b = (struct soluna_render_bindings *)lua_newuserdatauv(L, sizeof(*b), 0);
 	memset(b, 0, sizeof(*b));
 	if (luaL_newmetatable(L, "SOKOL_BINDINGS")) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
+			{ "base", lbindings_set_base },
 			{ "vbuffer", lbindings_set_vb },
 			{ "voffset", lbindings_set_voff },
 			{ "ibuffer", lbindings_set_ib },

@@ -9,6 +9,7 @@
 #include "batch.h"
 #include "spritemgr.h"
 #include "material_util.h"
+#include "render_bindings.h"
 
 #define BATCHN 4096
 
@@ -37,7 +38,7 @@ struct buffer_data {
 struct material_quad {
 	sg_pipeline pip;
 	sg_buffer inst;
-	sg_bindings *bind;
+	struct soluna_render_bindings *bind;
 	vs_params_t *uniform;
 	struct sr_buffer *srbuffer;
 };
@@ -83,8 +84,8 @@ lmateraial_quad_submit(lua_State *L) {
 	return 0;
 }
 
-static int
-lmateraial_quad_draw(lua_State *L) {
+static inline int
+lmateraial_quad_draw_(lua_State *L, int ex) {
 	struct material_quad *m = (struct material_quad *)luaL_checkudata(L, 1, "SOLUNA_MATERIAL_QUAD");
 //	struct draw_primitive *prim = lua_touserdata(L, 2);
 	int prim_n = luaL_checkinteger(L, 3);
@@ -93,11 +94,30 @@ lmateraial_quad_draw(lua_State *L) {
 	
 	sg_apply_pipeline(m->pip);
 	sg_apply_uniforms(UB_vs_params, &(sg_range){ m->uniform, sizeof(vs_params_t) });
-	sg_apply_bindings(m->bind);
-	sg_draw(0, 4, prim_n);
-	m->bind->vertex_buffer_offsets[0] += prim_n * sizeof(struct inst_object);
+	if (ex) {
+		sg_apply_bindings(&m->bind->bindings);
+		sg_draw_ex(0, 4, prim_n, 0, m->bind->base);
+	} else {
+		size_t base = m->bind->base * sizeof(struct inst_object);
+		m->bind->bindings.vertex_buffer_offsets[0] += base;
+		sg_apply_bindings(&m->bind->bindings);
+		sg_draw(0, 4, prim_n);
+		m->bind->bindings.vertex_buffer_offsets[0] -= base;
+	}
+
+	m->bind->base += prim_n;
 
 	return 0;
+}
+
+static int
+lmateraial_quad_draw(lua_State *L) {
+	return lmateraial_quad_draw_(L, 0);
+}
+
+static int
+lmateraial_quad_draw_ex(lua_State *L) {
+	return lmateraial_quad_draw_(L, 1);
 }
 
 static void
@@ -146,7 +166,7 @@ lnew_material_quad(lua_State *L) {
 		luaL_Reg l[] = {
 			{ "__index", NULL },
 			{ "submit", lmateraial_quad_submit },
-			{ "draw", lmateraial_quad_draw },
+			{ "draw", DRAWFUNC(lmateraial_quad_draw) },
 			{ NULL, NULL },
 		};
 		luaL_setfuncs(L, l, 0);

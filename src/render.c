@@ -113,7 +113,7 @@ get_buffer_data(lua_State *L, int index, size_t *sz) {
 		if (size > 0 && size != rawlen)
 			luaL_error(L, "size of string %d != %d", rawlen, size);
 		lua_pop(L, 1);
-		*sz = size;
+		*sz = rawlen;
 		return ptr;
 	}
 	luaL_error(L, "Invalid .data type = %s", lua_typename(L, t));
