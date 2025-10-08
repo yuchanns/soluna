@@ -11,6 +11,7 @@
 #include "render.lua.h"
 #include "settingdefault.dl.h"
 #include "settings.lua.h"
+#include "initsetting.lua.h"
 #include "fontmgr.lua.h"
 #include "gamepad.lua.h"
 #include "soluna.lua.h"
@@ -69,6 +70,7 @@ luaopen_embedsource(lua_State *L) {
 			REG_SOURCE(soluna)
 			REG_SOURCE(util)
 			REG_SOURCE(coroutine)
+			REG_SOURCE(initsetting)
 		lua_setfield(L, -2, "lib");
 
 		lua_newtable(L);	// service

@@ -1,8 +1,3 @@
-local boot = require "ltask.bootstrap"
-local mqueue = require "ltask.mqueue"
-local embedsource = require "soluna.embedsource"
-local event = require "soluna.event"
-local soluna_app = require "soluna.app"
 local package = package
 local table = table
 
@@ -45,6 +40,11 @@ local init_func_temp = [=[
 ]=]
 
 local function start(config)
+	local boot = require "ltask.bootstrap"
+	local mqueue = require "ltask.mqueue"
+	local embedsource = require "soluna.embedsource"
+	local event = require "soluna.event"
+	local soluna_app = require "soluna.app"
 	-- set callback message handler
 	local root_config = {
 		bootstrap = config.bootstrap,
@@ -149,23 +149,40 @@ if args.cpath then
 	package.cpath = args.cpath
 end
 
-return start {
-	args = args,
-	core = {
-		debuglog = "=", -- stdout
-	},
-	bootstrap = {
-		{
-			name = "timer",
-			unique = true,
+local api = {}
+
+function api.start(app)
+	args.app = app
+	return start {
+		args = args,
+		core = {
+			debuglog = "=", -- stdout
 		},
-		{
-			name = "log",
-			unique = true,
+		bootstrap = {
+			{
+				name = "timer",
+				unique = true,
+			},
+			{
+				name = "log",
+				unique = true,
+			},
+			{
+				name = "loader",
+				unique = true,
+			},
 		},
-		{
-			name = "loader",
-			unique = true,
-		},
-    },
-}
+	}
+end
+
+function api.init(desc)
+	-- todo : settings
+	local embedsource = require "soluna.embedsource"
+	local initsetting = load(embedsource.lib.initsetting, "@3rd/ltask/lualib/initsetting.lua")()
+	local settings = initsetting.init(args)
+	local soluna_app = require "soluna.app"
+	soluna_app.init_desc(desc, settings)
+end
+
+return api
+

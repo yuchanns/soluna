@@ -977,6 +977,50 @@ lversion(lua_State *L) {
 	return 2;
 }
 
+static void
+desc_get_boolean(lua_State *L, bool *r, int index, const char * key) {
+	if (lua_getfield(L, index, key) == LUA_TBOOLEAN) {
+		*r = lua_toboolean(L, -1);
+	} else {
+		luaL_checktype(L, -1, LUA_TNIL);
+	}
+	lua_pop(L, 1);
+}
+
+static void
+desc_get_int(lua_State *L, int *r, int index, const char * key) {
+	if (lua_getfield(L, index, key) == LUA_TNUMBER) {
+		*r = lua_tointeger(L, -1);
+	} else {
+		luaL_checktype(L, -1, LUA_TNIL);
+	}
+	lua_pop(L, 1);
+}
+
+static void
+desc_get_string(lua_State *L, const char **r, int index, const char * key) {
+	if (lua_getfield(L, index, key) == LUA_TSTRING) {
+		*r = lua_tostring(L, -1);
+	} else {
+		luaL_checktype(L, -1, LUA_TNIL);
+	}
+	lua_pop(L, 1);
+}
+
+static int
+linit_desc(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	luaL_checktype(L, 2, LUA_TTABLE);
+	sapp_desc *d = lua_touserdata(L, 1);
+	desc_get_boolean(L, &d->high_dpi, 2, "high_dpi");
+	desc_get_boolean(L, &d->fullscreen, 2, "fullscreen");
+	desc_get_int(L, &d->width, 2, "width");
+	desc_get_int(L, &d->height, 2, "height");
+	desc_get_string(L, &d->window_title, 2, "window_title");
+
+	return 0;
+}
+
 int
 luaopen_soluna_app(lua_State *L) {
 	luaL_checkversion(L);
@@ -994,6 +1038,7 @@ luaopen_soluna_app(lua_State *L) {
 		{ "close_window", lclose_window },
 		{ "platform", NULL },
 		{ "version", lversion },
+		{ "init_desc", linit_desc },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);
@@ -1033,22 +1078,6 @@ void soluna_openlibs(lua_State *L);
 
 static const char *code = "local embed = require 'soluna.embedsource' ; local f = load(embed.runtime.main()) ; return f(...)";
 
-static void
-set_app_info(lua_State *L, int index) {
-	lua_newtable(L);
-	const float dpi_scale = sapp_dpi_scale();
-	const float safe_scale = dpi_scale > 0.0f ? dpi_scale : 1.0f;
-	const int fb_width = sapp_width();
-	const int fb_height = sapp_height();
-	const int logical_width = (int)((float)fb_width / safe_scale + 0.5f);
-	const int logical_height = (int)((float)fb_height / safe_scale + 0.5f);
-	lua_pushinteger(L, logical_width);
-	lua_setfield(L, -2, "width");
-	lua_pushinteger(L, logical_height);
-	lua_setfield(L, -2, "height");
-	lua_setfield(L, index, "app");
-}
-
 static int
 pmain(lua_State *L) {
 	soluna_openlibs(L);
@@ -1067,8 +1096,6 @@ pmain(lua_State *L) {
 			lua_setfield(L, arg_table, k);
 		}
 	}
-	set_app_info(L, arg_table);
-	
 	int arg_n = lua_gettop(L) - arg_table + 1;
 	if (luaL_loadstring(L, code) != LUA_OK) {
 		return lua_error(L);
@@ -1125,13 +1152,40 @@ msghandler(lua_State *L) {
 	return 1;
 }
 
+static void
+get_app_info(lua_State *L) {
+	lua_newtable(L);
+	const float dpi_scale = sapp_dpi_scale();
+	const float safe_scale = dpi_scale > 0.0f ? dpi_scale : 1.0f;
+	const int fb_width = sapp_width();
+	const int fb_height = sapp_height();
+	const int logical_width = (int)((float)fb_width / safe_scale + 0.5f);
+	const int logical_height = (int)((float)fb_height / safe_scale + 0.5f);
+	lua_pushinteger(L, logical_width);
+	lua_setfield(L, -2, "width");
+	lua_pushinteger(L, logical_height);
+	lua_setfield(L, -2, "height");
+}
+
 static int
 start_app(lua_State *L) {
-	lua_settop(L, 0);
-	lua_pushcfunction(L, msghandler);
-	lua_pushcfunction(L, pmain);
-	if (lua_pcall(L, 0, 1, 1) != LUA_OK) {
-		fprintf(stderr, "Start fatal : %s", lua_tostring(L, -1));
+	if (L == NULL) {
+		fprintf(stderr, "Can't open lua state\n");
+		return 1;
+	}
+
+	if (lua_gettop(L) != 2) {
+		fprintf(stderr, "Invalid lua stack (top = %d)\n", lua_gettop(L));
+		return 1;
+	}
+	if (lua_getfield(L, -1, "start") != LUA_TFUNCTION) {
+		fprintf(stderr, "No start function\n");
+		return 1;
+	}
+	lua_replace(L, -2);
+	get_app_info(L);
+	if (lua_pcall(L, 1, 1, 1) != LUA_OK) {
+		fprintf(stderr, "Start fatal : %s\n", lua_tostring(L, -1));
 		return 1;
 	} else {
 		return init_callback(L, CTX);
@@ -1140,19 +1194,6 @@ start_app(lua_State *L) {
 
 static void
 app_init() {
-	static struct app_context app;
-	lua_State *L = luaL_newstate();
-	if (L == NULL)
-		return;
-
-	app.L = L;
-	app.quitL = NULL;
-	app.send_log = NULL;
-	app.send_log_ud = NULL;
-	app.mqueue = NULL;
-	
-	CTX = &app;
-
 #if defined(__APPLE__)
 	soluna_macos_install_ime();
 #endif
@@ -1164,10 +1205,14 @@ app_init() {
         .environment = sglue_environment(),
         .logger.func = log_func,			
 	});
+		
+	lua_State *L = CTX->L;
 	if (start_app(L)) {
 		sargs_shutdown();
-		lua_close(L);
-		app.L = NULL;
+		if (L) {
+			lua_close(L);
+		}
+		CTX->L = NULL;
 		sapp_quit();
 	} else {
 		sargs_shutdown();
@@ -1241,20 +1286,57 @@ app_event(const sapp_event* ev) {
 	}
 }
 
+static int
+init_settings(lua_State *L, sapp_desc *desc) {
+	if (L == NULL) {
+		fprintf(stderr, "Can't open lua state\n");
+		return 1;
+	}
+	if (lua_gettop(L) != 2) {
+		fprintf(stderr, "Invalid lua stack (top = %d)\n", lua_gettop(L));
+		return 1;
+	}
+	if (lua_getfield(L, -1, "init") != LUA_TFUNCTION) {
+		fprintf(stderr, "No start function\n");
+		return 1;
+	}
+	lua_pushlightuserdata(L, (void *)desc);
+	if (lua_pcall(L, 1, 0, 1) != LUA_OK) {
+		fprintf(stderr, "Start fatal : %s\n", lua_tostring(L, -1));
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
 sapp_desc
 sokol_main(int argc, char* argv[]) {
+	// init sargs
 	sargs_desc arg_desc;
 	memset(&arg_desc, 0, sizeof(arg_desc));
 	arg_desc.argc = argc;
 	arg_desc.argv = argv;
 	sargs_setup(&arg_desc);
 	
+	// init L
+	static struct app_context app;
+	lua_State *L = luaL_newstate();
+
+	lua_settop(L, 0);
+	lua_pushcfunction(L, msghandler);
+	lua_pushcfunction(L, pmain);
+	
+	if (lua_pcall(L, 0, 1, 1) != LUA_OK) {
+		fprintf(stderr, "Init fatal : %s\n", lua_tostring(L, -1));
+		lua_close(L);
+		L = NULL;
+	}
+	
+	// default sapp_desc
+	
 	sapp_desc d;
 	memset(&d, 0, sizeof(d));
 
-	d.high_dpi = true;
-	d.width = 1024;
-	d.height = 768;
 	d.init_cb = app_init;
 	d.frame_cb = app_frame;
 	d.cleanup_cb = app_cleanup;
@@ -1262,8 +1344,21 @@ sokol_main(int argc, char* argv[]) {
 	d.logger.func = log_func;
 	d.win32_console_utf8 = 1;
 	d.win32_console_attach = 1;
-	d.window_title = "soluna";
 	d.alpha = 0;
+	
+	if (init_settings(L, &d)) {
+		fprintf(stderr, "Init setting fatal : %s\n", lua_tostring(L, -1));
+		lua_close(L);
+		L = NULL;
+	}
+
+	app.L = L;
+	app.quitL = NULL;
+	app.send_log = NULL;
+	app.send_log_ud = NULL;
+	app.mqueue = NULL;
+	
+	CTX = &app;
 
 	return d;
 }

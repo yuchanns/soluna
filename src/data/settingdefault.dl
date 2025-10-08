@@ -6,3 +6,8 @@ draw_instance : 65536
 entry : main.lua
 project : soluna
 service_path : "./?.lua"
+width : 1024
+height : 768
+high_dpi : false
+window_title : soluna
+
