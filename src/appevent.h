@@ -15,8 +15,22 @@ mouse_message(struct event_message *em, const sapp_event* ev) {
 	switch (ev->type) {
 	case SAPP_EVENTTYPE_MOUSE_MOVE:
 		em->typestr = "mouse_move";
-		em->p1 = ev->mouse_x;
-		em->p2 = ev->mouse_y;
+	{
+		float dpi_scale = sapp_dpi_scale();
+		if (dpi_scale <= 0.0f) {
+			dpi_scale = 1.0f;
+		}
+		float logical_x = ev->mouse_x / dpi_scale;
+		float logical_y = ev->mouse_y / dpi_scale;
+		if (logical_x >= 0.0f)
+			em->p1 = (int)(logical_x + 0.5f);
+		else
+			em->p1 = (int)(logical_x - 0.5f);
+		if (logical_y >= 0.0f)
+			em->p2 = (int)(logical_y + 0.5f);
+		else
+			em->p2 = (int)(logical_y - 0.5f);
+	}
 		break;
 	case SAPP_EVENTTYPE_MOUSE_DOWN:
 	case SAPP_EVENTTYPE_MOUSE_UP:
