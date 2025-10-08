@@ -42,6 +42,8 @@
 
 #if defined(__APPLE__)
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
+#import <CoreText/CoreText.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #elif defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
@@ -96,23 +98,245 @@ static struct soluna_ime_rect_state g_soluna_ime_rect = { 0.0f, 0.0f, 0.0f, 0.0f
 #endif
 
 #if defined(__APPLE__)
-static int g_soluna_suppress_char_depth = 0;
+static bool g_soluna_macos_composition = false;
+static NSTextField *g_soluna_ime_label = nil;
+static NSString *g_soluna_macos_ime_font_name = nil;
+static CGFloat g_soluna_macos_ime_font_size = 14.0f;
+static NSView *g_soluna_ime_caret = nil;
 
-static inline void
-soluna_push_char_suppress(void) {
-	g_soluna_suppress_char_depth++;
+static NSString *soluna_current_marked_text(NSView *view);
+static NSRange soluna_current_selected_range(NSView *view);
+
+static void
+soluna_macos_apply_ime_font(void) {
+	if (!g_soluna_ime_label) {
+		return;
+	}
+	CGFloat size = g_soluna_macos_ime_font_size > 0.0f ? g_soluna_macos_ime_font_size : 14.0f;
+	NSFont *font = nil;
+	if (g_soluna_macos_ime_font_name) {
+		font = [NSFont fontWithName:g_soluna_macos_ime_font_name size:size];
+	}
+	if (font == nil) {
+		font = [NSFont systemFontOfSize:size];
+	}
+	[g_soluna_ime_label setFont:font];
 }
 
-static inline void
-soluna_pop_char_suppress(void) {
-	if (g_soluna_suppress_char_depth > 0) {
-		g_soluna_suppress_char_depth--;
+static void
+soluna_macos_set_ime_font(const char *font_name, float height_px) {
+	if (g_soluna_macos_ime_font_name) {
+		[g_soluna_macos_ime_font_name release];
+		g_soluna_macos_ime_font_name = nil;
+	}
+	if (font_name && font_name[0]) {
+		NSString *converted = [[NSString alloc] initWithUTF8String:font_name];
+		if (converted) {
+			g_soluna_macos_ime_font_name = converted;
+		} else {
+			[converted release];
+		}
+	}
+	if (height_px > 0.0f) {
+		g_soluna_macos_ime_font_size = (CGFloat)height_px;
+	} else {
+		g_soluna_macos_ime_font_size = 0.0f;
+	}
+	soluna_macos_apply_ime_font();
+}
+
+static NSView *
+soluna_macos_ensure_ime_caret(NSView *view) {
+	if (g_soluna_ime_caret == nil) {
+		g_soluna_ime_caret = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 1, 1)];
+		[g_soluna_ime_caret setWantsLayer:YES];
+		CALayer *layer = [g_soluna_ime_caret layer];
+		if (layer) {
+			layer.backgroundColor = [[NSColor controlAccentColor] CGColor];
+		}
+	}
+	if (g_soluna_ime_caret.superview != view) {
+		[g_soluna_ime_caret removeFromSuperview];
+		if (view) {
+			NSView *relative = g_soluna_ime_label && g_soluna_ime_label.superview == view ? g_soluna_ime_label : nil;
+			[view addSubview:g_soluna_ime_caret positioned:NSWindowAbove relativeTo:relative];
+		}
+	}
+	return g_soluna_ime_caret;
+}
+
+static void
+soluna_macos_hide_ime_caret(void) {
+	if (g_soluna_ime_caret) {
+		[g_soluna_ime_caret setHidden:YES];
 	}
 }
 
-static inline bool
-soluna_should_suppress_char(void) {
-	return g_soluna_suppress_char_depth > 0;
+static void
+soluna_macos_position_ime_caret(NSView *view, NSTextField *label, NSAttributedString *attr, NSRange selectedRange) {
+	if (selectedRange.location == NSNotFound) {
+		soluna_macos_hide_ime_caret();
+		return;
+	}
+	NSView *caret = soluna_macos_ensure_ime_caret(view);
+	if (selectedRange.length > 0) {
+		[caret setHidden:YES];
+		return;
+	}
+	NSUInteger caretIndex = selectedRange.location + selectedRange.length;
+	NSUInteger textLength = attr.length;
+	if (caretIndex > textLength) {
+		caretIndex = textLength;
+	}
+	NSRect textRect = [[label cell] drawingRectForBounds:label.bounds];
+	CGFloat prefixWidth = 0.0f;
+	CGFloat lineHeight = 0.0f;
+	CTLineRef line = CTLineCreateWithAttributedString((CFAttributedStringRef)attr);
+	if (line) {
+		if (caretIndex > textLength) {
+			caretIndex = textLength;
+		}
+		double caretOffset = CTLineGetOffsetForStringIndex(line, caretIndex, NULL);
+		prefixWidth = (CGFloat)ceil(caretOffset);
+		double ascent = 0.0, descent = 0.0, leading = 0.0;
+		CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
+		lineHeight = (CGFloat)(ascent + descent + leading);
+		CFRelease(line);
+	}
+	NSRect caretFrame;
+	caretFrame.size.width = 2.0f;
+	if (lineHeight <= 0.0f) {
+		NSFont *font = [label font];
+		if (font) {
+			lineHeight = font.ascender - font.descender;
+		}
+		if (lineHeight <= 0.0f) {
+			lineHeight = g_soluna_macos_ime_font_size > 0.0f ? g_soluna_macos_ime_font_size : 14.0f;
+		}
+	}
+	caretFrame.size.height = MAX(1.0f, lineHeight);
+	caretFrame.origin.x = label.frame.origin.x + textRect.origin.x + prefixWidth;
+	CGFloat originY = label.frame.origin.y + textRect.origin.y;
+	CGFloat verticalAdjust = 0.0f;
+	if (textRect.size.height > caretFrame.size.height) {
+		verticalAdjust = (textRect.size.height - caretFrame.size.height) * 0.5f;
+	}
+	caretFrame.origin.y = originY + verticalAdjust;
+	[caret setFrame:NSIntegralRect(caretFrame)];
+	[caret setHidden:NO];
+}
+
+static NSRect
+soluna_current_caret_local_rect(NSView *view) {
+	NSRect caret = NSMakeRect(0, 0, 1, 1);
+	if (g_soluna_ime_rect.valid) {
+		CGFloat dpi_scale = sapp_dpi_scale();
+		if (dpi_scale <= 0.0f) {
+			dpi_scale = 1.0f;
+		}
+		CGFloat logical_height = (CGFloat)sapp_height() / dpi_scale;
+		CGFloat caret_y = logical_height - (g_soluna_ime_rect.y + g_soluna_ime_rect.h);
+		caret = NSMakeRect(g_soluna_ime_rect.x, caret_y, g_soluna_ime_rect.w, g_soluna_ime_rect.h);
+	}
+	return caret;
+}
+
+static NSTextField *
+soluna_macos_ensure_ime_label(NSView *view) {
+	if (g_soluna_ime_label == nil) {
+		g_soluna_ime_label = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 0, 0)];
+		[g_soluna_ime_label setEditable:NO];
+		[g_soluna_ime_label setSelectable:NO];
+		[g_soluna_ime_label setBezeled:NO];
+		[g_soluna_ime_label setDrawsBackground:NO];
+		[g_soluna_ime_label setBordered:NO];
+		[g_soluna_ime_label setBackgroundColor:[NSColor clearColor]];
+		[g_soluna_ime_label setHidden:YES];
+		[g_soluna_ime_label setLineBreakMode:NSLineBreakByClipping];
+		[g_soluna_ime_label setUsesSingleLineMode:YES];
+		[g_soluna_ime_label setTranslatesAutoresizingMaskIntoConstraints:YES];
+		soluna_macos_apply_ime_font();
+	}
+	if (g_soluna_ime_label.superview != view) {
+		[g_soluna_ime_label removeFromSuperview];
+		if (view) {
+			[view addSubview:g_soluna_ime_label];
+		}
+	}
+	soluna_macos_apply_ime_font();
+	return g_soluna_ime_label;
+}
+
+static void
+soluna_macos_hide_ime_label(void) {
+	if (g_soluna_ime_label) {
+		[g_soluna_ime_label setHidden:YES];
+	}
+	soluna_macos_hide_ime_caret();
+}
+
+static void
+soluna_macos_position_ime_label(NSView *view, NSString *text, NSRange selectedRange) {
+	if (text == nil || text.length == 0) {
+		soluna_macos_hide_ime_label();
+		return;
+	}
+	NSTextField *label = soluna_macos_ensure_ime_label(view);
+	if (label == nil) {
+		return;
+	}
+	NSMutableAttributedString *attr = [[[NSMutableAttributedString alloc] initWithString:text] autorelease];
+	NSRange fullRange = NSMakeRange(0, attr.length);
+	if (fullRange.length > 0) {
+		NSFont *labelFont = [label font];
+		if (labelFont) {
+			[attr addAttribute:NSFontAttributeName value:labelFont range:fullRange];
+		}
+		[attr addAttribute:NSForegroundColorAttributeName value:[NSColor textColor] range:fullRange];
+		[attr addAttribute:NSUnderlineStyleAttributeName value:@(NSUnderlineStyleSingle) range:fullRange];
+	}
+	if (selectedRange.length > 0 && NSMaxRange(selectedRange) <= attr.length) {
+		[attr addAttribute:NSBackgroundColorAttributeName value:[NSColor controlAccentColor] range:selectedRange];
+		[attr addAttribute:NSForegroundColorAttributeName value:[NSColor alternateSelectedControlTextColor] range:selectedRange];
+	}
+	[label setAttributedStringValue:attr];
+	NSSize textSize = [[label cell] cellSizeForBounds:NSMakeRect(0, 0, CGFLOAT_MAX, CGFLOAT_MAX)];
+	CGFloat padding = 6.0f;
+	textSize.width += padding;
+	textSize.height += padding;
+	NSRect caret = soluna_current_caret_local_rect(view);
+	CGFloat baseline = caret.origin.y + caret.size.height;
+	CGFloat baselineOffset = [label baselineOffsetFromBottom];
+	CGFloat frameOriginY = baseline - baselineOffset - textSize.height;
+	NSRect frame = NSMakeRect(caret.origin.x, frameOriginY, textSize.width, textSize.height);
+	NSRect bounds = view.bounds;
+	if (frame.origin.x < bounds.origin.x) {
+		frame.origin.x = bounds.origin.x;
+	}
+	CGFloat maxX = NSMaxX(bounds);
+	if (NSMaxX(frame) > maxX) {
+		frame.origin.x = maxX - frame.size.width;
+	}
+	if (frame.origin.y < bounds.origin.y) {
+		frame.origin.y = bounds.origin.y;
+	}
+	CGFloat maxY = NSMaxY(bounds);
+	if (NSMaxY(frame) > maxY) {
+		frame.origin.y = maxY - frame.size.height;
+	}
+	[label setFrame:NSIntegralRect(frame)];
+	[label setHidden:NO];
+	soluna_macos_position_ime_caret(view, label, attr, selectedRange);
+}
+
+static void
+soluna_macos_refresh_ime_label(NSView *view) {
+	if (g_soluna_ime_label == nil || [g_soluna_ime_label isHidden]) {
+		return;
+	}
+	NSString *text = soluna_current_marked_text(view);
+	NSRange range = soluna_current_selected_range(view);
+	soluna_macos_position_ime_label(view, text, range);
 }
 #endif
 
@@ -302,14 +526,13 @@ soluna_current_caret_screen_rect(NSView *view) {
 	BOOL handled = [[self inputContext] handleEvent:event];
 	bool consumed = soluna_event_consumed(self);
 	bool hasMarked = soluna_view_has_marked_text(self);
-	bool suppress = handled && (consumed || hasMarked);
-	if (suppress) {
-		soluna_push_char_suppress();
+	bool swallow_now = handled && (consumed || hasMarked);
+	if (swallow_now || g_soluna_macos_composition) {
+		g_soluna_macos_composition = hasMarked;
+		return;
 	}
+	g_soluna_macos_composition = false;
 	[self soluna_keyDown:event];
-	if (suppress) {
-		soluna_pop_char_suppress();
-	}
 	if (handled && (consumed || hasMarked)) {
 		return;
 	}
@@ -324,15 +547,21 @@ soluna_current_caret_screen_rect(NSView *view) {
 	} else {
 		soluna_set_event_consumed(self, false);
 	}
+	g_soluna_macos_composition = false;
+	soluna_macos_hide_ime_label();
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
 	NSString *plain = soluna_plain_string(string);
 	soluna_store_marked_text(self, plain, selectedRange);
+	g_soluna_macos_composition = (string != nil);
+	soluna_macos_position_ime_label(self, plain, selectedRange);
 }
 
 - (void)unmarkText {
 	soluna_store_marked_text(self, nil, NSMakeRange(NSNotFound, 0));
+	g_soluna_macos_composition = false;
+	soluna_macos_hide_ime_label();
 }
 
 - (NSRange)selectedRange {
@@ -649,6 +878,8 @@ lset_ime_rect(lua_State *L) {
 		g_soluna_ime_rect.valid = false;
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 		soluna_win32_apply_ime_rect();
+#elif defined(__APPLE__)
+		soluna_macos_hide_ime_label();
 #endif
 		return 0;
 	}
@@ -659,6 +890,13 @@ lset_ime_rect(lua_State *L) {
 	g_soluna_ime_rect.valid = true;
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 	soluna_win32_apply_ime_rect();
+#elif defined(__APPLE__)
+	if (g_soluna_ime_label && ![g_soluna_ime_label isHidden]) {
+		NSView *view = [g_soluna_ime_label superview];
+		if (view) {
+			soluna_macos_refresh_ime_label(view);
+		}
+	}
 #endif
 #endif
 	return 0;
@@ -672,6 +910,9 @@ lset_ime_font(lua_State *L) {
 	if (top == 0) {
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 		g_soluna_ime_font_valid = FALSE;
+#endif
+#if defined(__APPLE__)
+		soluna_macos_set_ime_font(NULL, 0.0f);
 #endif
 		return 0;
 	}
@@ -691,6 +932,9 @@ lset_ime_font(lua_State *L) {
 	}
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 	soluna_win32_set_ime_font(name, size);
+#endif
+#if defined(__APPLE__)
+	soluna_macos_set_ime_font(name, size);
 #endif
 	return 0;
 }
@@ -973,7 +1217,9 @@ app_cleanup() {
 static void
 app_event(const sapp_event* ev) {
 #if defined(__APPLE__)
-	if (soluna_should_suppress_char() && ev->type == SAPP_EVENTTYPE_CHAR) {
+	if (g_soluna_macos_composition &&
+		(ev->type == SAPP_EVENTTYPE_KEY_DOWN ||
+		 ev->type == SAPP_EVENTTYPE_KEY_UP)) {
 		return;
 	}
 #endif
