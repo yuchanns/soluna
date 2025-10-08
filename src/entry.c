@@ -792,9 +792,15 @@ static const char *code = "local embed = require 'soluna.embedsource' ; local f 
 static void
 set_app_info(lua_State *L, int index) {
 	lua_newtable(L);
-	lua_pushinteger(L, sapp_width());
+	const float dpi_scale = sapp_dpi_scale();
+	const float safe_scale = dpi_scale > 0.0f ? dpi_scale : 1.0f;
+	const int fb_width = sapp_width();
+	const int fb_height = sapp_height();
+	const int logical_width = (int)((float)fb_width / safe_scale + 0.5f);
+	const int logical_height = (int)((float)fb_height / safe_scale + 0.5f);
+	lua_pushinteger(L, logical_width);
 	lua_setfield(L, -2, "width");
-	lua_pushinteger(L, sapp_height());
+	lua_pushinteger(L, logical_height);
 	lua_setfield(L, -2, "height");
 	lua_setfield(L, index, "app");
 }
@@ -999,7 +1005,8 @@ sokol_main(int argc, char* argv[]) {
 	
 	sapp_desc d;
 	memset(&d, 0, sizeof(d));
-		
+
+	d.high_dpi = true;
 	d.width = 1024;
 	d.height = 768;
 	d.init_cb = app_init;
