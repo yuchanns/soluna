@@ -67,6 +67,11 @@ function S.init(args)
 	end
 	for k,v in pairs(args) do
 		if type(k) == "string" then
+			if v == "true" then
+				v = true
+			elseif v == "false" then
+				v = false
+			end
 			patch(default_settings, k,v)
 		end
 	end
