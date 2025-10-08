@@ -3,7 +3,7 @@ local source = require "soluna.embedsource"
 local lfs = require "soluna.lfs"
 local file = require "soluna.file"
 
-global type, error, pairs, assert
+global type, error, pairs, assert, tonumber
 
 local S = {}
 
@@ -71,6 +71,8 @@ function S.init(args)
 				v = true
 			elseif v == "false" then
 				v = false
+			else
+				v = tonumber(v) or v
 			end
 			patch(default_settings, k,v)
 		end
