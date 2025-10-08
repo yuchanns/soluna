@@ -96,24 +96,7 @@ static struct soluna_ime_rect_state g_soluna_ime_rect = { 0.0f, 0.0f, 0.0f, 0.0f
 #endif
 
 #if defined(__APPLE__)
-static int g_soluna_suppress_char_depth = 0;
-
-static inline void
-soluna_push_char_suppress(void) {
-	g_soluna_suppress_char_depth++;
-}
-
-static inline void
-soluna_pop_char_suppress(void) {
-	if (g_soluna_suppress_char_depth > 0) {
-		g_soluna_suppress_char_depth--;
-	}
-}
-
-static inline bool
-soluna_should_suppress_char(void) {
-	return g_soluna_suppress_char_depth > 0;
-}
+static bool g_soluna_macos_composition = false;
 #endif
 
 struct soluna_message {
@@ -302,14 +285,13 @@ soluna_current_caret_screen_rect(NSView *view) {
 	BOOL handled = [[self inputContext] handleEvent:event];
 	bool consumed = soluna_event_consumed(self);
 	bool hasMarked = soluna_view_has_marked_text(self);
-	bool suppress = handled && (consumed || hasMarked);
-	if (suppress) {
-		soluna_push_char_suppress();
+	bool swallow_now = handled && (consumed || hasMarked);
+	if (swallow_now || g_soluna_macos_composition) {
+		g_soluna_macos_composition = hasMarked;
+		return;
 	}
+	g_soluna_macos_composition = false;
 	[self soluna_keyDown:event];
-	if (suppress) {
-		soluna_pop_char_suppress();
-	}
 	if (handled && (consumed || hasMarked)) {
 		return;
 	}
@@ -324,15 +306,18 @@ soluna_current_caret_screen_rect(NSView *view) {
 	} else {
 		soluna_set_event_consumed(self, false);
 	}
+	g_soluna_macos_composition = false;
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
 	NSString *plain = soluna_plain_string(string);
 	soluna_store_marked_text(self, plain, selectedRange);
+	g_soluna_macos_composition = (string != nil);
 }
 
 - (void)unmarkText {
 	soluna_store_marked_text(self, nil, NSMakeRange(NSNotFound, 0));
+	g_soluna_macos_composition = false;
 }
 
 - (NSRange)selectedRange {
@@ -973,7 +958,9 @@ app_cleanup() {
 static void
 app_event(const sapp_event* ev) {
 #if defined(__APPLE__)
-	if (soluna_should_suppress_char() && ev->type == SAPP_EVENTTYPE_CHAR) {
+	if (g_soluna_macos_composition &&
+		(ev->type == SAPP_EVENTTYPE_KEY_DOWN ||
+		 ev->type == SAPP_EVENTTYPE_KEY_UP)) {
 		return;
 	}
 #endif
