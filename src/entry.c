@@ -22,6 +22,17 @@
 #include <lauxlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#if defined(__linux__)
+#include <locale.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xatom.h>
+#include <wchar.h>
+#include <uchar.h>
+#include <dlfcn.h>
+#include <stdbool.h>
+#endif
 #if defined(__APPLE__)
 #include <stdbool.h>
 #endif
@@ -93,9 +104,11 @@ struct soluna_ime_rect_state {
 	bool valid;
 };
 
-#if defined(__APPLE__) || defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+#if defined(__APPLE__) || defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__linux__)
 static struct soluna_ime_rect_state g_soluna_ime_rect = { 0.0f, 0.0f, 0.0f, 0.0f, false };
 #endif
+
+static void soluna_emit_char(uint32_t codepoint, uint32_t modifiers, bool repeat);
 
 #if defined(__APPLE__)
 static bool g_soluna_macos_composition = false;
@@ -469,18 +482,6 @@ soluna_event_consumed(NSView *view) {
 }
 
 static void
-soluna_emit_char(uint32_t codepoint, uint32_t modifiers, bool repeat) {
-	sapp_event ev;
-	memset(&ev, 0, sizeof(ev));
-	ev.type = SAPP_EVENTTYPE_CHAR;
-	ev.frame_count = sapp_frame_count();
-	ev.char_code = codepoint;
-	ev.modifiers = modifiers;
-	ev.key_repeat = repeat;
-	app_event(&ev);
-}
-
-static void
 soluna_emit_nsstring(NSString *text) {
 	if (text == nil || text.length == 0) {
 		return;
@@ -652,6 +653,18 @@ soluna_macos_install_ime(void) {
 }
 #endif
 
+static void
+soluna_emit_char(uint32_t codepoint, uint32_t modifiers, bool repeat) {
+	sapp_event ev;
+	memset(&ev, 0, sizeof(ev));
+	ev.type = SAPP_EVENTTYPE_CHAR;
+	ev.frame_count = sapp_frame_count();
+	ev.char_code = codepoint;
+	ev.modifiers = modifiers;
+	ev.key_repeat = repeat;
+	app_event(&ev);
+}
+
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 static WNDPROC g_soluna_prev_wndproc = NULL;
 static BOOL g_soluna_wndproc_installed = FALSE;
@@ -805,6 +818,310 @@ soluna_win32_set_ime_font(const char *font_name, float height_px) {
 }
 #endif
 
+#if defined(__linux__)
+static XIM g_soluna_linux_im = NULL;
+static XIC g_soluna_linux_ic = NULL;
+static bool g_soluna_linux_xim_failed = false;
+static bool g_soluna_linux_has_focus = false;
+static bool g_soluna_linux_locale_ready = false;
+static const int SOLUNA_LINUX_CHAR_QUEUE_CAP = 32;
+static uint32_t g_soluna_linux_expected_chars[32];
+static int g_soluna_linux_expected_count = 0;
+static uint32_t g_soluna_linux_ignore_chars[32];
+static int g_soluna_linux_ignore_count = 0;
+
+static Display *
+soluna_linux_display(void) {
+	return (Display *)sapp_x11_get_display();
+}
+
+static Window
+soluna_linux_window(void) {
+	return (Window)(uintptr_t)sapp_x11_get_window();
+}
+
+static void
+soluna_linux_queue_push(uint32_t *buffer, int *count, int max, uint32_t code) {
+	if (*count == max) {
+		memmove(buffer, buffer + 1, (size_t)(max - 1) * sizeof(uint32_t));
+		buffer[max - 1] = code;
+	} else {
+		buffer[*count] = code;
+		(*count)++;
+	}
+}
+
+static bool
+
+soluna_linux_queue_consume(uint32_t *buffer, int *count, uint32_t code) {
+	for (int i = 0; i < *count; ++i) {
+		if (buffer[i] == code) {
+			if (i < *count - 1) {
+				memmove(buffer + i, buffer + i + 1, (size_t)(*count - i - 1) * sizeof(uint32_t));
+			}
+			(*count)--;
+			return true;
+		}
+	}
+	return false;
+}
+
+static void
+soluna_linux_ensure_locale(void) {
+	if (g_soluna_linux_locale_ready) {
+		return;
+	}
+	setlocale(LC_CTYPE, "");
+	XSetLocaleModifiers("");
+	g_soluna_linux_locale_ready = true;
+}
+
+static void
+soluna_linux_set_spot(short x, short y) {
+	if (!g_soluna_linux_ic) {
+		return;
+	}
+	XPoint spot = { x, y };
+	XVaNestedList preedit = XVaCreateNestedList(0, XNSpotLocation, &spot, NULL);
+	if (preedit) {
+		XSetICValues(g_soluna_linux_ic, XNPreeditAttributes, preedit, NULL);
+		XFree(preedit);
+	}
+}
+
+
+static bool
+soluna_linux_ensure_im(void) {
+	if (g_soluna_linux_ic) {
+		return true;
+	}
+	if (g_soluna_linux_xim_failed) {
+		return false;
+	}
+	Display *dpy = soluna_linux_display();
+	Window win = soluna_linux_window();
+	if (!dpy || !win) {
+		return false;
+	}
+	soluna_linux_ensure_locale();
+	XIM im = XOpenIM(dpy, NULL, NULL, NULL);
+	if (!im) {
+		g_soluna_linux_xim_failed = true;
+		return false;
+	}
+	XIC ic = XCreateIC(
+		im,
+		XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
+		XNClientWindow, win,
+		XNFocusWindow, win,
+		NULL);
+	if (!ic) {
+		XCloseIM(im);
+		return false;
+	}
+	g_soluna_linux_im = im;
+	g_soluna_linux_ic = ic;
+	soluna_linux_set_spot(0, 0);
+	return true;
+}
+
+static void
+soluna_linux_update_spot(void) {
+	if (!g_soluna_ime_rect.valid) {
+		return;
+	}
+	if (!soluna_linux_ensure_im()) {
+		return;
+	}
+	float scale = sapp_dpi_scale();
+	if (scale <= 0.0f) {
+		scale = 1.0f;
+	}
+	float caret_x = g_soluna_ime_rect.x;
+	float caret_y = g_soluna_ime_rect.y + g_soluna_ime_rect.h;
+	if (caret_x < 0.0f) {
+		caret_x = 0.0f;
+	}
+	if (caret_y < 0.0f) {
+		caret_y = 0.0f;
+	}
+	short spot_x = (short)(caret_x * scale + 0.5f);
+	short spot_y = (short)(caret_y * scale + 0.5f);
+	soluna_linux_set_spot(spot_x, spot_y);
+}
+
+static void
+soluna_linux_emit_utf8(const char *text, int len, uint32_t mods, bool repeat) {
+	if (!text || len <= 0) {
+		return;
+	}
+	mbstate_t state;
+	memset(&state, 0, sizeof(state));
+	const char *ptr = text;
+	const char *end = text + len;
+	bool first = true;
+	while (ptr < end) {
+		char32_t ch = 0;
+		size_t consumed = mbrtoc32(&ch, ptr, (size_t)(end - ptr), &state);
+		if (consumed == (size_t)-1 || consumed == (size_t)-2) {
+			memset(&state, 0, sizeof(state));
+			++ptr;
+			continue;
+		}
+		if (consumed == 0) {
+			consumed = 1;
+		}
+		soluna_linux_queue_push(g_soluna_linux_expected_chars, &g_soluna_linux_expected_count, SOLUNA_LINUX_CHAR_QUEUE_CAP, (uint32_t)ch);
+		soluna_emit_char((uint32_t)ch, mods, first ? repeat : false);
+		first = false;
+		ptr += consumed;
+	}
+}
+
+static bool
+soluna_linux_handle_keypress(XKeyEvent *kev) {
+	if (!kev) {
+		return false;
+	}
+	Display *dpy = soluna_linux_display();
+	if (!dpy || kev->display != dpy || kev->window != soluna_linux_window()) {
+		return false;
+	}
+	if (!soluna_linux_ensure_im()) {
+		return false;
+	}
+	char local_buf[128];
+	char *buf = local_buf;
+	int cap = (int)sizeof(local_buf) - 1;
+	KeySym ks = 0;
+	Status status = 0;
+	int len = Xutf8LookupString(g_soluna_linux_ic, kev, buf, cap, &ks, &status);
+	if (status == XBufferOverflow && len > 0) {
+		buf = (char *)malloc((size_t)len + 1);
+		if (!buf) {
+			return false;
+		}
+		cap = len;
+		len = Xutf8LookupString(g_soluna_linux_ic, kev, buf, cap, &ks, &status);
+	}
+	bool consumed = false;
+	if (len > 0 && (status == XLookupChars || status == XLookupBoth)) {
+		uint32_t mods = _sapp_x11_mods((uint32_t)kev->state);
+		bool repeat = false;
+		int keycode = (int)kev->keycode;
+		if (keycode >= 0 && keycode < _SAPP_X11_MAX_X11_KEYCODES) {
+			repeat = _sapp.x11.key_repeat[keycode];
+		}
+		buf[len] = '\0';
+		soluna_linux_emit_utf8(buf, len, mods, repeat);
+		mbstate_t cp_state;
+		memset(&cp_state, 0, sizeof(cp_state));
+		char32_t first_cp = 0;
+		size_t cp_res = mbrtoc32(&first_cp, buf, (size_t)len, &cp_state);
+		if (cp_res == (size_t)-1 || cp_res == (size_t)-2) {
+			consumed = false;
+		} else {
+			if (cp_res == 0) {
+				first_cp = 0;
+			}
+			consumed = (first_cp >= 0x20 && first_cp != 0x7F);
+		}
+	}
+	if (buf != local_buf) {
+		free(buf);
+	}
+	return consumed;
+}
+
+static bool
+soluna_linux_filter_event(Display *dpy, XEvent *event) {
+	if (!event) {
+		return true;
+	}
+	if (XFilterEvent(event, None)) {
+		return true;
+	}
+	if (event->type == KeyPress) {
+		if (event->xkey.display != soluna_linux_display() || event->xkey.window != soluna_linux_window()) {
+			return false;
+		}
+		if (soluna_linux_handle_keypress(&event->xkey)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static int (*soluna_linux_real_XNextEvent)(Display *, XEvent *) = NULL;
+
+static int
+soluna_linux_XNextEvent(Display *display, XEvent *event) {
+	if (!soluna_linux_real_XNextEvent) {
+		soluna_linux_real_XNextEvent = (int (*)(Display *, XEvent *))dlsym(RTLD_NEXT, "XNextEvent");
+		if (!soluna_linux_real_XNextEvent) {
+			fprintf(stderr, "soluna: failed to resolve XNextEvent\n");
+			abort();
+		}
+	}
+	for (;;) {
+		int r = soluna_linux_real_XNextEvent(display, event);
+		if (r != 0) {
+			return r;
+		}
+		if (!soluna_linux_filter_event(display, event)) {
+			return 0;
+		}
+	}
+}
+
+int
+XNextEvent(Display *display, XEvent *event) {
+	return soluna_linux_XNextEvent(display, event);
+}
+
+static void
+soluna_linux_focus_in(void) {
+	g_soluna_linux_xim_failed = false;
+	if (!soluna_linux_ensure_im()) {
+		return;
+	}
+	if (!g_soluna_linux_has_focus) {
+		XSetICFocus(g_soluna_linux_ic);
+		g_soluna_linux_has_focus = true;
+	}
+	soluna_linux_update_spot();
+}
+
+static void
+soluna_linux_focus_out(void) {
+	if (!g_soluna_linux_ic) {
+		return;
+	}
+	if (g_soluna_linux_has_focus) {
+		XUnsetICFocus(g_soluna_linux_ic);
+		g_soluna_linux_has_focus = false;
+	}
+	g_soluna_linux_expected_count = 0;
+	g_soluna_linux_ignore_count = 0;
+}
+
+static void
+soluna_linux_shutdown_ime(void) {
+	if (g_soluna_linux_ic) {
+		XDestroyIC(g_soluna_linux_ic);
+		g_soluna_linux_ic = NULL;
+	}
+	if (g_soluna_linux_im) {
+		XCloseIM(g_soluna_linux_im);
+		g_soluna_linux_im = NULL;
+	}
+	g_soluna_linux_has_focus = false;
+	g_soluna_linux_xim_failed = false;
+	g_soluna_linux_expected_count = 0;
+	g_soluna_linux_ignore_count = 0;
+}
+#endif
+
 static int
 lmessage_send(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
@@ -873,13 +1190,19 @@ lset_window_title(lua_State *L) {
 
 static int
 lset_ime_rect(lua_State *L) {
-#if defined(__APPLE__) || defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
+#if defined(__APPLE__) || defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__linux__)
 	if (lua_isnoneornil(L, 1)) {
 		g_soluna_ime_rect.valid = false;
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 		soluna_win32_apply_ime_rect();
 #elif defined(__APPLE__)
 		soluna_macos_hide_ime_label();
+#elif defined(__linux__)
+		if (soluna_linux_ensure_im()) {
+			soluna_linux_set_spot(0, 0);
+		}
+		g_soluna_linux_expected_count = 0;
+		g_soluna_linux_ignore_count = 0;
 #endif
 		return 0;
 	}
@@ -897,6 +1220,8 @@ lset_ime_rect(lua_State *L) {
 			soluna_macos_refresh_ime_label(view);
 		}
 	}
+#elif defined(__linux__)
+	soluna_linux_update_spot();
 #endif
 #endif
 	return 0;
@@ -1197,6 +1522,9 @@ app_init() {
 #if defined(__APPLE__)
 	soluna_macos_install_ime();
 #endif
+#if defined(__linux__)
+	soluna_linux_ensure_im();
+#endif
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 	soluna_win32_install_wndproc();
 #endif
@@ -1262,6 +1590,9 @@ app_cleanup() {
 	if (L) {
 		invoke_callback(L, CLEANUP_CALLBACK, 0);
 	}
+#if defined(__linux__)
+	soluna_linux_shutdown_ime();
+#endif
 	sg_shutdown();
 }
 
@@ -1274,9 +1605,35 @@ app_event(const sapp_event* ev) {
 		return;
 	}
 #endif
+#if defined(__linux__)
+	if (ev->type == SAPP_EVENTTYPE_CHAR) {
+		if (soluna_linux_queue_consume(g_soluna_linux_expected_chars, &g_soluna_linux_expected_count, ev->char_code)) {
+			soluna_linux_queue_push(g_soluna_linux_ignore_chars, &g_soluna_linux_ignore_count, SOLUNA_LINUX_CHAR_QUEUE_CAP, ev->char_code);
+		} else if (g_soluna_linux_ignore_count > 0) {
+			if (soluna_linux_queue_consume(g_soluna_linux_ignore_chars, &g_soluna_linux_ignore_count, ev->char_code)) {
+				return;
+			} else if (g_soluna_linux_ignore_count > 0) {
+				uint32_t stale = g_soluna_linux_ignore_chars[0];
+				soluna_linux_queue_consume(g_soluna_linux_ignore_chars, &g_soluna_linux_ignore_count, stale);
+			}
+		}
+	}
+#endif
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 	if (ev->type == SAPP_EVENTTYPE_FOCUSED && g_soluna_ime_rect.valid) {
 		soluna_win32_apply_ime_rect();
+	}
+#endif
+#if defined(__linux__)
+	if (ev->type == SAPP_EVENTTYPE_FOCUSED) {
+		soluna_linux_focus_in();
+		if (g_soluna_ime_rect.valid) {
+			soluna_linux_update_spot();
+		}
+	} else if (ev->type == SAPP_EVENTTYPE_UNFOCUSED) {
+		soluna_linux_focus_out();
+	} else if (ev->type == SAPP_EVENTTYPE_RESIZED && g_soluna_ime_rect.valid) {
+		soluna_linux_update_spot();
 	}
 #endif
 	lua_State *L = get_L(CTX);
