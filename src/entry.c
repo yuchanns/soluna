@@ -108,7 +108,7 @@ struct soluna_ime_rect_state {
 static struct soluna_ime_rect_state g_soluna_ime_rect = { 0.0f, 0.0f, 0.0f, 0.0f, false };
 #endif
 
-static void soluna_emit_char(uint32_t codepoint, uint32_t modifiers, bool repeat);
+static inline void soluna_emit_char(uint32_t codepoint, uint32_t modifiers, bool repeat);
 
 #if defined(__APPLE__)
 static bool g_soluna_macos_composition = false;
@@ -653,7 +653,7 @@ soluna_macos_install_ime(void) {
 }
 #endif
 
-static void
+static inline void
 soluna_emit_char(uint32_t codepoint, uint32_t modifiers, bool repeat) {
 	sapp_event ev;
 	memset(&ev, 0, sizeof(ev));
