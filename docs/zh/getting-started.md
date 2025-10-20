@@ -6,29 +6,17 @@
 
 - **Windows**: GCC (MinGW) 或 MSVC 编译器
 - **macOS/Linux**: GCC 或 Clang 编译器
-- **所有平台**: Make 工具
+- **所有平台**: luamake 构建工具
 
 ## 构建 Soluna
 
-### Windows (使用 MinGW)
+Soluna 使用 luamake 作为构建系统。构建方法：
 
 ```bash
-make
+luamake
 ```
 
-### Windows (使用 MSVC)
-
-```bash
-make CC=cl
-```
-
-### macOS/Linux
-
-```bash
-make
-```
-
-编译后的可执行文件将被放置在 `bin/` 目录中。
+编译后的可执行文件将根据平台和构建模式放置在 `bin/` 目录中。
 
 ## 第一个 Soluna 程序
 
@@ -229,26 +217,6 @@ function callback.mouse_move(x, y)
 end
 ```
 
-### 手柄输入
-
-```lua
-local soluna = require "soluna"
-
--- 初始化手柄
-local gamepad_state = soluna.gamepad_init()
-
-function callback.frame(count)
-    -- 访问手柄状态
-    if gamepad_state.button_a then
-        -- A 按钮被按下
-    end
-    
-    -- 左摇杆
-    local lx = gamepad_state.axis_left_x or 0
-    local ly = gamepad_state.axis_left_y or 0
-end
-```
-
 ## 使用布局系统
 
 ```lua
@@ -310,7 +278,7 @@ end
 
 1. 确保安装了正确的编译器
 2. 检查所有子模块是否已初始化：`git submodule update --init --recursive`
-3. 清理并重新构建：`make clean && make`
+3. 清理并重新构建：`luamake rebuild`
 
 ### 运行时错误
 

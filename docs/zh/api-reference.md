@@ -99,33 +99,6 @@ local sprites = soluna.load_sprites("asset/sprites.dl")
 local player_sprite = sprites.player
 ```
 
-#### `soluna.gamepad_init()`
-初始化手柄支持并返回手柄状态表。
-
-**返回值:**
-- `table`: 每帧更新的手柄状态表
-
-**手柄状态字段:**
-- `button_a`, `button_b`, `button_x`, `button_y` (boolean)
-- `button_back`, `button_start` (boolean)
-- `dpad_up`, `dpad_down`, `dpad_left`, `dpad_right` (boolean)
-- `shoulder_left`, `shoulder_right` (boolean)
-- `axis_left_x`, `axis_left_y` (number): 左摇杆位置 (-1 到 1)
-- `axis_right_x`, `axis_right_y` (number): 右摇杆位置 (-1 到 1)
-- `trigger_left`, `trigger_right` (number): 扳机压力 (0 到 1)
-
-**示例:**
-```lua
-local gamepad = soluna.gamepad_init()
-
-function callback.frame(count)
-    if gamepad.button_a then
-        player_jump()
-    end
-    player.x = player.x + gamepad.axis_left_x * 5
-end
-```
-
 ---
 
 ## 模块：`soluna.layout`
@@ -315,6 +288,55 @@ local fontid = font.name("")  -- 获取最后导入的字体
 
 ---
 
+## 模块：`soluna.text`
+
+文本转换和富文本图标嵌入。
+
+```lua
+local text = require "soluna.text"
+```
+
+### 函数
+
+#### `text.init(bundle_file)`
+使用图标包初始化文本系统。
+
+**参数:**
+- `bundle_file` (string): 图标精灵包文件路径
+
+**示例:**
+```lua
+local text = require "soluna.text"
+text.init("asset/icons.dl")
+```
+
+#### `text.convert`
+转换带有嵌入图标标签和颜色代码的文本字符串的表。
+
+**用法:**
+```lua
+local converted = text.convert["你好 [icon_name] 世界"]
+```
+
+文本转换支持：
+- 图标嵌入：`[icon_name]` 从加载的包嵌入图标
+- 颜色代码：`[FF0000]` 设置文本颜色（RGB 十六进制）
+- 命名颜色：`[red]`、`[green]`、`[blue]`、`[white]`、`[black]` 等
+- 自定义十六进制颜色：`[c808080]` 用于自定义 RGB 值
+
+**示例:**
+```lua
+local text = require "soluna.text"
+text.init("asset/icons.dl")
+
+-- 带图标和颜色的文本
+local label = "生命值: [heart_icon] [red]100[white]"
+local converted = text.convert[label]
+-- 使用 mattext.block 使用转换后的文本
+```
+
+---
+
 ## 模块：`soluna.font.system`
 
 系统字体访问。
@@ -488,6 +510,26 @@ local image = require "soluna.image"
 **返回值:**
 - `data`, `width`, `height`: 图像数据和尺寸
 
+#### `image.resize(data, width, height, scale)`
+按比例因子缩放图像。
+
+**参数:**
+- `data`: 图像数据
+- `width`, `height` (number): 源图像尺寸
+- `scale` (number): 缩放因子（例如，0.5 表示一半大小，0.25 表示四分之一大小）
+
+**返回值:**
+- `data`, `width`, `height`: 缩放后的图像数据和新尺寸
+
+**示例:**
+```lua
+local file = require "soluna.file"
+local c = file.load("asset/icon.png")
+local data, w, h = image.load(c)
+-- 创建一半大小的版本
+local mid_data, mid_w, mid_h = image.resize(data, w, h, 0.5)
+```
+
 #### `image.new(width, height)`
 创建新的空白图像。
 
@@ -613,55 +655,6 @@ local datalist = require "soluna.datalist"
 
 **返回值:**
 - `array`: 解析后的列表结构
-
----
-
-## 模块：`ltask`
-
-多线程和消息传递。
-
-```lua
-local ltask = require "ltask"
-```
-
-### 函数
-
-#### `ltask.call(service, method, ...)`
-对服务进行同步调用。
-
-**参数:**
-- `service`: 服务地址
-- `method` (string): 方法名
-- `...`: 方法参数
-
-**返回值:**
-- 来自服务方法的返回值
-
-#### `ltask.send(service, method, ...)`
-向服务发送异步消息。
-
-**参数:**
-- `service`: 服务地址
-- `method` (string): 方法名
-- `...`: 方法参数
-
-#### `ltask.uniqueservice(name)`
-获取或创建唯一服务实例。
-
-**参数:**
-- `name` (string): 服务名称
-
-**返回值:**
-- 服务地址
-
-#### `ltask.queryservice(name)`
-按名称查询服务。
-
-**参数:**
-- `name` (string): 服务名称
-
-**返回值:**
-- 服务地址或 nil
 
 ---
 

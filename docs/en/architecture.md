@@ -324,19 +324,18 @@ Services can be located by:
 
 ### Build Process
 
-Soluna uses both Make and luamake build systems:
+Soluna uses luamake as its build system:
 
-**Makefile** (Windows-focused):
 1. Build standalone Lua interpreter
 2. Compile Lua scripts to C headers
 3. Compile shaders to C headers
 4. Compile C/C++ sources
 5. Link final executable
 
-**luamake** (Cross-platform):
-- Modern Lua-based build system
-- Better cross-platform support
-- Used for macOS, Linux, and WASM builds
+To build the project:
+```bash
+luamake
+```
 
 ### Code Generation
 
@@ -408,19 +407,10 @@ Sokol provides cross-platform abstractions for:
 
 ### Optimization Strategies
 
-1. **Batch Rendering**: Minimize draw calls by batching sprites
-2. **Texture Atlases**: Reduce texture switching
-3. **SDF Text**: Smooth text without multiple font sizes
-4. **Multithreading**: Parallel asset loading and processing
-5. **Dirty State Tracking**: Only update what changed
-
-### Bottlenecks
-
-Common performance bottlenecks:
-- **GPU Upload**: Large texture updates
-- **Draw Calls**: Too many render batches
-- **Lua GC**: Excessive garbage generation
-- **File I/O**: Synchronous file loading
+1. **Batch Rendering**: Batch sprites to reduce draw calls
+2. **Texture Atlases**: Minimize texture switching
+3. **SDF Text**: Render text at any scale without quality loss
+4. **Dirty State Tracking**: Update only modified elements
 
 ### Profiling
 
@@ -428,7 +418,6 @@ Use platform-specific tools:
 - **Windows**: Visual Studio Profiler, PIX
 - **macOS**: Instruments
 - **Linux**: perf, Valgrind
-- **All**: Lua profiling hooks
 
 ## Extension Points
 
@@ -482,19 +471,8 @@ print("Service received:", method, ...)
 - Enable validation layers
 - Capture frames with platform tools (RenderDoc, Xcode, etc.)
 
-## Future Directions
-
-Potential areas for improvement:
-- **3D Rendering**: Add 3D sprite support
-- **Particle Systems**: Built-in particle effects
-- **Physics**: Integrate physics engine
-- **Audio**: Add audio support
-- **Networking**: Multiplayer capabilities
-- **Editor**: Visual game editor
-
 ## References
 
-- [ltask](https://github.com/cloudwu/ltask): Multithreading library
 - [Sokol](https://github.com/floooh/sokol): Graphics library
 - [Yoga](https://github.com/facebook/yoga): Layout engine
 - [stb_image](https://github.com/nothings/stb): Image loading

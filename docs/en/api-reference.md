@@ -99,33 +99,6 @@ local sprites = soluna.load_sprites("asset/sprites.dl")
 local player_sprite = sprites.player
 ```
 
-#### `soluna.gamepad_init()`
-Initializes gamepad support and returns the gamepad state table.
-
-**Returns:**
-- `table`: Gamepad state table updated every frame
-
-**Gamepad State Fields:**
-- `button_a`, `button_b`, `button_x`, `button_y` (boolean)
-- `button_back`, `button_start` (boolean)
-- `dpad_up`, `dpad_down`, `dpad_left`, `dpad_right` (boolean)
-- `shoulder_left`, `shoulder_right` (boolean)
-- `axis_left_x`, `axis_left_y` (number): Left stick position (-1 to 1)
-- `axis_right_x`, `axis_right_y` (number): Right stick position (-1 to 1)
-- `trigger_left`, `trigger_right` (number): Trigger pressure (0 to 1)
-
-**Example:**
-```lua
-local gamepad = soluna.gamepad_init()
-
-function callback.frame(count)
-    if gamepad.button_a then
-        player_jump()
-    end
-    player.x = player.x + gamepad.axis_left_x * 5
-end
-```
-
 ---
 
 ## Module: `soluna.layout`
@@ -315,6 +288,55 @@ Imports icon sprites for text rendering.
 
 ---
 
+## Module: `soluna.text`
+
+Text conversion and icon embedding for rich text.
+
+```lua
+local text = require "soluna.text"
+```
+
+### Functions
+
+#### `text.init(bundle_file)`
+Initializes the text system with an icon bundle.
+
+**Parameters:**
+- `bundle_file` (string): Path to icon sprite bundle file
+
+**Example:**
+```lua
+local text = require "soluna.text"
+text.init("asset/icons.dl")
+```
+
+#### `text.convert`
+A table that converts text strings with embedded icon tags and color codes.
+
+**Usage:**
+```lua
+local converted = text.convert["Hello [icon_name] world"]
+```
+
+Text conversion supports:
+- Icon embedding: `[icon_name]` embeds icons from the loaded bundle
+- Color codes: `[FF0000]` sets text color (RGB hex)
+- Named colors: `[red]`, `[green]`, `[blue]`, `[white]`, `[black]`, etc.
+- Custom hex colors: `[c808080]` for custom RGB values
+
+**Example:**
+```lua
+local text = require "soluna.text"
+text.init("asset/icons.dl")
+
+-- Text with icon and color
+local label = "Health: [heart_icon] [red]100[white]"
+local converted = text.convert[label]
+-- Use converted text with mattext.block
+```
+
+---
+
 ## Module: `soluna.font.system`
 
 System font access.
@@ -488,6 +510,26 @@ Loads an image with alpha channel processing.
 **Returns:**
 - `data`, `width`, `height`: Image data and dimensions
 
+#### `image.resize(data, width, height, scale)`
+Resizes an image by a scale factor.
+
+**Parameters:**
+- `data`: Image data
+- `width`, `height` (number): Source image dimensions
+- `scale` (number): Scale factor (e.g., 0.5 for half size, 0.25 for quarter size)
+
+**Returns:**
+- `data`, `width`, `height`: Resized image data and new dimensions
+
+**Example:**
+```lua
+local file = require "soluna.file"
+local c = file.load("asset/icon.png")
+local data, w, h = image.load(c)
+-- Create half-size version
+local mid_data, mid_w, mid_h = image.resize(data, w, h, 0.5)
+```
+
 #### `image.new(width, height)`
 Creates a new blank image.
 
@@ -613,55 +655,6 @@ Parses datalist format as a list.
 
 **Returns:**
 - `array`: Parsed list structure
-
----
-
-## Module: `ltask`
-
-Multithreading and message passing.
-
-```lua
-local ltask = require "ltask"
-```
-
-### Functions
-
-#### `ltask.call(service, method, ...)`
-Makes a synchronous call to a service.
-
-**Parameters:**
-- `service`: Service address
-- `method` (string): Method name
-- `...`: Method arguments
-
-**Returns:**
-- Return values from the service method
-
-#### `ltask.send(service, method, ...)`
-Sends an asynchronous message to a service.
-
-**Parameters:**
-- `service`: Service address
-- `method` (string): Method name
-- `...`: Method arguments
-
-#### `ltask.uniqueservice(name)`
-Gets or creates a unique service instance.
-
-**Parameters:**
-- `name` (string): Service name
-
-**Returns:**
-- Service address
-
-#### `ltask.queryservice(name)`
-Queries for a service by name.
-
-**Parameters:**
-- `name` (string): Service name
-
-**Returns:**
-- Service address or nil
 
 ---
 

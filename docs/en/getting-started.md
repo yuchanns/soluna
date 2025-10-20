@@ -6,29 +6,17 @@ This guide will help you get started with Soluna game engine development.
 
 - **Windows**: GCC (MinGW) or MSVC compiler
 - **macOS/Linux**: GCC or Clang compiler
-- **All platforms**: Make utility
+- **All platforms**: luamake build tool
 
 ## Building Soluna
 
-### Windows (with MinGW)
+Soluna uses luamake as its build system. To build:
 
 ```bash
-make
+luamake
 ```
 
-### Windows (with MSVC)
-
-```bash
-make CC=cl
-```
-
-### macOS/Linux
-
-```bash
-make
-```
-
-The compiled executable will be placed in the `bin/` directory.
+The compiled executable will be placed in the `bin/` directory according to your platform and build mode.
 
 ## Your First Soluna Program
 
@@ -229,25 +217,7 @@ function callback.mouse_move(x, y)
 end
 ```
 
-### Gamepad Input
 
-```lua
-local soluna = require "soluna"
-
--- Initialize gamepad
-local gamepad_state = soluna.gamepad_init()
-
-function callback.frame(count)
-    -- Access gamepad state
-    if gamepad_state.button_a then
-        -- A button is pressed
-    end
-    
-    -- Left stick
-    local lx = gamepad_state.axis_left_x or 0
-    local ly = gamepad_state.axis_left_y or 0
-end
-```
 
 ## Using Layout System
 
@@ -310,7 +280,8 @@ If you encounter build errors:
 
 1. Ensure you have the correct compiler installed
 2. Check that all submodules are initialized: `git submodule update --init --recursive`
-3. Clean and rebuild: `make clean && make`
+3. Clean and rebuild: `luamake rebuild`
+
 
 ### Runtime Errors
 

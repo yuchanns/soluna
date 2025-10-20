@@ -4,26 +4,25 @@ Soluna is a framework for creating 2D games in Lua with multithreading support.
 
 ## Overview
 
-Soluna is a lightweight, high-performance 2D game engine that leverages Lua for scripting and provides built-in multithreading capabilities through ltask. It's designed to be simple yet powerful, making it ideal for developing cross-platform 2D games.
+Soluna is a 2D game engine that uses Lua for scripting and provides multithreading capabilities through ltask. It's designed for developing cross-platform 2D games.
 
 ## Features
 
-- **Lua Scripting**: Write your game logic in Lua, a lightweight and fast scripting language
-- **Multithreading**: Built-in support for concurrent operations using ltask
+- **Lua Scripting**: Write game logic in Lua
+- **Multithreading**: Support for concurrent operations using ltask
 - **Cross-Platform**: Supports Windows, macOS, Linux, and WebAssembly (WASM)
-- **Modern Rendering**: Uses Sokol for efficient graphics rendering
+- **Modern Rendering**: Uses Sokol for graphics rendering
 - **Flexible Layout**: Yoga-based layout system for UI elements
-- **Sprite Management**: Efficient sprite batching and texture atlas support
-- **Text Rendering**: Advanced text rendering with TrueType font support
-- **Gamepad Support**: Built-in gamepad input handling
-- **Resource Management**: Efficient loading and management of game assets
+- **Sprite Management**: Sprite batching and texture atlas support
+- **Text Rendering**: Text rendering with TrueType font support
+- **Resource Management**: Asset loading and management
 
 ## Core Components
 
 ### Rendering System
 - Hardware-accelerated 2D rendering using Sokol
 - Material system with support for default, text, quad, and mask materials
-- Sprite batching for optimal performance
+- Sprite batching
 - Multiple render passes and viewports
 
 ### Layout Engine

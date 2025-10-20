@@ -9,11 +9,10 @@
 3. [文本渲染](#文本渲染)
 4. [布局系统](#布局系统)
 5. [输入处理](#输入处理)
-6. [手柄支持](#手柄支持)
-7. [动画](#动画)
-8. [UI 元素](#ui-元素)
-9. [保存和加载数据](#保存和加载数据)
-10. [完整小游戏](#完整小游戏)
+6. [动画](#动画)
+7. [UI 元素](#ui-元素)
+8. [保存和加载数据](#保存和加载数据)
+9. [完整小游戏](#完整小游戏)
 
 ---
 
@@ -304,62 +303,6 @@ function callback.key(keycode, state)
     if state == 1 then
         last_key = tostring(keycode)
     end
-end
-
-return callback
-```
-
----
-
-## 手柄支持
-
-使用手柄输入进行玩家控制。
-
-**main.lua:**
-```lua
-local soluna = require "soluna"
-local matquad = require "soluna.material.quad"
-
-soluna.set_window_title("手柄示例")
-
-local args = ...
-local batch = args.batch
-
--- 初始化手柄
-local gamepad = soluna.gamepad_init()
-
-local player_x = 400
-local player_y = 300
-local player_speed = 5
-
-local callback = {}
-
-function callback.frame(count)
-    -- 背景
-    local bg = matquad.quad(args.width, args.height, 0x334455ff)
-    batch:add(bg, 0, 0)
-    
-    -- 从手柄更新玩家位置
-    if gamepad then
-        local lx = gamepad.axis_left_x or 0
-        local ly = gamepad.axis_left_y or 0
-        
-        player_x = player_x + lx * player_speed
-        player_y = player_y + ly * player_speed
-        
-        -- 限制在屏幕内
-        player_x = math.max(0, math.min(args.width, player_x))
-        player_y = math.max(0, math.min(args.height, player_y))
-        
-        -- A 按钮跳跃
-        if gamepad.button_a then
-            -- 这里是跳跃逻辑
-        end
-    end
-    
-    -- 绘制玩家
-    local player = matquad.quad(32, 32, 0xff0000ff)
-    batch:add(player, player_x - 16, player_y - 16)
 end
 
 return callback
@@ -727,10 +670,7 @@ return callback
 1. **使用批处理**: 将绘制调用分组以获得更好的性能
 2. **缓存资源**: 一次加载精灵和字体，重复使用它们
 3. **优化布局**: 仅在需要时重新计算布局
-4. **分析游戏**: 使用帧计数器测量性能
-5. **处理窗口大小调整**: 始终实现 `callback.window_resize`
-6. **清晰的输入处理**: 对复杂输入使用状态机
-7. **经常保存**: 定期自动保存游戏状态
-8. **在目标平台上测试**: 始终在目标平台上测试
+4. **处理窗口大小调整**: 实现 `callback.window_resize`
+5. **在目标平台上测试**: 在目标平台上测试
 
 使用 Soluna 愉快地开发游戏！

@@ -9,11 +9,10 @@ This document provides practical examples and tutorials for common game developm
 3. [Text Rendering](#text-rendering)
 4. [Layout System](#layout-system)
 5. [Input Handling](#input-handling)
-6. [Gamepad Support](#gamepad-support)
-7. [Animation](#animation)
-8. [UI Elements](#ui-elements)
-9. [Saving and Loading Data](#saving-and-loading-data)
-10. [Complete Mini-Game](#complete-mini-game)
+6. [Animation](#animation)
+7. [UI Elements](#ui-elements)
+8. [Saving and Loading Data](#saving-and-loading-data)
+9. [Complete Mini-Game](#complete-mini-game)
 
 ---
 
@@ -303,78 +302,6 @@ end
 function callback.key(keycode, state)
     if state == 1 then
         last_key = tostring(keycode)
-    end
-end
-
-return callback
-```
-
----
-
-## Gamepad Support
-
-Use gamepad input for player control.
-
-**main.lua:**
-```lua
-local soluna = require "soluna"
-local matquad = require "soluna.material.quad"
-
-soluna.set_window_title("Gamepad Example")
-
-local args = ...
-local batch = args.batch
-
--- Initialize gamepad
-local gamepad = soluna.gamepad_init()
-
-local player_x = 400
-local player_y = 300
-local player_speed = 5
-
-local callback = {}
-
-function callback.frame(count)
-    -- Background
-    local bg = matquad.quad(args.width, args.height, 0x334455ff)
-    batch:add(bg, 0, 0)
-    
-    -- Update player position from gamepad
-    if gamepad then
-        local lx = gamepad.axis_left_x or 0
-        local ly = gamepad.axis_left_y or 0
-        
-        player_x = player_x + lx * player_speed
-        player_y = player_y + ly * player_speed
-        
-        -- Clamp to screen
-        player_x = math.max(0, math.min(args.width, player_x))
-        player_y = math.max(0, math.min(args.height, player_y))
-        
-        -- Jump on A button
-        if gamepad.button_a then
-            -- Jump logic here
-        end
-    end
-    
-    -- Draw player
-    local player = matquad.quad(32, 32, 0xff0000ff)
-    batch:add(player, player_x - 16, player_y - 16)
-    
-    -- Draw stick indicator
-    if gamepad then
-        local lx = gamepad.axis_left_x or 0
-        local ly = gamepad.axis_left_y or 0
-        local stick_x = 100 + lx * 50
-        local stick_y = 100 + ly * 50
-        
-        -- Stick base
-        local base = matquad.quad(100, 100, 0x20ffffff)
-        batch:add(base, 50, 50)
-        
-        -- Stick indicator
-        local stick = matquad.quad(10, 10, 0xffffffff)
-        batch:add(stick, stick_x - 5, stick_y - 5)
     end
 end
 
@@ -754,10 +681,7 @@ For more advanced examples, check out:
 1. **Use Batching**: Group draw calls for better performance
 2. **Cache Resources**: Load sprites and fonts once, reuse them
 3. **Optimize Layouts**: Recalculate layouts only when needed
-4. **Profile Your Game**: Use frame counters to measure performance
-5. **Handle Window Resize**: Always implement `callback.window_resize`
-6. **Clean Input Handling**: Use state machines for complex input
-7. **Save Often**: Auto-save game state periodically
-8. **Test on Target Platform**: Always test on the platform you're targeting
+4. **Handle Window Resize**: Implement `callback.window_resize`
+5. **Test on Target Platform**: Test on the platform you're targeting
 
 Happy game development with Soluna!
