@@ -1,0 +1,321 @@
+# Getting Started with Soluna
+
+This guide will help you get started with Soluna game engine development.
+
+## Prerequisites
+
+- **Windows**: GCC (MinGW) or MSVC compiler
+- **macOS/Linux**: GCC or Clang compiler
+- **All platforms**: Make utility
+
+## Building Soluna
+
+### Windows (with MinGW)
+
+```bash
+make
+```
+
+### Windows (with MSVC)
+
+```bash
+make CC=cl
+```
+
+### macOS/Linux
+
+```bash
+make
+```
+
+The compiled executable will be placed in the `bin/` directory.
+
+## Your First Soluna Program
+
+### Hello World
+
+Create a file `hello.lua`:
+
+```lua
+print("Hello World")
+```
+
+Run it:
+
+```bash
+bin/soluna.exe entry=hello.lua
+```
+
+### Creating a Window
+
+Create a file `window.lua`:
+
+```lua
+local soluna = require "soluna"
+
+-- Set window title
+soluna.set_window_title("My First Game")
+
+-- Define callback functions
+local callback = {}
+
+function callback.frame(count)
+    -- This function is called every frame
+    -- count is the frame number
+end
+
+return callback
+```
+
+Run it:
+
+```bash
+bin/soluna.exe entry=window.lua
+```
+
+### Using a Game Configuration File
+
+Create `mygame.game`:
+
+```
+title : My First Game
+width : 1280
+height : 720
+entry : main.lua
+```
+
+Create `main.lua`:
+
+```lua
+local soluna = require "soluna"
+
+local callback = {}
+
+function callback.frame(count)
+    -- Your game logic here
+end
+
+function callback.key(keycode, state)
+    -- Handle keyboard input
+    -- state: 0=release, 1=press, 2=repeat
+    if state == 1 then
+        print("Key pressed:", keycode)
+    end
+end
+
+return callback
+```
+
+Run your game:
+
+```bash
+bin/soluna.exe mygame.game
+```
+
+## Project Structure
+
+A typical Soluna project structure:
+
+```
+mygame/
+├── mygame.game          # Game configuration
+├── main.lua             # Entry point
+├── asset/               # Game assets
+│   ├── sprites.dl       # Sprite definitions
+│   ├── images/          # Image files
+│   └── fonts/           # Font files
+└── scripts/             # Game scripts
+    ├── player.lua
+    ├── enemy.lua
+    └── ui.lua
+```
+
+## Loading Sprites
+
+### Define Sprite Bundle
+
+Create `asset/sprites.dl`:
+
+```
+sprite1 :
+    filename : sprite1.png
+    x : 0
+    y : 0
+```
+
+### Load and Display Sprites
+
+```lua
+local soluna = require "soluna"
+
+soluna.set_window_title("Sprite Example")
+
+-- Load sprite bundle
+local sprites = soluna.load_sprites("asset/sprites.dl")
+
+local callback = {}
+local args = ...
+local batch = args.batch
+
+function callback.frame(count)
+    -- Draw sprite at center of screen
+    local x = args.width / 2
+    local y = args.height / 2
+    batch:add(sprites.sprite1, x, y, 1, 0)
+end
+
+return callback
+```
+
+## Basic Text Rendering
+
+```lua
+local soluna = require "soluna"
+local font = require "soluna.font"
+local mattext = require "soluna.material.text"
+
+local args = ...
+local batch = args.batch
+
+-- Initialize font
+local sysfont = require "soluna.font.system"
+font.import(sysfont.ttfdata("Arial"))
+local fontid = font.name("")
+local fontcobj = font.cobj()
+
+-- Create text block
+local block, cursor = mattext.block(fontcobj, fontid, 32, 0xffffff, "CV")
+local label = block("Hello, Soluna!", 200, 50)
+
+local callback = {}
+
+function callback.frame(count)
+    batch:add(label, 100, 100)
+end
+
+return callback
+```
+
+## Handling Input
+
+### Keyboard Input
+
+```lua
+function callback.key(keycode, state)
+    -- state: 0=release, 1=press, 2=repeat
+    if state == 1 then
+        if keycode == 256 then  -- ESC
+            -- Exit game
+        elseif keycode == 32 then  -- SPACE
+            -- Jump
+        end
+    end
+end
+```
+
+### Mouse Input
+
+```lua
+function callback.mouse_button(button, state, x, y)
+    -- button: 0=left, 1=right, 2=middle
+    -- state: 0=release, 1=press
+    if button == 0 and state == 1 then
+        print("Clicked at:", x, y)
+    end
+end
+
+function callback.mouse_move(x, y)
+    -- Mouse moved to (x, y)
+end
+```
+
+### Gamepad Input
+
+```lua
+local soluna = require "soluna"
+
+-- Initialize gamepad
+local gamepad_state = soluna.gamepad_init()
+
+function callback.frame(count)
+    -- Access gamepad state
+    if gamepad_state.button_a then
+        -- A button is pressed
+    end
+    
+    -- Left stick
+    local lx = gamepad_state.axis_left_x or 0
+    local ly = gamepad_state.axis_left_y or 0
+end
+```
+
+## Using Layout System
+
+```lua
+local layout = require "soluna.layout"
+local datalist = require "soluna.datalist"
+
+-- Define layout
+local layout_def = [[
+id : container
+width : 800
+height : 600
+direction : column
+gap : 10
+header :
+    height : 60
+    background : 0xff0000ff
+content :
+    flex : 1
+    background : 0xff00ff00
+]]
+
+local dom = layout.load(datalist.parse_list(layout_def))
+
+-- Calculate layout
+local elements = layout.calc(dom)
+
+-- Draw layout
+for _, obj in ipairs(elements) do
+    if obj.background then
+        local quad = matquad.quad(obj.w, obj.h, obj.background)
+        batch:add(quad, obj.x, obj.y)
+    end
+end
+```
+
+## Next Steps
+
+- Explore [API Reference](api-reference.md) for detailed API documentation
+- Check out [Examples](examples.md) for more advanced examples
+- Study the [Deep Future](https://github.com/cloudwu/deepfuture) game source code for real-world usage
+
+## Common Keycodes
+
+- ESC: 256
+- SPACE: 32
+- Enter: 257
+- Arrow Left: 263
+- Arrow Right: 262
+- Arrow Up: 265
+- Arrow Down: 264
+- A-Z: 65-90
+- 0-9: 48-57
+
+## Troubleshooting
+
+### Build Errors
+
+If you encounter build errors:
+
+1. Ensure you have the correct compiler installed
+2. Check that all submodules are initialized: `git submodule update --init --recursive`
+3. Clean and rebuild: `make clean && make`
+
+### Runtime Errors
+
+- Check that all asset paths are correct
+- Ensure fonts are properly loaded before use
+- Verify that required services are initialized
+
+For more help, refer to the examples in the `test/` directory.
