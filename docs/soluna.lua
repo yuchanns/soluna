@@ -57,18 +57,27 @@ function soluna.load_sprites(filename) end
 local layout = {}
 
 ---
---- Loads a layout definition from a file
+--- Loads a layout definition from a file or table
 ---
----@param filename string Path to layout definition file
----@param scripts? table Script resolver table
----@return table document Layout document object
-function layout.load(filename, scripts) end
+--- The filename_or_list parameter can be:
+--- - A string: path to a .dl layout file (will be loaded and parsed)
+--- - A table: pre-parsed datalist structure
+---
+--- The scripts parameter is optional and provides a function table for script resolution.
+---
+---@param filename_or_list string|table Layout definition file path or parsed list
+---@param scripts? table Script resolver function table
+---@return table document Layout document object with element access by ID
+function layout.load(filename_or_list, scripts) end
 
 ---
 --- Calculates layout positions and dimensions
 ---
+--- Runs the Yoga layout calculation on the document and updates all element positions.
+--- Returns an array of element objects, each with x, y, w, h fields set to calculated values.
+---
 ---@param document table Layout document from layout.load()
----@return table[] elements Array of element objects with x, y, w, h fields
+---@return table[] elements Array of element objects with calculated x, y, w, h positions
 function layout.calc(document) end
 
 ---@class soluna.font
@@ -109,13 +118,23 @@ local mattext = {}
 ---
 --- Creates a text block renderer
 ---
+--- Returns two functions:
+--- 1. block(text, width, height) - creates a renderable text sprite
+--- 2. cursor(text, position, width, height) - calculates cursor position in text
+---
+--- Color format: RGBA as 32-bit integer. If alpha channel (high byte) is 0, defaults to 0xFF (opaque).
+--- Alignment codes (case-insensitive, can be combined):
+---   Horizontal: L (left), C (center), R (right)
+---   Vertical: T (top), V (center), B (bottom)
+---   Examples: "LT" (left-top), "CV" (center-vertical), "RB" (right-bottom)
+---
 ---@param fontcobj userdata Font system C object from font.cobj()
 ---@param fontid integer Font ID from font.name()
----@param size integer Font size in pixels
----@param color integer Text color (RGBA hex, 0 for default white)
----@param alignment string Alignment code ("L","C","R","T","V","B","H", e.g., "CV" for center)
----@return fun(text: string, width: integer, height: integer): userdata block_function Text block creator
----@return fun(text: string, position: integer, width: integer, height: integer): integer, integer, integer, integer, integer cursor_function Cursor position calculator
+---@param size? integer Font size in pixels (default: 16)
+---@param color? integer Text color (RGBA as 0xRRGGBBAA, default: 0xff000000 = opaque black)
+---@param alignment? string Alignment code (default: no alignment)
+---@return fun(text: string, width: integer, height: integer): userdata block_function Creates text sprite
+---@return fun(text: string, position: integer, width: integer, height: integer): integer, integer, integer, integer, integer, integer cursor_function Returns x, y, w, h, actual_position, descent
 function mattext.block(fontcobj, fontid, size, color, alignment) end
 
 ---@class soluna.material.quad
@@ -124,10 +143,13 @@ local matquad = {}
 ---
 --- Creates a colored rectangle sprite
 ---
----@param width integer Rectangle width
----@param height integer Rectangle height
----@param color integer Color in RGBA hex format (0xRRGGBBAA)
----@return userdata sprite Sprite object for rendering
+--- Color format: RGBA as 32-bit integer 0xRRGGBBAA.
+--- If alpha channel (high byte) is 0, it defaults to 0xFF (opaque).
+---
+---@param width integer Rectangle width in pixels
+---@param height integer Rectangle height in pixels
+---@param color integer Color in RGBA format (0xRRGGBBAA, e.g., 0xFF0000FF for opaque red)
+---@return userdata sprite Sprite object for rendering with batch:add()
 function matquad.quad(width, height, color) end
 
 ---@class soluna.material.mask
@@ -139,17 +161,25 @@ local text = {}
 ---
 --- Initializes the text system with an icon bundle
 ---
----@param bundle_file string Path to icon sprite bundle file
+--- Loads an icon sprite bundle and makes it available for embedding in text via text.convert.
+--- The bundle is kept in memory to prevent garbage collection.
+---
+---@param bundle_file string Path to icon sprite bundle file (.dl format)
 function text.init(bundle_file) end
 
 ---
 --- Table that converts text strings with embedded icon tags and color codes
 ---
+--- Usage: local converted = text.convert[original_text]
+---
 --- Supports:
---- - Icon embedding: [icon_name]
---- - Color codes: [FF0000] for RGB hex
---- - Named colors: [red], [green], [blue], [white], [black], etc.
---- - Custom hex: [c808080] for custom RGB
+--- - Icon embedding: [icon_name] - replaced with icon from bundle loaded with text.init()
+--- - Color codes: [RRGGBB] - sets text color (RGB hex, e.g., [FF0000] for red)
+--- - Named colors: [red], [green], [blue], [white], [black], [aqua], [yellow], [pink], [gray]
+--- - Custom hex colors: [cRRGGBB] - custom RGB (e.g., [c808080] for gray)
+--- - Escape brackets: [[ - literal bracket (replaced with [bracket] internally)
+---
+--- The table uses weak keys/values for memory efficiency.
 ---
 ---@type table<string, string>
 text.convert = {}
@@ -167,16 +197,20 @@ local image = {}
 function image.load(data) end
 
 ---
---- Resizes an image by a scale factor
+--- Resizes an image by scale factors
 ---
----@param data userdata Image data
+--- The image data can be either RGBA (4 channels) or grayscale (1 channel).
+--- Size is validated: for RGBA data must be width*height*4, for grayscale must be width*height.
+---
+---@param data userdata Image data (external string from image.load)
 ---@param width integer Source image width
 ---@param height integer Source image height
----@param scale number Scale factor (e.g., 0.5 for half size)
+---@param scale_x number Horizontal scale factor (e.g., 0.5 for half width)
+---@param scale_y? number Vertical scale factor (default: same as scale_x)
 ---@return userdata imagedata Resized image data
----@return integer width New width
----@return integer height New height
-function image.resize(data, width, height, scale) end
+---@return integer width New width (width * scale_x, rounded)
+---@return integer height New height (height * scale_y, rounded)
+function image.resize(data, width, height, scale_x, scale_y) end
 
 ---@class soluna.file
 local file = {}
@@ -256,19 +290,38 @@ local batch = {}
 ---
 --- Adds a sprite to the render batch
 ---
----@param sprite userdata Sprite object
----@param x number X position
----@param y number Y position
----@param scale? number Scale factor (default: 1)
----@param rotation? number Rotation in radians (default: 0)
----@param color? integer Color tint (RGBA hex)
-function batch:add(sprite, x, y, scale, rotation, color) end
+--- The sprite can be:
+--- - A sprite ID (number) from a loaded sprite bundle
+--- - A material userdata (from mattext.block or matquad.quad)
+--- - A string for batch commands
+---
+---@param sprite number|userdata|string Sprite ID, material object, or command string
+---@param x? number X position (default: 0)
+---@param y? number Y position (default: 0)
+function batch:add(sprite, x, y) end
 
 ---
---- Sets the render layer
+--- Creates or closes a transformation layer
 ---
----@param layer integer Layer index
-function batch:layer(layer) end
+--- Layers apply scale, rotation, and translation transformations to all sprites
+--- added while the layer is active. Layers can be nested.
+---
+--- Usage:
+--- - batch:layer() with no args: closes the current layer
+--- - batch:layer(rotation): applies rotation only (scale=1, x=0, y=0)
+--- - batch:layer(x, y): applies translation only (scale=1, rotation=0)
+--- - batch:layer(scale, x, y): applies scale and translation (rotation=0)
+--- - batch:layer(scale, rotation, x, y): applies all transformations
+---
+---@overload fun(self: Batch)
+---@overload fun(self: Batch, rotation: number)
+---@overload fun(self: Batch, x: number, y: number)
+---@overload fun(self: Batch, scale: number, x: number, y: number)
+---@param scale number Scale factor (cannot be 0)
+---@param rotation number Rotation in radians
+---@param x number X translation
+---@param y number Y translation
+function batch:layer(scale, rotation, x, y) end
 
 ---@class Args
 ---@field width integer Current window width
