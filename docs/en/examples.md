@@ -9,10 +9,11 @@ This document provides practical examples and tutorials for common game developm
 3. [Text Rendering](#text-rendering)
 4. [Layout System](#layout-system)
 5. [Input Handling](#input-handling)
-6. [Animation](#animation)
-7. [UI Elements](#ui-elements)
-8. [Saving and Loading Data](#saving-and-loading-data)
-9. [Complete Mini-Game](#complete-mini-game)
+6. [Transformation Layers](#transformation-layers)
+7. [Animation](#animation)
+8. [UI Elements](#ui-elements)
+9. [Saving and Loading Data](#saving-and-loading-data)
+10. [Complete Mini-Game](#complete-mini-game)
 
 ---
 
@@ -307,6 +308,83 @@ end
 
 return callback
 ```
+
+---
+
+## Transformation Layers
+
+Use batch:layer() to apply transformations (scale, rotation, translation) to groups of sprites.
+
+**main.lua:**
+```lua
+local soluna = require "soluna"
+local matquad = require "soluna.material.quad"
+
+soluna.set_window_title("Transformation Layers Example")
+
+local args = ...
+local batch = args.batch
+
+local callback = {}
+local time = 0
+
+function callback.frame(count)
+    time = count * 0.05
+    
+    -- Background
+    local bg = matquad.quad(args.width, args.height, 0x1a1a1aff)
+    batch:add(bg, 0, 0)
+    
+    -- Center of screen
+    local cx = args.width / 2
+    local cy = args.height / 2
+    
+    -- Example 1: Rotation only
+    batch:layer(time)  -- Open layer with rotation
+    local box1 = matquad.quad(50, 50, 0xff0000ff)
+    batch:add(box1, cx - 150, cy - 100)
+    batch:layer()  -- Close layer
+    
+    -- Example 2: Translation only
+    batch:layer(math.sin(time) * 50, math.cos(time) * 50)  -- Open layer with translation
+    local box2 = matquad.quad(50, 50, 0x00ff00ff)
+    batch:add(box2, cx, cy - 100)
+    batch:layer()  -- Close layer
+    
+    -- Example 3: Scale and translation
+    local scale = 1 + math.sin(time) * 0.3
+    batch:layer(scale, math.cos(time) * 30, math.sin(time * 2) * 20)
+    local box3 = matquad.quad(50, 50, 0x0000ffff)
+    batch:add(box3, cx + 150, cy - 100)
+    batch:layer()  -- Close layer
+    
+    -- Example 4: Full transformation (scale, rotation, translation)
+    batch:layer(scale, time * 0.5, 0, 50)
+    local box4 = matquad.quad(50, 50, 0xffff00ff)
+    batch:add(box4, cx, cy + 100)
+    batch:layer()  -- Close layer
+    
+    -- Example 5: Nested layers
+    batch:layer(1, time * 0.3, -100, 0)  -- Outer layer: rotation and offset
+        local parent = matquad.quad(80, 80, 0xff00ffaa)
+        batch:add(parent, cx, cy)
+        
+        batch:layer(0.5, -time * 0.5, 60, 0)  -- Inner layer: scale, counter-rotation, offset
+            local child = matquad.quad(40, 40, 0x00ffffff)
+            batch:add(child, cx, cy)
+        batch:layer()  -- Close inner layer
+    batch:layer()  -- Close outer layer
+end
+
+return callback
+```
+
+This example demonstrates:
+- **Rotation**: `batch:layer(rotation)` rotates all sprites
+- **Translation**: `batch:layer(x, y)` moves all sprites
+- **Scale + Translation**: `batch:layer(scale, x, y)` scales and moves
+- **Full Transform**: `batch:layer(scale, rotation, x, y)` applies all
+- **Nested Layers**: Transformations accumulate through nested layers
 
 ---
 

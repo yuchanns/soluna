@@ -9,10 +9,11 @@
 3. [文本渲染](#文本渲染)
 4. [布局系统](#布局系统)
 5. [输入处理](#输入处理)
-6. [动画](#动画)
-7. [UI 元素](#ui-元素)
-8. [保存和加载数据](#保存和加载数据)
-9. [完整小游戏](#完整小游戏)
+6. [变换层](#变换层)
+7. [动画](#动画)
+8. [UI 元素](#ui-元素)
+9. [保存和加载数据](#保存和加载数据)
+10. [完整小游戏](#完整小游戏)
 
 ---
 
@@ -307,6 +308,83 @@ end
 
 return callback
 ```
+
+---
+
+## 变换层
+
+使用 batch:layer() 对精灵组应用变换（缩放、旋转、平移）。
+
+**main.lua:**
+```lua
+local soluna = require "soluna"
+local matquad = require "soluna.material.quad"
+
+soluna.set_window_title("变换层示例")
+
+local args = ...
+local batch = args.batch
+
+local callback = {}
+local time = 0
+
+function callback.frame(count)
+    time = count * 0.05
+    
+    -- 背景
+    local bg = matquad.quad(args.width, args.height, 0x1a1a1aff)
+    batch:add(bg, 0, 0)
+    
+    -- 屏幕中心
+    local cx = args.width / 2
+    local cy = args.height / 2
+    
+    -- 示例 1：仅旋转
+    batch:layer(time)  -- 打开带旋转的层
+    local box1 = matquad.quad(50, 50, 0xff0000ff)
+    batch:add(box1, cx - 150, cy - 100)
+    batch:layer()  -- 关闭层
+    
+    -- 示例 2：仅平移
+    batch:layer(math.sin(time) * 50, math.cos(time) * 50)  -- 打开带平移的层
+    local box2 = matquad.quad(50, 50, 0x00ff00ff)
+    batch:add(box2, cx, cy - 100)
+    batch:layer()  -- 关闭层
+    
+    -- 示例 3：缩放和平移
+    local scale = 1 + math.sin(time) * 0.3
+    batch:layer(scale, math.cos(time) * 30, math.sin(time * 2) * 20)
+    local box3 = matquad.quad(50, 50, 0x0000ffff)
+    batch:add(box3, cx + 150, cy - 100)
+    batch:layer()  -- 关闭层
+    
+    -- 示例 4：完整变换（缩放、旋转、平移）
+    batch:layer(scale, time * 0.5, 0, 50)
+    local box4 = matquad.quad(50, 50, 0xffff00ff)
+    batch:add(box4, cx, cy + 100)
+    batch:layer()  -- 关闭层
+    
+    -- 示例 5：嵌套层
+    batch:layer(1, time * 0.3, -100, 0)  -- 外层：旋转和偏移
+        local parent = matquad.quad(80, 80, 0xff00ffaa)
+        batch:add(parent, cx, cy)
+        
+        batch:layer(0.5, -time * 0.5, 60, 0)  -- 内层：缩放、反向旋转、偏移
+            local child = matquad.quad(40, 40, 0x00ffffff)
+            batch:add(child, cx, cy)
+        batch:layer()  -- 关闭内层
+    batch:layer()  -- 关闭外层
+end
+
+return callback
+```
+
+此示例演示了：
+- **旋转**：`batch:layer(rotation)` 旋转所有精灵
+- **平移**：`batch:layer(x, y)` 移动所有精灵
+- **缩放 + 平移**：`batch:layer(scale, x, y)` 缩放和移动
+- **完整变换**：`batch:layer(scale, rotation, x, y)` 应用所有变换
+- **嵌套层**：变换通过嵌套层累积
 
 ---
 
