@@ -2,21 +2,11 @@
 
 本指南将帮助你开始 Soluna 游戏引擎开发。
 
-## 前置条件
+## 获取 Soluna
 
-- **Windows**: GCC (MinGW) 或 MSVC 编译器
-- **macOS/Linux**: GCC 或 Clang 编译器
-- **所有平台**: luamake 构建工具
+从 [Nightly Releases](https://github.com/yuchanns/soluna/releases/tag/nightly) 下载预构建的二进制文件。
 
-## 构建 Soluna
-
-Soluna 使用 luamake 作为构建系统。构建方法：
-
-```bash
-luamake
-```
-
-编译后的可执行文件将根据平台和构建模式放置在 `bin/` 目录中。
+解压下载的文件，你会找到 `soluna` 可执行文件。
 
 ## 第一个 Soluna 程序
 
@@ -31,7 +21,7 @@ print("Hello World")
 运行它：
 
 ```bash
-bin/soluna.exe entry=hello.lua
+soluna entry=hello.lua
 ```
 
 ### 创建窗口
@@ -58,7 +48,7 @@ return callback
 运行它：
 
 ```bash
-bin/soluna.exe entry=window.lua
+soluna entry=window.lua
 ```
 
 ### 使用游戏配置文件
@@ -97,7 +87,7 @@ return callback
 运行你的游戏：
 
 ```bash
-bin/soluna.exe mygame.game
+soluna mygame.game
 ```
 
 ## 项目结构
@@ -272,18 +262,9 @@ end
 
 ## 故障排除
 
-### 构建错误
-
-如果遇到构建错误：
-
-1. 确保安装了正确的编译器
-2. 检查所有子模块是否已初始化：`git submodule update --init --recursive`
-3. 清理并重新构建：`luamake rebuild`
-
 ### 运行时错误
 
 - 检查所有资产路径是否正确
 - 确保在使用前正确加载字体
-- 验证所需的服务是否已初始化
 
-更多帮助，请参考 `test/` 目录中的示例。
+更多帮助，请参考 `test/` 目录中的示例或学习 [Deep Future](https://github.com/cloudwu/deepfuture) 游戏源代码。

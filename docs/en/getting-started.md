@@ -2,21 +2,11 @@
 
 This guide will help you get started with Soluna game engine development.
 
-## Prerequisites
+## Getting Soluna
 
-- **Windows**: GCC (MinGW) or MSVC compiler
-- **macOS/Linux**: GCC or Clang compiler
-- **All platforms**: luamake build tool
+Download pre-built binaries from the [Nightly Releases](https://github.com/yuchanns/soluna/releases/tag/nightly).
 
-## Building Soluna
-
-Soluna uses luamake as its build system. To build:
-
-```bash
-luamake
-```
-
-The compiled executable will be placed in the `bin/` directory according to your platform and build mode.
+Extract the downloaded archive and you'll find the `soluna` executable.
 
 ## Your First Soluna Program
 
@@ -31,7 +21,7 @@ print("Hello World")
 Run it:
 
 ```bash
-bin/soluna.exe entry=hello.lua
+soluna entry=hello.lua
 ```
 
 ### Creating a Window
@@ -58,7 +48,7 @@ return callback
 Run it:
 
 ```bash
-bin/soluna.exe entry=window.lua
+soluna entry=window.lua
 ```
 
 ### Using a Game Configuration File
@@ -97,7 +87,7 @@ return callback
 Run your game:
 
 ```bash
-bin/soluna.exe mygame.game
+soluna mygame.game
 ```
 
 ## Project Structure
@@ -274,19 +264,9 @@ end
 
 ## Troubleshooting
 
-### Build Errors
-
-If you encounter build errors:
-
-1. Ensure you have the correct compiler installed
-2. Check that all submodules are initialized: `git submodule update --init --recursive`
-3. Clean and rebuild: `luamake rebuild`
-
-
 ### Runtime Errors
 
 - Check that all asset paths are correct
 - Ensure fonts are properly loaded before use
-- Verify that required services are initialized
 
-For more help, refer to the examples in the `test/` directory.
+For more help, refer to the examples in the `test/` directory or study the [Deep Future](https://github.com/cloudwu/deepfuture) game source code.
