@@ -4,7 +4,6 @@
 --- Soluna Game Engine API Reference
 ---
 --- This file documents the Soluna API using Lua meta annotations.
---- Based on actual usage in the Deep Future game.
 ---
 
 ---@class soluna

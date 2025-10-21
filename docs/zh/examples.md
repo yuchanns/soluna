@@ -663,7 +663,7 @@ return callback
 更多高级示例，请查看：
 
 - **测试目录**: Soluna 仓库中的 `test/` 目录包含许多示例脚本
-- **Deep Future**: [github.com/cloudwu/deepfuture](https://github.com/cloudwu/deepfuture) - 展示所有 Soluna 功能的完整游戏
+- **Deep Future**: [github.com/cloudwu/deepfuture](https://github.com/cloudwu/deepfuture) - 使用 Soluna 构建的游戏
 
 ## 提示和最佳实践
 

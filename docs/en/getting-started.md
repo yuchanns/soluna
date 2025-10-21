@@ -246,9 +246,8 @@ end
 
 ## Next Steps
 
-- Explore [API Reference](api-reference.md) for detailed API documentation
 - Check out [Examples](examples.md) for more advanced examples
-- Study the [Deep Future](https://github.com/cloudwu/deepfuture) game source code for real-world usage
+- Refer to the API documentation in [soluna.lua](../soluna.lua)
 
 ## Common Keycodes
 
@@ -269,4 +268,4 @@ end
 - Check that all asset paths are correct
 - Ensure fonts are properly loaded before use
 
-For more help, refer to the examples in the `test/` directory or study the [Deep Future](https://github.com/cloudwu/deepfuture) game source code.
+For more help, refer to the examples in the `test/` directory.

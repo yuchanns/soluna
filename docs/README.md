@@ -20,17 +20,15 @@ Download pre-built binaries from the [Nightly Releases](https://github.com/yucha
 
 - **[Getting Started](en/getting-started.md)** - Your first Soluna project
 - **[Examples](en/examples.md)** - Code examples and tutorials
-- **[Architecture](en/architecture.md)** - Engine architecture
 
 ### Chinese Documentation / 中文文档
 
 - **[快速开始](zh/getting-started.md)** - 第一个 Soluna 项目
 - **[示例](zh/examples.md)** - 代码示例和教程
-- **[架构](zh/architecture.md)** - 引擎架构
 
 ## Example Game / 示例游戏
 
-[Deep Future](https://github.com/cloudwu/deepfuture) - A complete game built with Soluna / 使用 Soluna 构建的完整游戏
+[Deep Future](https://github.com/cloudwu/deepfuture) - A game built with Soluna / 使用 Soluna 构建的游戏
 
 ## License / 许可证
 

@@ -244,9 +244,8 @@ end
 
 ## 下一步
 
-- 探索 [API 参考](api-reference.md)获取详细的 API 文档
 - 查看[示例](examples.md)获取更高级的示例
-- 学习 [Deep Future](https://github.com/cloudwu/deepfuture) 游戏源代码了解实际使用
+- 参考 API 文档 [soluna.lua](../soluna.lua)
 
 ## 常用按键码
 
@@ -267,4 +266,4 @@ end
 - 检查所有资产路径是否正确
 - 确保在使用前正确加载字体
 
-更多帮助，请参考 `test/` 目录中的示例或学习 [Deep Future](https://github.com/cloudwu/deepfuture) 游戏源代码。
+更多帮助，请参考 `test/` 目录中的示例。

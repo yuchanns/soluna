@@ -674,7 +674,7 @@ return callback
 For more advanced examples, check out:
 
 - **Test Directory**: The `test/` directory in the Soluna repository contains many example scripts
-- **Deep Future**: [github.com/cloudwu/deepfuture](https://github.com/cloudwu/deepfuture) - A complete game showcasing all Soluna features
+- **Deep Future**: [github.com/cloudwu/deepfuture](https://github.com/cloudwu/deepfuture) - A game built with Soluna
 
 ## Tips and Best Practices
 
