@@ -371,4 +371,104 @@ function callback.mouse_move(x, y) end
 ---@param dy number Vertical scroll delta
 function callback.mouse_scroll(dx, dy) end
 
+---@class soluna.app
+local app = {}
+
+---
+--- Quits the application
+---
+--- Signals the application to exit gracefully.
+---
+function app.quit() end
+
+---
+--- Sets the IME (Input Method Editor) font
+---
+--- Configures the font used for IME text input display.
+---
+---@param font_name string Font name for IME display
+---@param font_size integer Font size for IME display
+function app.set_ime_font(font_name, font_size) end
+
+---
+--- Sets the IME (Input Method Editor) position rectangle
+---
+--- Defines the screen position where IME candidate window should appear.
+---
+---@param x integer X position of IME rectangle
+---@param y integer Y position of IME rectangle
+---@param width integer Width of IME rectangle
+---@param height integer Height of IME rectangle
+function app.set_ime_rect(x, y, width, height) end
+
+---@class soluna.crypt
+local crypt = {}
+
+---
+--- Encodes binary data to hexadecimal string
+---
+--- Converts binary data to a hexadecimal string representation (lowercase).
+---
+---@param data string Binary data to encode
+---@return string hex Hexadecimal string (lowercase)
+function crypt.hexencode(data) end
+
+---
+--- Computes SHA-1 hash of input data
+---
+--- Returns the SHA-1 hash as binary data (20 bytes).
+---
+---@param data string Input data to hash
+---@return string hash Binary SHA-1 hash (20 bytes)
+function crypt.sha1(data) end
+
+---@class soluna.zip
+local zip = {}
+
+---
+--- Opens a ZIP file for reading or writing
+---
+--- Opens a ZIP archive. Mode "r" opens for reading, "w" creates a new archive.
+--- Returns a file handle or nil on error.
+---
+---@param filename string Path to ZIP file
+---@param mode "r"|"w" Open mode: "r" for read, "w" for write
+---@return userdata? zipfile ZIP file handle or nil on error
+function zip.open(filename, mode) end
+
+---@class soluna.coroutine
+local coroutine = {}
+
+---
+--- Creates a new coroutine
+---
+--- Creates a coroutine compatible with ltask framework.
+--- The coroutine is tracked for ltask yield/resume handling.
+---
+---@param f function Coroutine function
+---@return thread co Coroutine thread object
+function coroutine.create(f) end
+
+---
+--- Resumes a coroutine
+---
+--- Resumes execution of a coroutine. Handles ltask framework yielding automatically.
+--- Returns true and results on success, or false and error message on failure.
+---
+---@param co thread Coroutine to resume
+---@param ... any Arguments to pass to coroutine
+---@return boolean success True if resumed successfully
+---@return any ... Return values from coroutine or error message
+function coroutine.resume(co, ...) end
+
+---
+--- Yields from current coroutine
+---
+--- Suspends execution of current coroutine and returns control to caller.
+--- Compatible with ltask framework.
+---
+---@param ... any Values to return to resume caller
+---@return any ... Values passed from resume
+function coroutine.yield(...) end
+
 return soluna
