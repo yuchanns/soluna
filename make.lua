@@ -100,6 +100,7 @@ lm:conf({
       "-s USE_PTHREADS=1",
       "-s PTHREAD_POOL_SIZE='Math.max(2,navigator.hardwareConcurrency)'",
       "-s PTHREAD_POOL_SIZE_STRICT=2",
+      "-s WASM_WORKERS=1",
       lm.mode == "debug" and "-s ASSERTIONS=2",
       -- lm.mode == "debug" and "-s SAFE_HEAP=1",
       lm.mode == "debug" and "-s STACK_OVERFLOW_CHECK=1",

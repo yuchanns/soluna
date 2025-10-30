@@ -884,6 +884,10 @@ sokol_main(int argc, char* argv[]) {
 	d.win32_console_utf8 = 1;
 	d.win32_console_attach = 1;
 	d.alpha = 0;
+#if defined(__EMSCRIPTEN__)
+  d.html5_use_emsc_set_main_loop = true;
+  d.html5_emsc_set_main_loop_simulate_infinite_loop = true;
+#endif
 	
 	// init L
 	static struct app_context app;
