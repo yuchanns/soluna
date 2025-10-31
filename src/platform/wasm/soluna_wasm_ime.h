@@ -60,45 +60,25 @@ soluna_wasm_char_queue_consume(uint32_t *buffer, int *count, uint32_t code) {
 
 static void
 soluna_wasm_call_setup(void) {
-#if defined(__EMSCRIPTEN_PTHREADS__)
-    if (!emscripten_is_main_browser_thread()) {
-        emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_V, soluna_wasm_setup_ime);
-        return;
-    }
-#endif
+    // todo:
     soluna_wasm_setup_ime();
 }
 
 static void
 soluna_wasm_call_show(float x, float y, float w, float h) {
-#if defined(__EMSCRIPTEN_PTHREADS__)
-    if (!emscripten_is_main_browser_thread()) {
-        emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VFFFF, soluna_wasm_dom_show, x, y, w, h);
-        return;
-    }
-#endif
+    // todo:
     soluna_wasm_dom_show(x, y, w, h);
 }
 
 static void
 soluna_wasm_call_hide(void) {
-#if defined(__EMSCRIPTEN_PTHREADS__)
-    if (!emscripten_is_main_browser_thread()) {
-        emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_V, soluna_wasm_dom_hide);
-        return;
-    }
-#endif
+    // todo:
     soluna_wasm_dom_hide();
 }
 
 static void
 soluna_wasm_call_set_font(const char *name, float size) {
-#if defined(__EMSCRIPTEN_PTHREADS__)
-    if (!emscripten_is_main_browser_thread()) {
-        emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VIF, soluna_wasm_dom_set_font, (intptr_t)name, size);
-        return;
-    }
-#endif
+    // todo:
     soluna_wasm_dom_set_font(name, size);
 }
 

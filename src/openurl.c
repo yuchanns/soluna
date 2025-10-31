@@ -25,12 +25,7 @@ extern void soluna_wasm_open_url(const char *url);
 
 static void
 soluna_wasm_call_open_url(const char *url) {
-#if defined(__EMSCRIPTEN_PTHREADS__)
-  if (!emscripten_is_main_browser_thread()) {
-    emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI, soluna_wasm_open_url, url);
-    return;
-  }
-#endif
+  // todo:
   soluna_wasm_open_url(url);
 }
 
