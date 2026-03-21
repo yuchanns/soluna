@@ -348,4 +348,62 @@
   } else {
     document.addEventListener("DOMContentLoaded", initPlay);
   }
+
+  // iOS Safari audio unlock: persistent listeners that fire on every user
+  // gesture until all miniaudio AudioContexts reach 'running' state.
+  // Must be registered immediately (before WASM loads) to catch early gestures.
+  //
+  // Two iOS Safari issues are addressed here:
+  // 1. AudioContext.resume() alone is insufficient — a BufferSource must be
+  //    started synchronously within the gesture call stack.
+  // 2. A ScriptProcessorNode created while the context was suspended may not
+  //    fire onaudioprocess after the context is later resumed. Disconnecting
+  //    and reconnecting the node after resume restarts audio processing.
+  (function () {
+    var solunaUnlock = function () {
+      if (typeof window.miniaudio === "undefined") { return; }
+      var hasStarted = false;
+      var allRunning = true;
+      for (var i = 0; i < window.miniaudio.devices.length; ++i) {
+        var device = window.miniaudio.devices[i];
+        if (device == null || device.webaudio == null) { continue; }
+        if (device.state !== window.miniaudio.device_state.started) { continue; }
+        hasStarted = true;
+        var ctx = device.webaudio;
+        if (ctx.state === "running") { continue; }
+        allRunning = false;
+        // iOS Safari requires a BufferSource to be started synchronously
+        // within the gesture call stack to fully unlock the AudioContext.
+        try {
+          var buf = ctx.createBuffer(1, 1, 22050);
+          var src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(ctx.destination);
+          src.onended = function () { src.disconnect(); };
+          src.start(0);
+        } catch (e) { /* ignore */ }
+        // Resume and reconnect the ScriptProcessorNode so it fires
+        // onaudioprocess on iOS Safari after a suspended-then-resumed context.
+        (function (dev, audioCtx) {
+          audioCtx.resume().then(function () {
+            if (dev.scriptNode) {
+              try {
+                dev.scriptNode.disconnect();
+                dev.scriptNode.connect(audioCtx.destination);
+              } catch (e) { /* ignore */ }
+            }
+          }).catch(function () { /* non-fatal */ });
+        })(device, ctx);
+      }
+      // Remove listeners only once a started device exists and is running.
+      if (hasStarted && allRunning) {
+        document.removeEventListener("click", solunaUnlock, true);
+        document.removeEventListener("touchend", solunaUnlock, true);
+        document.removeEventListener("keydown", solunaUnlock, true);
+      }
+    };
+    document.addEventListener("click", solunaUnlock, true);
+    document.addEventListener("touchend", solunaUnlock, true);
+    document.addEventListener("keydown", solunaUnlock, true);
+  })();
 })();

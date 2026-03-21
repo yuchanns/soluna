@@ -166,48 +166,61 @@ laudio_init(lua_State *L) {
 
 #ifdef __EMSCRIPTEN__
 	EM_ASM({
+		// Guard: EM_ASM may run in a pthread (Web Worker) context where window
+		// and document are not available. Exit silently if so.
+		if (typeof window === 'undefined' || typeof document === 'undefined') { return; }
 		// Retry on every gesture rather than using a one-time flag.
 		// The first gesture may fire before miniaudio registers any device
 		// (window.miniaudio.devices is empty), so a one-time guard would
 		// remove the listeners without ever unlocking the AudioContext.
 		// We keep the listeners active until every device context is 'running'.
-		var resume_audio = function() {
+		var resumeAudio = function() {
 			if (typeof window.miniaudio === 'undefined') { return; }
-			var all_running = true;
+			var hasStarted = false;
+			var allRunning = true;
 			for (var i = 0; i < window.miniaudio.devices.length; ++i) {
 				var device = window.miniaudio.devices[i];
-				if (device != null && device.webaudio != null) {
-					var ctx = device.webaudio;
-					if (ctx.state !== 'running') {
-						all_running = false;
-						// iOS Safari requires a BufferSource to be started
-						// within the synchronous user-gesture call stack to
-						// fully unlock the AudioContext; resume() alone is
-						// insufficient on iOS.
-						var buf = ctx.createBuffer(1, 1, 22050);
-						var src = ctx.createBufferSource();
-						src.buffer = buf;
-						src.connect(ctx.destination);
-						src.onended = function() { src.disconnect(); };
-						src.start(0);
-						ctx.resume().catch(function() {
-						// Suppress unhandled promise rejections; resume() failing
-						// here (e.g. on very old browsers) is non-fatal since the
-						// silent-buffer start above already attempted the unlock.
+				if (device == null || device.webaudio == null) { continue; }
+				if (device.state !== window.miniaudio.device_state.started) { continue; }
+				hasStarted = true;
+				var ctx = device.webaudio;
+				if (ctx.state === 'running') { continue; }
+				allRunning = false;
+				// iOS Safari requires a BufferSource to be started synchronously
+				// within the gesture call stack to fully unlock the AudioContext.
+				try {
+					var buf = ctx.createBuffer(1, 1, 22050);
+					var src = ctx.createBufferSource();
+					src.buffer = buf;
+					src.connect(ctx.destination);
+					src.onended = function() { src.disconnect(); };
+					src.start(0);
+				} catch(e) {}
+				// Resume and reconnect the ScriptProcessorNode so it fires
+				// onaudioprocess on iOS Safari after suspend-then-resume.
+				(function(dev, audioCtx) {
+					audioCtx.resume().then(function() {
+						if (dev.scriptNode) {
+							try {
+								dev.scriptNode.disconnect();
+								dev.scriptNode.connect(audioCtx.destination);
+							} catch(e) {}
+						}
+					}).catch(function() {
+						// Suppress unhandled promise rejections; non-fatal.
 					});
-					}
-				}
+				})(device, ctx);
 			}
-			// Remove listeners only after all contexts are confirmed running.
-			if (all_running && window.miniaudio.devices.length > 0) {
-				document.removeEventListener('click', resume_audio, true);
-				document.removeEventListener('touchend', resume_audio, true);
-				document.removeEventListener('keydown', resume_audio, true);
+			// Remove listeners only once a started device exists and is running.
+			if (hasStarted && allRunning) {
+				document.removeEventListener('click', resumeAudio, true);
+				document.removeEventListener('touchend', resumeAudio, true);
+				document.removeEventListener('keydown', resumeAudio, true);
 			}
 		};
-		document.addEventListener('click', resume_audio, true);
-		document.addEventListener('touchend', resume_audio, true);
-		document.addEventListener('keydown', resume_audio, true);
+		document.addEventListener('click', resumeAudio, true);
+		document.addEventListener('touchend', resumeAudio, true);
+		document.addEventListener('keydown', resumeAudio, true);
 	});
 #endif
 
