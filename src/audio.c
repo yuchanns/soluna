@@ -177,8 +177,18 @@ laudio_init(lua_State *L) {
 				for (var i = 0; i < window.miniaudio.devices.length; ++i) {
 					var device = window.miniaudio.devices[i];
 					if (device != null && device.webaudio != null) {
-						if (device.webaudio.state === 'suspended') {
-							device.webaudio.resume().catch(function() {});
+						var ctx = device.webaudio;
+						// iOS Safari requires a BufferSource to be started (not just
+						// resumed) within the synchronous user-gesture call stack in
+						// order to fully unlock the AudioContext.
+						var buf = ctx.createBuffer(1, 1, 22050);
+						var src = ctx.createBufferSource();
+						src.buffer = buf;
+						src.connect(ctx.destination);
+						src.onended = function() { src.disconnect(); };
+						src.start(0);
+						if (ctx.state === 'suspended') {
+							ctx.resume().catch(function() {});
 						}
 					}
 				}
