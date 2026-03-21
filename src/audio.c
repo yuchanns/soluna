@@ -3,6 +3,10 @@
 
 #include "zipreader.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #define MA_NO_WIN32_FILEIO
 #define MA_NO_MP3
 #define MA_NO_FLAC
@@ -53,6 +57,50 @@ struct custom_engine {
 	struct ma_resource_manager rm;
 	struct custom_vfs vfs;
 };
+
+#if defined(__EMSCRIPTEN__)
+EM_JS(void, soluna_webaudio_resume_on_gesture, (int device_index), {
+	if (typeof document === "undefined") return;
+	try {
+		const miniaudio = window.miniaudio;
+		if (!miniaudio || typeof miniaudio.get_device_by_index !== "function") return;
+		const device = miniaudio.get_device_by_index(device_index);
+		if (!device || !device.webaudio || typeof device.webaudio.resume !== "function") return;
+		const ctx = device.webaudio;
+		const resume = () => {
+			if (ctx.state === "running") return;
+			const p = ctx.resume();
+			if (p && typeof p.catch === "function") {
+				p.catch((err) => console.error("Failed to resume AudioContext", err));
+			}
+		};
+		["click", "touchend", "keydown"].forEach((event_type) => {
+			document.addEventListener(event_type, resume, { once: true });
+		});
+	} catch (err) {
+		console.error("Failed to install WebAudio resume handler", err);
+	}
+});
+
+static void
+inject_webaudio_resume(struct ma_engine *engine) {
+	ma_device *device;
+	if (engine == NULL) {
+		return;
+	}
+	device = ma_engine_get_device(engine);
+	if (device == NULL || device->pContext == NULL) {
+		return;
+	}
+	if (device->pContext->backend != ma_backend_webaudio) {
+		return;
+	}
+	if (device->webaudio.deviceIndex < 0) {
+		return;
+	}
+	soluna_webaudio_resume_on_gesture(device->webaudio.deviceIndex);
+}
+#endif
 
 static ma_result
 zr_open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
@@ -163,6 +211,9 @@ laudio_init(lua_State *L) {
 	if (r != MA_SUCCESS) {
 		return luaL_error(L, "ma_engine_init() error : %s", ma_result_description(r));
 	}
+#if defined(__EMSCRIPTEN__)
+	inject_webaudio_resume(&e->engine);
+#endif
 	lua_pushlightuserdata(L, (void *)e);
 	
 	return 2;
