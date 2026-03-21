@@ -21,6 +21,56 @@ local mx = 0
 local my = 0
 local pressing = false
 
+-- Try to create a "play" text label for the button.
+-- Font loading may fail on some platforms (e.g. WASM without bundled fonts),
+-- in which case text_label remains nil and the button renders without text.
+local text_label = nil
+local function try_load_font()
+	local font    = require "soluna.font"
+	local mattext = require "soluna.material.text"
+	local fontid
+
+	-- Desktop: try common system fonts
+	local ok, sysfont = pcall(require, "soluna.font.system")
+	if ok then
+		local candidates = { "Arial", "DejaVu Sans", "Liberation Sans", "Helvetica Neue", "Helvetica" }
+		for _, name in ipairs(candidates) do
+			local ok2, data = pcall(sysfont.ttfdata, name)
+			if ok2 and data then
+				font.import(data)
+				fontid = font.name ""   -- last imported
+				if fontid then break end
+			end
+		end
+	end
+
+	-- WASM: try bundled font files
+	if not fontid then
+		local ok2, file = pcall(require, "soluna.file")
+		if ok2 then
+			local paths = { "asset/font/arial.ttf", "asset/font/SourceHanSansSC-Regular.ttf" }
+			for _, path in ipairs(paths) do
+				local data = file.load(path)
+				if data then
+					font.import(data)
+					fontid = font.name ""
+					if fontid then break end
+				end
+			end
+		end
+	end
+
+	if fontid then
+		local fontcobj = font.cobj()
+		-- size=24, color=opaque white, alignment=center-horizontal+center-vertical
+		local block = mattext.block(fontcobj, fontid, 24, 0xFFFFFFFF, "CV")
+		return block("play", BTN_W, BTN_H)
+	end
+end
+
+local ok, result = pcall(try_load_font)
+if ok then text_label = result end
+
 local function btn_rect()
 	local x = (screen_w - BTN_W) / 2
 	local y = (screen_h - BTN_H) / 2
@@ -43,6 +93,9 @@ function callback.frame(count)
 		color = COLOR_NORMAL
 	end
 	batch:add(quad.quad(bw, bh, color), bx, by)
+	if text_label then
+		batch:add(text_label, bx, by)
+	end
 end
 
 function callback.window_resize(w, h)
