@@ -163,6 +163,33 @@ laudio_init(lua_State *L) {
 	if (r != MA_SUCCESS) {
 		return luaL_error(L, "ma_engine_init() error : %s", ma_result_description(r));
 	}
+
+#ifdef __EMSCRIPTEN__
+	EM_ASM({
+		var resumed = false;
+		var resume_audio = function() {
+			if (resumed) { return; }
+			resumed = true;
+			document.removeEventListener('click', resume_audio, true);
+			document.removeEventListener('touchend', resume_audio, true);
+			document.removeEventListener('keydown', resume_audio, true);
+			if (typeof window.miniaudio !== 'undefined') {
+				for (var i = 0; i < window.miniaudio.devices.length; ++i) {
+					var device = window.miniaudio.devices[i];
+					if (device != null && device.webaudio != null) {
+						if (device.webaudio.state === 'suspended') {
+							device.webaudio.resume().catch(function() {});
+						}
+					}
+				}
+			}
+		};
+		document.addEventListener('click', resume_audio, true);
+		document.addEventListener('touchend', resume_audio, true);
+		document.addEventListener('keydown', resume_audio, true);
+	});
+#endif
+
 	lua_pushlightuserdata(L, (void *)e);
 	
 	return 2;
