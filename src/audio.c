@@ -166,53 +166,33 @@ laudio_init(lua_State *L) {
 
 #ifdef __EMSCRIPTEN__
 	EM_ASM({
-		// Guard: EM_ASM may run in a pthread (Web Worker) context where window
-		// and document are not available. Exit silently if so.
+		// Guard: EM_ASM may run in a pthread (Web Worker) context where
+		// window/document are not available. Exit silently if so.
 		if (typeof window === 'undefined' || typeof document === 'undefined') { return; }
-		// Retry on every gesture rather than using a one-time flag.
-		// The first gesture may fire before miniaudio registers any device
-		// (window.miniaudio.devices is empty), so a one-time guard would
-		// remove the listeners without ever unlocking the AudioContext.
-		// We keep the listeners active until every device context is 'running'.
+		// Belt-and-suspenders: the primary iOS Safari unlock is implemented in
+		// playframe.js via an AudioContext constructor interceptor. This block
+		// provides a secondary unlock path using window.miniaudio directly,
+		// for cases where the context was created outside the interceptor scope.
 		var resumeAudio = function() {
 			if (typeof window.miniaudio === 'undefined') { return; }
-			var hasStarted = false;
 			var allRunning = true;
 			for (var i = 0; i < window.miniaudio.devices.length; ++i) {
 				var device = window.miniaudio.devices[i];
 				if (device == null || device.webaudio == null) { continue; }
-				if (device.state !== window.miniaudio.device_state.started) { continue; }
-				hasStarted = true;
 				var ctx = device.webaudio;
 				if (ctx.state === 'running') { continue; }
 				allRunning = false;
-				// iOS Safari requires a BufferSource to be started synchronously
-				// within the gesture call stack to fully unlock the AudioContext.
 				try {
-					var buf = ctx.createBuffer(1, 1, 22050);
+					var buf = ctx.createBuffer(1, 1, ctx.sampleRate || 22050);
 					var src = ctx.createBufferSource();
 					src.buffer = buf;
 					src.connect(ctx.destination);
 					src.onended = function() { src.disconnect(); };
 					src.start(0);
 				} catch(e) {}
-				// Resume and reconnect the ScriptProcessorNode so it fires
-				// onaudioprocess on iOS Safari after suspend-then-resume.
-				(function(dev, audioCtx) {
-					audioCtx.resume().then(function() {
-						if (dev.scriptNode) {
-							try {
-								dev.scriptNode.disconnect();
-								dev.scriptNode.connect(audioCtx.destination);
-							} catch(e) {}
-						}
-					}).catch(function() {
-						// Suppress unhandled promise rejections; non-fatal.
-					});
-				})(device, ctx);
+				ctx.resume().catch(function() {});
 			}
-			// Remove listeners only once a started device exists and is running.
-			if (hasStarted && allRunning) {
+			if (allRunning && window.miniaudio.devices.length > 0) {
 				document.removeEventListener('click', resumeAudio, true);
 				document.removeEventListener('touchend', resumeAudio, true);
 				document.removeEventListener('keydown', resumeAudio, true);
