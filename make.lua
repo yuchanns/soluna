@@ -96,6 +96,9 @@ lm:conf {
 			"--js-library=src/platform/wasm/soluna_openurl.js",
 			"--use-port=emdawnwebgpu",
 			"-s ALLOW_MEMORY_GROWTH",
+			"-s AUDIO_WORKLET=1",
+			"-s WASM_WORKERS=1",
+			"-s ASYNCIFY",
 			"-s FORCE_FILESYSTEM=1",
 			'-s EXPORTED_RUNTIME_METHODS=\'["FS","FS_createPath","FS_createDataFile","IDBFS"]\'',
 			"-s USE_PTHREADS=1",
@@ -109,6 +112,7 @@ lm:conf {
 		defines = {
 			"_POSIX_C_SOURCE=200809L",
 			"_GNU_SOURCE",
+			"MA_ENABLE_AUDIO_WORKLETS",
 		},
 	},
 	defines = {
