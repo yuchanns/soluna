@@ -10,7 +10,7 @@ local maskmat = require "soluna.material.mask"
 local pqmat = require "soluna.material.perspective_quad"
 local soluna_app = require "soluna.app"
 
-global require, assert, pairs, pcall, ipairs, print, tostring
+global require, assert, pairs, pcall, ipairs, print
 
 local setting = require "soluna".settings()
 
@@ -289,9 +289,7 @@ local function render_init(arg)
 	local audio = require "soluna.audio"
 	local file = require "soluna.file"
 	local ziplist = file.ziplist and file.ziplist() or nil
-	print("[audio] render_init: ziplist " .. (ziplist and "provided (zip VFS)" or "nil (local VFS)"))
 	local engine, ptr = audio.init(ziplist)
-	print("[audio] render_init: engine=" .. tostring(engine) .. " ptr=" .. tostring(ptr))
 	audio_engine = {
 		engine = engine,
 		ptr = ptr,

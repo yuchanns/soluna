@@ -3,7 +3,7 @@ local audio = require "soluna.audio"
 local file = require "soluna.file"
 local datalist = require "soluna.datalist"
 
-global print, assert, setmetatable, tostring, error, ipairs
+global assert, error, ipairs
 
 local DEVICE, BANK
 
@@ -13,7 +13,6 @@ local play = audio.play
 
 -- play
 api[true] = function(id)
-	print("[audio] play: id=" .. tostring(id) .. " file=" .. tostring(BANK[id]))
 	play(DEVICE, BANK[id])
 end
 
@@ -43,16 +42,9 @@ end
 function S.init(filename)
 	assert(DEVICE == nil)
 	DEVICE = false
-	print("[audio] service init: loading " .. tostring(filename))
 	local bank, ret = load_bundle(filename)
-	print("[audio] service init: bank loaded, " .. #bank .. " sounds")
-	for i, v in ipairs(bank) do
-		print("[audio] service init: bank[" .. i .. "]=" .. tostring(v))
-	end
 	local d = ltask.call(ltask.queryservice "render", "audio_engine")
-	print("[audio] service init: audio_engine ptr=" .. tostring(d))
 	if not d then
-		print("[audio] service init: no audio engine, audio disabled")
 		return {}
 	else
 		-- todo : load file list
@@ -62,7 +54,6 @@ function S.init(filename)
 		for k, v in pairs(api) do
 			inject[k] = v
 		end
-		print("[audio] service init: OK, sounds ready")
 		return ret
 	end
 end

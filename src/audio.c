@@ -63,64 +63,49 @@ struct custom_engine {
 EM_JS(void, soluna_webaudio_resume_on_gesture, (int device_index), {
 	if (typeof document === "undefined") return;
 	try {
-		console.log("[audio] resume handler: device_index=" + device_index);
-		const miniaudio = window.miniaudio;
+		var miniaudio = window.miniaudio;
 		if (!miniaudio || typeof miniaudio.get_device_by_index !== "function") {
-			console.warn("[audio] resume handler: window.miniaudio not available");
 			return;
 		}
-		const device = miniaudio.get_device_by_index(device_index);
+		var device = miniaudio.get_device_by_index(device_index);
 		if (!device || !device.webaudio || typeof device.webaudio.resume !== "function") {
-			console.warn("[audio] resume handler: device or webaudio context not available");
 			return;
 		}
-		const ctx = device.webaudio;
-		console.log("[audio] resume handler: AudioContext state=" + ctx.state);
-		const resume = () => {
-			console.log("[audio] gesture detected, AudioContext state=" + ctx.state);
-			if (ctx.state === "running") {
-				console.log("[audio] AudioContext already running");
-				return;
-			}
-			const p = ctx.resume();
-			if (p && typeof p.then === "function") {
-				p.then(() => {
-					console.log("[audio] AudioContext resumed OK, state=" + ctx.state);
-				}).catch((err) => {
-					console.error("[audio] AudioContext resume FAILED", err);
-				});
-			}
+		var ctx = device.webaudio;
+		var activated = false;
+		var activate = function() {
+			if (activated) return;
+			activated = true;
+			["click", "touchend", "keydown"].forEach(function(et) {
+				document.removeEventListener(et, activate, true);
+			});
+			if (ctx.state === "running") return;
+			ctx.resume().then(function() {
+				console.log("[audio] AudioContext resumed, state=" + ctx.state);
+			}).catch(function(err) {
+				console.error("[audio] AudioContext resume failed", err);
+			});
 		};
-		["click", "touchend", "keydown"].forEach((event_type) => {
-			document.addEventListener(event_type, resume, { once: true });
+		["click", "touchend", "keydown"].forEach(function(et) {
+			document.addEventListener(et, activate, true);
 		});
-		console.log("[audio] resume handler installed for click/touchend/keydown");
 	} catch (err) {
-		console.error("[audio] Failed to install WebAudio resume handler", err);
+		console.error("[audio] Failed to install resume handler", err);
 	}
 });
 
 static void
 inject_webaudio_resume(struct ma_engine *engine) {
 	ma_device *device;
-	if (engine == NULL) {
-		printf("[audio] inject_webaudio_resume: engine is NULL\n");
+	if (engine == NULL)
 		return;
-	}
 	device = ma_engine_get_device(engine);
-	if (device == NULL || device->pContext == NULL) {
-		printf("[audio] inject_webaudio_resume: device or context is NULL\n");
+	if (device == NULL || device->pContext == NULL)
 		return;
-	}
-	if (device->pContext->backend != ma_backend_webaudio) {
-		printf("[audio] inject_webaudio_resume: backend is not webaudio (%d)\n", device->pContext->backend);
+	if (device->pContext->backend != ma_backend_webaudio)
 		return;
-	}
-	if (device->webaudio.deviceIndex < 0) {
-		printf("[audio] inject_webaudio_resume: invalid deviceIndex (%d)\n", device->webaudio.deviceIndex);
+	if (device->webaudio.deviceIndex < 0)
 		return;
-	}
-	printf("[audio] inject_webaudio_resume: deviceIndex=%d\n", device->webaudio.deviceIndex);
 	soluna_webaudio_resume_on_gesture(device->webaudio.deviceIndex);
 }
 #endif
@@ -130,13 +115,11 @@ zr_open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pF
 	struct custom_vfs *vfs = (struct custom_vfs *)pVFS;
 	if (openMode != MA_OPEN_MODE_READ)
 		return MA_NOT_IMPLEMENTED;
-	printf("[audio] zr_open: '%s'\n", pFilePath);
 	zipreader_file zf = zipreader_open(vfs->zipnames, pFilePath);
 	if (zf == NULL) {
 		printf("[audio] zr_open: FAILED for '%s'\n", pFilePath);
 		return MA_ERROR;
 	}
-	printf("[audio] zr_open: OK for '%s'\n", pFilePath);
 	*pFile = (ma_vfs_file)zf;
 	return MA_SUCCESS;
 }
@@ -221,10 +204,6 @@ laudio_init(lua_State *L) {
 		e->vfs.base.cb.onInfo = zr_info;
 		lua_pushvalue(L, 1);
 		lua_setiuservalue(L, -2, 1);
-		printf("[audio] init: using zip VFS (zipnames=%p)\n", (void *)e->vfs.zipnames);
-	} else {
-		printf("[audio] init: using local VFS (no ziplist provided, arg type=%s)\n",
-			lua_typename(L, lua_type(L, 1)));
 	}
 	
     ma_resource_manager_config config = ma_resource_manager_config_init();
@@ -232,22 +211,17 @@ laudio_init(lua_State *L) {
 	
 	ma_result r = ma_resource_manager_init(&config, &e->rm);
 	if (r != MA_SUCCESS) {
-		printf("[audio] init: ma_resource_manager_init FAILED: %s\n", ma_result_description(r));
 		return luaL_error(L, "ma_resource_manager_init() error : %s", ma_result_description(r));
 	}
-	printf("[audio] init: resource manager OK\n");
 		
 	ma_engine_config ec = ma_engine_config_init();
 	ec.pResourceManager = &e->rm;
 	r = ma_engine_init(&ec, &e->engine);
 	if (r != MA_SUCCESS) {
-		printf("[audio] init: ma_engine_init FAILED: %s\n", ma_result_description(r));
 		return luaL_error(L, "ma_engine_init() error : %s", ma_result_description(r));
 	}
-	printf("[audio] init: engine OK\n");
 #if defined(__EMSCRIPTEN__)
 	inject_webaudio_resume(&e->engine);
-	printf("[audio] init: webaudio resume handler injected\n");
 #endif
 	lua_pushlightuserdata(L, (void *)e);
 	
@@ -283,12 +257,9 @@ laudio_play(lua_State *L) {
 	ma_engine *engine = (ma_engine *)lua_touserdata(L, 1);
 	const char *filename = luaL_checkstring(L, 2);
 	
-	printf("[audio] play: file='%s' engine=%p\n", filename, (void *)engine);
 	ma_result r = ma_engine_play_sound(engine, filename, NULL);
 	if (r != MA_SUCCESS) {
 		printf("[audio] play: FAILED for '%s': %s\n", filename, ma_result_description(r));
-	} else {
-		printf("[audio] play: OK for '%s'\n", filename);
 	}
 	return 0;
 }
