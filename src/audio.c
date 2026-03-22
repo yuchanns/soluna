@@ -116,6 +116,27 @@ EM_JS(void, soluna_webaudio_resume_on_gesture, (int device_index), {
 	}
 });
 
+EM_JS(void, soluna_webaudio_debug_ctx_state, (int device_index, const char *label), {
+	try {
+		const miniaudio = window.miniaudio;
+		if (!miniaudio || typeof miniaudio.get_device_by_index !== "function") return;
+		const device = miniaudio.get_device_by_index(device_index);
+		if (!device || !device.webaudio) return;
+		const ctx = device.webaudio;
+		const node = device.scriptNode || ctx._solunaScriptNode;
+		const nodeState = node && node.context ? node.context.state : undefined;
+		console.info("[audio] webaudio ctx state", label, {
+			deviceIndex: device_index,
+			ctxState: ctx.state,
+			scriptNodeCtx: nodeState,
+			baseLatency: ctx.baseLatency,
+			sampleRate: ctx.sampleRate,
+		});
+	} catch (err) {
+		console.error("[audio] webaudio debug error", err);
+	}
+});
+
 static void
 inject_webaudio_resume(struct ma_engine *engine) {
 	ma_device *device;
@@ -138,6 +159,7 @@ inject_webaudio_resume(struct ma_engine *engine) {
 	}
 	audio_log("install WebAudio resume hook for device %d", device->webaudio.deviceIndex);
 	soluna_webaudio_resume_on_gesture(device->webaudio.deviceIndex);
+	soluna_webaudio_debug_ctx_state(device->webaudio.deviceIndex, "on-init");
 }
 #endif
 
@@ -303,6 +325,12 @@ laudio_play(lua_State *L) {
 	} else {
 		audio_log("play %s ok", filename);
 	}
+#if defined(__EMSCRIPTEN__)
+	ma_device *device = ma_engine_get_device(engine);
+	if (device && device->pContext && device->pContext->backend == ma_backend_webaudio && device->webaudio.deviceIndex >= 0) {
+		soluna_webaudio_debug_ctx_state(device->webaudio.deviceIndex, "after-play");
+	}
+#endif
 	return 0;
 }
 
