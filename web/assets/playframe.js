@@ -205,7 +205,7 @@
     };
 
     ["pointerdown", "touchend", "click", "keydown"].forEach((type) => {
-      window.addEventListener(type, resumeAll, { once: true, capture: true });
+      window.addEventListener(type, resumeAll, { capture: true });
     });
 
     return resumeAll;
