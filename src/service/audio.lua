@@ -13,6 +13,7 @@ local play = audio.play
 
 -- play
 api[true] = function(id)
+	print(string.format("[Soluna Audio Lua] Playing sound id=%s, file=%s", tostring(id), tostring(BANK[id])))
 	play(DEVICE, BANK[id])
 end
 
@@ -42,14 +43,18 @@ end
 function S.init(filename)
 	assert(DEVICE == nil)
 	DEVICE = false
+	print(string.format("[Soluna Audio Lua] Initializing audio service with file: %s", filename))
 	local bank, ret = load_bundle(filename)
+	print(string.format("[Soluna Audio Lua] Loaded %d sounds from bundle", #bank))
 	local d = ltask.call(ltask.queryservice "render", "audio_engine")
 	if not d then
+		print("[Soluna Audio Lua] Audio engine not available")
 		return {}
 	else
 		-- todo : load file list
 		BANK = bank
 		DEVICE = d
+		print(string.format("[Soluna Audio Lua] Audio engine initialized, device: %s", tostring(d)))
 		local inject = ltask.dispatch()
 		for k, v in pairs(api) do
 			inject[k] = v

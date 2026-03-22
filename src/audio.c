@@ -60,25 +60,49 @@ struct custom_engine {
 
 #if defined(__EMSCRIPTEN__)
 EM_JS(void, soluna_webaudio_resume_on_gesture, (int device_index), {
-	if (typeof document === "undefined") return;
+	if (typeof document === "undefined") {
+		console.log("[Soluna Audio] Document not available, skipping resume handler");
+		return;
+	}
+	console.log("[Soluna Audio] Installing WebAudio resume handler for device index:", device_index);
 	try {
 		const miniaudio = window.miniaudio;
-		if (!miniaudio || typeof miniaudio.get_device_by_index !== "function") return;
+		if (!miniaudio || typeof miniaudio.get_device_by_index !== "function") {
+			console.warn("[Soluna Audio] window.miniaudio not available or get_device_by_index not a function");
+			return;
+		}
 		const device = miniaudio.get_device_by_index(device_index);
-		if (!device || !device.webaudio || typeof device.webaudio.resume !== "function") return;
+		if (!device) {
+			console.warn("[Soluna Audio] Device not found for index:", device_index);
+			return;
+		}
+		if (!device.webaudio || typeof device.webaudio.resume !== "function") {
+			console.warn("[Soluna Audio] Device.webaudio not available or resume not a function");
+			return;
+		}
 		const ctx = device.webaudio;
+		console.log("[Soluna Audio] AudioContext state:", ctx.state);
 		const resume = () => {
-			if (ctx.state === "running") return;
+			console.log("[Soluna Audio] Resume triggered, current state:", ctx.state);
+			if (ctx.state === "running") {
+				console.log("[Soluna Audio] AudioContext already running");
+				return;
+			}
 			const p = ctx.resume();
 			if (p && typeof p.catch === "function") {
-				p.catch((err) => console.error("Failed to resume AudioContext", err));
+				p.then(() => {
+					console.log("[Soluna Audio] AudioContext resumed successfully, new state:", ctx.state);
+				}).catch((err) => {
+					console.error("[Soluna Audio] Failed to resume AudioContext", err);
+				});
 			}
 		};
 		["click", "touchend", "keydown"].forEach((event_type) => {
 			document.addEventListener(event_type, resume, { once: true });
+			console.log("[Soluna Audio] Registered listener for:", event_type);
 		});
 	} catch (err) {
-		console.error("Failed to install WebAudio resume handler", err);
+		console.error("[Soluna Audio] Failed to install WebAudio resume handler", err);
 	}
 });
 
@@ -86,18 +110,23 @@ static void
 inject_webaudio_resume(struct ma_engine *engine) {
 	ma_device *device;
 	if (engine == NULL) {
+		EM_ASM(console.error("[Soluna Audio] inject_webaudio_resume: engine is NULL"););
 		return;
 	}
 	device = ma_engine_get_device(engine);
 	if (device == NULL || device->pContext == NULL) {
+		EM_ASM(console.error("[Soluna Audio] inject_webaudio_resume: device or context is NULL"););
 		return;
 	}
 	if (device->pContext->backend != ma_backend_webaudio) {
+		EM_ASM(console.log("[Soluna Audio] inject_webaudio_resume: backend is not WebAudio"););
 		return;
 	}
 	if (device->webaudio.deviceIndex < 0) {
+		EM_ASM(console.error("[Soluna Audio] inject_webaudio_resume: invalid device index"););
 		return;
 	}
+	EM_ASM(console.log("[Soluna Audio] inject_webaudio_resume: calling soluna_webaudio_resume_on_gesture"););
 	soluna_webaudio_resume_on_gesture(device->webaudio.deviceIndex);
 }
 #endif
@@ -109,8 +138,14 @@ zr_open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pF
 		return MA_NOT_IMPLEMENTED;
 	zipreader_file zf = zipreader_open(vfs->zipnames, pFilePath);
 	if (zf == NULL) {
+#if defined(__EMSCRIPTEN__)
+		EM_ASM({console.error("[Soluna Audio] zr_open: failed to open file:", UTF8ToString($0));}, pFilePath);
+#endif
 		return MA_ERROR;
 	}
+#if defined(__EMSCRIPTEN__)
+	EM_ASM({console.log("[Soluna Audio] zr_open: successfully opened file:", UTF8ToString($0));}, pFilePath);
+#endif
 	*pFile = (ma_vfs_file)zf;
 	return MA_SUCCESS;
 }
@@ -178,12 +213,15 @@ static int
 laudio_init(lua_State *L) {
 	lua_settop(L, 1);
 	struct custom_engine *e = (struct custom_engine *)lua_newuserdatauv(L, sizeof(*e), 1);
-	
+
 	ma_default_vfs_init(&e->vfs.base, NULL);
 	e->vfs.base.cb.onOpen = vfs_open_local;
 	e->vfs.zipnames = NULL;
-	
+
 	if (lua_isuserdata(L, 1)) {
+#if defined(__EMSCRIPTEN__)
+		EM_ASM(console.log("[Soluna Audio] laudio_init: using zip VFS"););
+#endif
 		e->vfs.zipnames = lua_touserdata(L, 1);
 		e->vfs.base.cb.onOpen = zr_open;
 		e->vfs.base.cb.onOpenW = NULL;
@@ -195,27 +233,38 @@ laudio_init(lua_State *L) {
 		e->vfs.base.cb.onInfo = zr_info;
 		lua_pushvalue(L, 1);
 		lua_setiuservalue(L, -2, 1);
+	} else {
+#if defined(__EMSCRIPTEN__)
+		EM_ASM(console.log("[Soluna Audio] laudio_init: using local file VFS"););
+#endif
 	}
-	
+
     ma_resource_manager_config config = ma_resource_manager_config_init();
 	config.pVFS = &e->vfs;
-	
+
 	ma_result r = ma_resource_manager_init(&config, &e->rm);
 	if (r != MA_SUCCESS) {
+#if defined(__EMSCRIPTEN__)
+		EM_ASM({console.error("[Soluna Audio] laudio_init: ma_resource_manager_init error:", UTF8ToString($0));}, ma_result_description(r));
+#endif
 		return luaL_error(L, "ma_resource_manager_init() error : %s", ma_result_description(r));
 	}
-		
+
 	ma_engine_config ec = ma_engine_config_init();
 	ec.pResourceManager = &e->rm;
 	r = ma_engine_init(&ec, &e->engine);
 	if (r != MA_SUCCESS) {
+#if defined(__EMSCRIPTEN__)
+		EM_ASM({console.error("[Soluna Audio] laudio_init: ma_engine_init error:", UTF8ToString($0));}, ma_result_description(r));
+#endif
 		return luaL_error(L, "ma_engine_init() error : %s", ma_result_description(r));
 	}
 #if defined(__EMSCRIPTEN__)
+	EM_ASM(console.log("[Soluna Audio] laudio_init: engine initialized, injecting WebAudio resume handler"););
 	inject_webaudio_resume(&e->engine);
 #endif
 	lua_pushlightuserdata(L, (void *)e);
-	
+
 	return 2;
 }
 
@@ -247,8 +296,20 @@ laudio_play(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
 	ma_engine *engine = (ma_engine *)lua_touserdata(L, 1);
 	const char *filename = luaL_checkstring(L, 2);
-	
-	ma_engine_play_sound(engine, filename, NULL);
+
+#if defined(__EMSCRIPTEN__)
+	EM_ASM({console.log("[Soluna Audio] laudio_play: attempting to play file:", UTF8ToString($0));}, filename);
+#endif
+	ma_result r = ma_engine_play_sound(engine, filename, NULL);
+	if (r != MA_SUCCESS) {
+#if defined(__EMSCRIPTEN__)
+		EM_ASM({console.error("[Soluna Audio] laudio_play: ma_engine_play_sound error:", UTF8ToString($0));}, ma_result_description(r));
+#endif
+	} else {
+#if defined(__EMSCRIPTEN__)
+		EM_ASM({console.log("[Soluna Audio] laudio_play: successfully started playing:", UTF8ToString($0));}, filename);
+#endif
+	}
 	return 0;
 }
 

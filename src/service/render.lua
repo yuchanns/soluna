@@ -287,7 +287,9 @@ end
 
 local function render_init(arg)
 	local audio = require "soluna.audio"
-	local engine, ptr = audio.init()
+	local file = require "soluna.file"
+	local ziplist = file.ziplist and file.ziplist()
+	local engine, ptr = audio.init(ziplist)
 	audio_engine = {
 		engine = engine,
 		ptr = ptr,

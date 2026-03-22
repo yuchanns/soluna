@@ -4,7 +4,10 @@ local mattext = require "soluna.material.text"
 local font = require "soluna.font"
 local file = require "soluna.file"
 
+print(string.format("[Audio Test] Platform: %s", soluna.platform))
+print("[Audio Test] Loading sounds...")
 soluna.load_sounds "asset/sounds.dl"
+print("[Audio Test] Sounds loaded successfully")
 soluna.set_window_title "Soluna sound sample"
 
 local args = ...
@@ -70,7 +73,9 @@ local function inside_button(x, y)
 end
 
 local function trigger_play()
+	print("[Audio Test] Button clicked, playing sound 'bloop'")
 	soluna.play_sound "bloop"
+	print("[Audio Test] play_sound call completed")
 end
 
 local callback = {}
