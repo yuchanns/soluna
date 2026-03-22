@@ -89,9 +89,14 @@
         try {
           if (ctx.state !== "running") {
             logAudio("resume miniaudio device", idx, ctx.state);
-            ctx.resume().catch(() => {});
+            const p = ctx.resume();
+            if (p && typeof p.catch === "function") {
+              p.catch((err) => logAudio("resume miniaudio device failed", idx, err && err.message));
+            }
           }
-        } catch (_) {}
+        } catch (err) {
+          logAudio("resume miniaudio device threw", idx, err && err.message);
+        }
       }
       idx++;
     }
@@ -183,6 +188,37 @@
       window.webkitAudioContext = WrappedAudioContext;
     }
 
+    const tryResumeContext = (ctx, label) => {
+      if (!ctx || typeof ctx.resume !== "function") return;
+      if (ctx.state === "closed") {
+        logAudio("skip closed context", label);
+        return;
+      }
+      if (ctx.state === "running") {
+        logAudio("context already running", label);
+        primeContext(ctx);
+        reconnectScriptNodes(ctx);
+        return;
+      }
+      logAudio("resuming AudioContext", label, ctx.state);
+      try {
+        const result = ctx.resume();
+        const afterResume = () => {
+          logAudio("context resumed", label, ctx.state);
+          reconnectScriptNodes(ctx);
+          primeContext(ctx);
+          setTimeout(() => logAudio("context state post-resume delay", label, ctx.state), 250);
+        };
+        if (result && typeof result.then === "function") {
+          result.then(afterResume).catch((err) => logAudio("resume failed", label, err && err.message));
+        } else {
+          afterResume();
+        }
+      } catch (err) {
+        logAudio("resume threw", label, err && err.message);
+      }
+    };
+
     const resumeAll = () => {
       if (contexts.size === 0) {
         logAudio("resumeAll: no contexts yet");
@@ -195,35 +231,12 @@
           logAudio("failed to create lifeline AudioContext", err && err.message);
         }
       }
-      contexts.forEach((ctx) => {
-        if (!ctx || typeof ctx.resume !== "function") return;
-        if (ctx.state === "closed") {
-          logAudio("skip closed context");
-          return;
-        }
-        if (ctx.state === "running") {
-          logAudio("context already running");
-          primeContext(ctx);
-          reconnectScriptNodes(ctx);
-          return;
-        }
-        try {
-          logAudio("resuming AudioContext", ctx.state);
-          const result = ctx.resume();
-          const afterResume = () => {
-            logAudio("context resumed", ctx.state);
-            reconnectScriptNodes(ctx);
-            primeContext(ctx);
-          };
-          if (result && typeof result.then === "function") {
-            result.then(afterResume).catch(() => {});
-          } else {
-            afterResume();
-          }
-        } catch (_) {
-          /* ignore resume errors */
-        }
+      contexts.forEach((ctx, idx) => {
+        tryResumeContext(ctx, idx);
       });
+      if (lifeline) {
+        tryResumeContext(lifeline, "lifeline");
+      }
       resumeMiniaudioDevices();
     };
 
