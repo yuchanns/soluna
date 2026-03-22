@@ -81,19 +81,51 @@ EM_JS(void, soluna_webaudio_resume_on_gesture, (int device_index), {
 		if (!device || !device.webaudio || typeof device.webaudio.resume !== "function") return;
 		const ctx = device.webaudio;
 		const label = `[miniaudio ctx ${device_index}]`;
+		const reconnectScriptNode = () => {
+			const node = device.scriptNode || ctx._solunaScriptNode;
+			if (!node || typeof node.connect !== "function" || typeof node.disconnect !== "function") return;
+			try {
+				node.disconnect();
+				node.connect(ctx.destination);
+				console.info(label, "reconnected script node");
+			} catch (err) {
+				console.error(label, "reconnect script node failed", err);
+			}
+		};
+		const primeOutput = () => {
+			try {
+				const osc = ctx.createOscillator();
+				const gain = ctx.createGain();
+				gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+				gain.gain.exponentialRampToValueAtTime(0.02, ctx.currentTime + 0.02);
+				gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+				osc.frequency.value = 440;
+				osc.connect(gain).connect(ctx.destination);
+				osc.start();
+				osc.stop(ctx.currentTime + 0.16);
+			} catch (_) {}
+		};
 		const tryResume = () => {
 			if (ctx.state === "running") {
 				console.info(label, "already running");
+				reconnectScriptNode();
+				primeOutput();
 				return true;
 			}
 			console.info(label, "resume()", ctx.state);
 			try {
 				const p = ctx.resume();
 				if (p && typeof p.then === "function") {
-					p.then(() => console.info(label, "resumed ->", ctx.state))
+					p.then(() => {
+						console.info(label, "resumed ->", ctx.state);
+						reconnectScriptNode();
+						primeOutput();
+					})
 						.catch((err) => console.error(label, "resume failed", err));
 				} else {
 					console.info(label, "resume sync ->", ctx.state);
+					reconnectScriptNode();
+					primeOutput();
 				}
 			} catch (err) {
 				console.error(label, "resume threw", err);
