@@ -80,18 +80,22 @@ end
 local audio_service, audio_sounds
 
 function soluna.load_sounds(filename)
-	print(string.format("[Soluna Lua] Loading sounds from: %s", filename))
+	print("[Soluna Lua] Loading sounds from: " .. filename)
 	audio_service = audio_service or ltask.uniqueservice "audio"
 	audio_sounds = ltask.call(audio_service, "init", filename)
-	print(string.format("[Soluna Lua] Loaded %d sound(s)", audio_sounds and #audio_sounds or 0))
+	local count = 0
+	for _ in pairs(audio_sounds or {}) do
+		count = count + 1
+	end
+	print("[Soluna Lua] Loaded " .. count .. " sound(s)")
 	for name, id in pairs(audio_sounds or {}) do
-		print(string.format("[Soluna Lua] Sound '%s' -> id %s", name, tostring(id)))
+		print("[Soluna Lua] Sound '" .. name .. "' -> id " .. tostring(id))
 	end
 	return audio_sounds
 end
 
 function soluna.play_sound(name)
-	print(string.format("[Soluna Lua] Requesting to play sound: %s (id: %s)", name, tostring(audio_sounds[name])))
+	print("[Soluna Lua] Requesting to play sound: " .. name .. " (id: " .. tostring(audio_sounds[name]) .. ")")
 	ltask.send(audio_service, true, audio_sounds[name])
 end
 

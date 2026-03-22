@@ -4,7 +4,7 @@ local mattext = require "soluna.material.text"
 local font = require "soluna.font"
 local file = require "soluna.file"
 
-print(string.format("[Audio Test] Platform: %s", soluna.platform))
+print("[Audio Test] Platform: " .. soluna.platform)
 print("[Audio Test] Loading sounds...")
 soluna.load_sounds "asset/sounds.dl"
 print("[Audio Test] Sounds loaded successfully")
