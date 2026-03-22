@@ -10,7 +10,7 @@ local maskmat = require "soluna.material.mask"
 local pqmat = require "soluna.material.perspective_quad"
 local soluna_app = require "soluna.app"
 
-global require, assert, pairs, pcall, ipairs, print
+global require, assert, pairs, pcall, ipairs, print, tostring
 
 local setting = require "soluna".settings()
 
