@@ -85,6 +85,21 @@
     logAudio("installing AudioContext unlock shim");
 
     const contexts = new Set();
+    let lifeline = null;
+
+    const trackContext = (ctx) => {
+      if (!ctx || typeof ctx.addEventListener !== "function") return;
+      const onStateChange = () => {
+        logAudio("statechange", ctx.state);
+        if (ctx.state === "closed") {
+          contexts.delete(ctx);
+          ctx.removeEventListener("statechange", onStateChange);
+        }
+      };
+      try {
+        ctx.addEventListener("statechange", onStateChange);
+      } catch (_) {}
+    };
 
     const reconnectScriptNodes = (ctx) => {
       const nodes = ctx && ctx.__solunaScriptNodes;
@@ -114,6 +129,7 @@
         const ctx = new Ctor(...args);
         contexts.add(ctx);
         logAudio("AudioContext created", ctx.state);
+        trackContext(ctx);
         if (!ctx.__solunaScriptNodes && typeof ctx.createScriptProcessor === "function") {
           const original = ctx.createScriptProcessor.bind(ctx);
           ctx.__solunaScriptNodes = new Set();
@@ -148,9 +164,21 @@
     const resumeAll = () => {
       if (contexts.size === 0) {
         logAudio("resumeAll: no contexts yet");
+        try {
+          lifeline = lifeline || new NativeAudioContext();
+          contexts.add(lifeline);
+          logAudio("created lifeline AudioContext", lifeline.state);
+          trackContext(lifeline);
+        } catch (err) {
+          logAudio("failed to create lifeline AudioContext", err && err.message);
+        }
       }
       contexts.forEach((ctx) => {
         if (!ctx || typeof ctx.resume !== "function") return;
+        if (ctx.state === "closed") {
+          logAudio("skip closed context");
+          return;
+        }
         if (ctx.state === "running") {
           logAudio("context already running");
           primeContext(ctx);
