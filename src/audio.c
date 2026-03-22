@@ -79,9 +79,26 @@ EM_JS(void, soluna_webaudio_resume_on_gesture, (int device_index), {
 			["click", "touchend", "keydown"].forEach(function(et) {
 				document.removeEventListener(et, activate, true);
 			});
-			if (ctx.state === "running") return;
+			/* Prime audio graph: play a tiny silent buffer to kick-start
+			   the audio pipeline (required by some browsers, e.g. Safari). */
+			try {
+				var buf = ctx.createBuffer(1, 1, ctx.sampleRate || 44100);
+				var src = ctx.createBufferSource();
+				src.buffer = buf;
+				src.connect(ctx.destination);
+				src.start(0);
+			} catch(e) {}
+			/* Resume the context if it is not already running. */
 			ctx.resume().then(function() {
-				console.log("[audio] AudioContext resumed, state=" + ctx.state);
+				/* After resume succeeds, disconnect and reconnect the
+				   ScriptProcessorNode so the browser restarts the
+				   onaudioprocess callback reliably. */
+				if (device.scriptNode) {
+					try {
+						device.scriptNode.disconnect();
+						device.scriptNode.connect(ctx.destination);
+					} catch(e) {}
+				}
 			}).catch(function(err) {
 				console.error("[audio] AudioContext resume failed", err);
 			});
