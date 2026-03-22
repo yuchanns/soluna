@@ -287,7 +287,11 @@ end
 
 local function render_init(arg)
 	local audio = require "soluna.audio"
-	local engine, ptr = audio.init()
+	local file = require "soluna.file"
+	local ziplist = file.ziplist and file.ziplist() or nil
+	print("[audio] render_init: ziplist " .. (ziplist and "provided (zip VFS)" or "nil (local VFS)"))
+	local engine, ptr = audio.init(ziplist)
+	print("[audio] render_init: engine=" .. tostring(engine) .. " ptr=" .. tostring(ptr))
 	audio_engine = {
 		engine = engine,
 		ptr = ptr,

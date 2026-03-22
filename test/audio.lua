@@ -70,6 +70,7 @@ local function inside_button(x, y)
 end
 
 local function trigger_play()
+	print("[audio] trigger_play: requesting 'bloop'")
 	soluna.play_sound "bloop"
 end
 
