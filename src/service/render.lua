@@ -9,6 +9,7 @@ local quadmat = require "soluna.material.quad"
 local maskmat = require "soluna.material.mask"
 local pqmat = require "soluna.material.perspective_quad"
 local soluna_app = require "soluna.app"
+local file = require "soluna.file"
 
 global require, assert, pairs, pcall, ipairs, print
 
@@ -287,7 +288,13 @@ end
 
 local function render_init(arg)
 	local audio = require "soluna.audio"
-	local engine, ptr = audio.init()
+	local zipnames = file.ziplist and file.ziplist()
+	if zipnames then
+		print("[audio.render] use zip VFS for audio assets")
+	else
+		print("[audio.render] using local filesystem for audio assets")
+	end
+	local engine, ptr = audio.init(zipnames)
 	audio_engine = {
 		engine = engine,
 		ptr = ptr,

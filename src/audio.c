@@ -1,5 +1,7 @@
 #include <lua.h>
 #include <lauxlib.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 #include "zipreader.h"
 
@@ -14,6 +16,16 @@
 #include "miniaudio.h"
 
 FILE * fopen_utf8(const char *filename, const char *mode);
+
+static void
+audio_log(const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	fprintf(stderr, "[audio] ");
+	vfprintf(stderr, fmt, ap);
+	fprintf(stderr, "\n");
+	va_end(ap);
+}
 
 static ma_result
 vfs_open_local(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile) {
@@ -39,6 +51,7 @@ vfs_open_local(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_f
 	pFileStd = fopen_utf8(pFilePath, pOpenModeStr);
 	
 	if (pFileStd == NULL) {
+		audio_log("vfs_open_local failed for %s", pFilePath);
 		return MA_ERROR;
 	}
 
@@ -86,18 +99,23 @@ static void
 inject_webaudio_resume(struct ma_engine *engine) {
 	ma_device *device;
 	if (engine == NULL) {
+		audio_log("skip WebAudio resume: engine null");
 		return;
 	}
 	device = ma_engine_get_device(engine);
 	if (device == NULL || device->pContext == NULL) {
+		audio_log("skip WebAudio resume: device/context null");
 		return;
 	}
 	if (device->pContext->backend != ma_backend_webaudio) {
+		audio_log("skip WebAudio resume: backend %d", device->pContext->backend);
 		return;
 	}
 	if (device->webaudio.deviceIndex < 0) {
+		audio_log("skip WebAudio resume: invalid device index %d", device->webaudio.deviceIndex);
 		return;
 	}
+	audio_log("install WebAudio resume hook for device %d", device->webaudio.deviceIndex);
 	soluna_webaudio_resume_on_gesture(device->webaudio.deviceIndex);
 }
 #endif
@@ -109,6 +127,7 @@ zr_open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pF
 		return MA_NOT_IMPLEMENTED;
 	zipreader_file zf = zipreader_open(vfs->zipnames, pFilePath);
 	if (zf == NULL) {
+		audio_log("zip VFS missing asset: %s", pFilePath);
 		return MA_ERROR;
 	}
 	*pFile = (ma_vfs_file)zf;
@@ -184,6 +203,7 @@ laudio_init(lua_State *L) {
 	e->vfs.zipnames = NULL;
 	
 	if (lua_isuserdata(L, 1)) {
+		audio_log("audio init with zip VFS");
 		e->vfs.zipnames = lua_touserdata(L, 1);
 		e->vfs.base.cb.onOpen = zr_open;
 		e->vfs.base.cb.onOpenW = NULL;
@@ -195,6 +215,8 @@ laudio_init(lua_State *L) {
 		e->vfs.base.cb.onInfo = zr_info;
 		lua_pushvalue(L, 1);
 		lua_setiuservalue(L, -2, 1);
+	} else {
+		audio_log("audio init with local filesystem VFS");
 	}
 	
     ma_resource_manager_config config = ma_resource_manager_config_init();
@@ -210,6 +232,12 @@ laudio_init(lua_State *L) {
 	r = ma_engine_init(&ec, &e->engine);
 	if (r != MA_SUCCESS) {
 		return luaL_error(L, "ma_engine_init() error : %s", ma_result_description(r));
+	}
+	ma_device *device = ma_engine_get_device(&e->engine);
+	if (device) {
+		audio_log("engine ready: backend=%d sample_rate=%d channels=%d", device->pContext ? device->pContext->backend : -1, device->sampleRate, device->playback.channels);
+	} else {
+		audio_log("engine ready: no device pointer");
 	}
 #if defined(__EMSCRIPTEN__)
 	inject_webaudio_resume(&e->engine);
@@ -248,7 +276,12 @@ laudio_play(lua_State *L) {
 	ma_engine *engine = (ma_engine *)lua_touserdata(L, 1);
 	const char *filename = luaL_checkstring(L, 2);
 	
-	ma_engine_play_sound(engine, filename, NULL);
+	ma_result r = ma_engine_play_sound(engine, filename, NULL);
+	if (r != MA_SUCCESS) {
+		audio_log("play %s failed: %s", filename, ma_result_description(r));
+	} else {
+		audio_log("play %s ok", filename);
+	}
 	return 0;
 }
 
