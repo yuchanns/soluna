@@ -227,9 +227,32 @@
       resumeMiniaudioDevices();
     };
 
+    const hasRunningContext = () => {
+      for (const ctx of contexts) {
+        if (ctx && ctx.state === "running") return true;
+      }
+      return false;
+    };
+
+    const scheduleAutoResume = () => {
+      let attempts = 0;
+      const maxAttempts = 10;
+      const tick = () => {
+        attempts += 1;
+        logAudio("auto resume tick", attempts);
+        resumeAll();
+        if (!hasRunningContext() && attempts < maxAttempts) {
+          setTimeout(tick, 300);
+        }
+      };
+      setTimeout(tick, 0);
+    };
+
     ["pointerdown", "touchend", "click", "keydown"].forEach((type) => {
       window.addEventListener(type, resumeAll, { capture: true });
     });
+
+    scheduleAutoResume();
 
     return resumeAll;
   }
