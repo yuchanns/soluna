@@ -75,6 +75,28 @@
     } catch (_) {}
   };
 
+  const resumeMiniaudioDevices = () => {
+    const m = window.miniaudio;
+    if (!m || typeof m.get_device_by_index !== "function") {
+      return;
+    }
+    let idx = 0;
+    while (true) {
+      const dev = m.get_device_by_index(idx);
+      if (!dev) break;
+      const ctx = dev.webaudio;
+      if (ctx && typeof ctx.resume === "function") {
+        try {
+          if (ctx.state !== "running") {
+            logAudio("resume miniaudio device", idx, ctx.state);
+            ctx.resume().catch(() => {});
+          }
+        } catch (_) {}
+      }
+      idx++;
+    }
+  };
+
   function setupAudioUnlock() {
     const NativeAudioContext = window.AudioContext || window.webkitAudioContext;
     if (!NativeAudioContext) {
@@ -202,6 +224,7 @@
           /* ignore resume errors */
         }
       });
+      resumeMiniaudioDevices();
     };
 
     ["pointerdown", "touchend", "click", "keydown"].forEach((type) => {
