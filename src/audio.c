@@ -80,16 +80,37 @@ EM_JS(void, soluna_webaudio_resume_on_gesture, (int device_index), {
 		const device = miniaudio.get_device_by_index(device_index);
 		if (!device || !device.webaudio || typeof device.webaudio.resume !== "function") return;
 		const ctx = device.webaudio;
-		const resume = () => {
-			if (ctx.state === "running") return;
-			const p = ctx.resume();
-			if (p && typeof p.catch === "function") {
-				p.catch((err) => console.error("Failed to resume AudioContext", err));
+		const label = `[miniaudio ctx ${device_index}]`;
+		const tryResume = () => {
+			if (ctx.state === "running") {
+				console.info(label, "already running");
+				return true;
 			}
+			console.info(label, "resume()", ctx.state);
+			try {
+				const p = ctx.resume();
+				if (p && typeof p.then === "function") {
+					p.then(() => console.info(label, "resumed ->", ctx.state))
+						.catch((err) => console.error(label, "resume failed", err));
+				} else {
+					console.info(label, "resume sync ->", ctx.state);
+				}
+			} catch (err) {
+				console.error(label, "resume threw", err);
+			}
+			return ctx.state === "running";
 		};
-		["click", "touchend", "keydown"].forEach((event_type) => {
-			document.addEventListener(event_type, resume, { once: true });
+		let attempts = 0;
+		const maxAttempts = 10;
+		const tick = () => {
+			attempts += 1;
+			if (tryResume() || attempts >= maxAttempts) return;
+			setTimeout(tick, 300);
+		};
+		["click", "touchend", "pointerdown", "keydown"].forEach((event_type) => {
+			document.addEventListener(event_type, tryResume, { capture: true });
 		});
+		tick();
 	} catch (err) {
 		console.error("Failed to install WebAudio resume handler", err);
 	}
