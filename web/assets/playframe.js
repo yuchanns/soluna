@@ -69,6 +69,106 @@
     postMessage("console", { text, isError: Boolean(isError) });
   }
 
+  function setupAudioUnlock() {
+    const NativeAudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!NativeAudioContext) {
+      return () => {};
+    }
+
+    const contexts = new Set();
+
+    const reconnectScriptNodes = (ctx) => {
+      const nodes = ctx && ctx.__solunaScriptNodes;
+      if (!nodes) return;
+      nodes.forEach((node) => {
+        try {
+          node.disconnect();
+          node.connect(ctx.destination);
+        } catch (_) {}
+      });
+    };
+
+    const primeContext = (ctx) => {
+      if (!ctx || ctx.__solunaPrimed) return;
+      ctx.__solunaPrimed = true;
+      try {
+        const buffer = ctx.createBuffer(1, 1, ctx.sampleRate || 44100);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch (_) {}
+    };
+
+    const wrapContext = (Ctor) => {
+      const Wrapped = function (...args) {
+        const ctx = new Ctor(...args);
+        contexts.add(ctx);
+        if (!ctx.__solunaScriptNodes && typeof ctx.createScriptProcessor === "function") {
+          const original = ctx.createScriptProcessor.bind(ctx);
+          ctx.__solunaScriptNodes = new Set();
+          ctx.createScriptProcessor = function (...spArgs) {
+            const node = original(...spArgs);
+            try {
+              ctx.__solunaScriptNodes.add(node);
+            } catch (_) {}
+            return node;
+          };
+        }
+        return ctx;
+      };
+      Wrapped.prototype = Ctor.prototype;
+      Object.defineProperty(Wrapped.prototype, "constructor", {
+        value: Wrapped,
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
+      return Wrapped;
+    };
+
+    const WrappedAudioContext = wrapContext(NativeAudioContext);
+    if (window.AudioContext) {
+      window.AudioContext = WrappedAudioContext;
+    }
+    if (window.webkitAudioContext) {
+      window.webkitAudioContext = WrappedAudioContext;
+    }
+
+    const resumeAll = () => {
+      contexts.forEach((ctx) => {
+        if (!ctx || typeof ctx.resume !== "function") return;
+        if (ctx.state === "running") {
+          primeContext(ctx);
+          reconnectScriptNodes(ctx);
+          return;
+        }
+        try {
+          const result = ctx.resume();
+          const afterResume = () => {
+            reconnectScriptNodes(ctx);
+            primeContext(ctx);
+          };
+          if (result && typeof result.then === "function") {
+            result.then(afterResume).catch(() => {});
+          } else {
+            afterResume();
+          }
+        } catch (_) {
+          /* ignore resume errors */
+        }
+      });
+    };
+
+    ["pointerdown", "touchend", "click", "keydown"].forEach((type) => {
+      window.addEventListener(type, resumeAll, { once: true, capture: true });
+    });
+
+    return resumeAll;
+  }
+
+  setupAudioUnlock();
+
   function createZip(entries) {
     const CRC32_TABLE = createZip.crcTable || (createZip.crcTable = (() => {
       const table = new Uint32Array(256);
