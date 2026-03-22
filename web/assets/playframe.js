@@ -69,11 +69,20 @@
     postMessage("console", { text, isError: Boolean(isError) });
   }
 
+  const logAudio = (...args) => {
+    try {
+      console.info("[audio.unlock]", ...args);
+    } catch (_) {}
+  };
+
   function setupAudioUnlock() {
     const NativeAudioContext = window.AudioContext || window.webkitAudioContext;
     if (!NativeAudioContext) {
+      logAudio("no AudioContext available; skip unlock shim");
       return () => {};
     }
+
+    logAudio("installing AudioContext unlock shim");
 
     const contexts = new Set();
 
@@ -104,6 +113,7 @@
       const Wrapped = function (...args) {
         const ctx = new Ctor(...args);
         contexts.add(ctx);
+        logAudio("AudioContext created", ctx.state);
         if (!ctx.__solunaScriptNodes && typeof ctx.createScriptProcessor === "function") {
           const original = ctx.createScriptProcessor.bind(ctx);
           ctx.__solunaScriptNodes = new Set();
@@ -136,16 +146,22 @@
     }
 
     const resumeAll = () => {
+      if (contexts.size === 0) {
+        logAudio("resumeAll: no contexts yet");
+      }
       contexts.forEach((ctx) => {
         if (!ctx || typeof ctx.resume !== "function") return;
         if (ctx.state === "running") {
+          logAudio("context already running");
           primeContext(ctx);
           reconnectScriptNodes(ctx);
           return;
         }
         try {
+          logAudio("resuming AudioContext", ctx.state);
           const result = ctx.resume();
           const afterResume = () => {
+            logAudio("context resumed", ctx.state);
             reconnectScriptNodes(ctx);
             primeContext(ctx);
           };
@@ -167,7 +183,10 @@
     return resumeAll;
   }
 
-  setupAudioUnlock();
+  const resumeAudioUnlock = setupAudioUnlock();
+  if (typeof resumeAudioUnlock === "function") {
+    setTimeout(resumeAudioUnlock, 0);
+  }
 
   function createZip(entries) {
     const CRC32_TABLE = createZip.crcTable || (createZip.crcTable = (() => {
