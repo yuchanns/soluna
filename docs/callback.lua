@@ -24,6 +24,11 @@ end
 function callback.char(codepoint)
 end
 
+---Clipboard paste event.
+---@param text string UTF-8 clipboard text
+function callback.clipboard_pasted(text)
+end
+
 ---鼠标按钮事件
 ---Mouse button event.
 ---@param button integer 0 左键，1 右键，2 中键 / 0 left, 1 right, 2 middle

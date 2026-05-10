@@ -53,4 +53,9 @@ end
 function app.set_ime_rect(rect)
 end
 
+---Writes text to the system clipboard.
+---@param text string
+function app.set_clipboard_text(text)
+end
+
 return app
