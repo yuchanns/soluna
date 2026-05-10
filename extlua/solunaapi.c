@@ -13,8 +13,13 @@ struct soluna_api {
 	soluna_material_error (*material_push_stream) (int material_id, int count, size_t payload_size, soluna_material_stream_write_func write, void *ud, struct soluna_material_stream *out);
 	void (*material_stream_free) (void *ptr);
 	int (*material_stream_read) (struct soluna_material_stream_context ctx, int index, size_t payload_size, void *payload, struct soluna_material_stream_data *out);
+	int (*material_stream_read_basis) (struct soluna_material_stream_context ctx, int index, size_t payload_size, void *payload, struct soluna_material_stream_basis *out);
 	void (*material_stream_error) (struct soluna_material_stream_context ctx, const char *error);
 	int (*material_stream_failed) (struct soluna_material_stream_context ctx);
+	const char * (*font_measure) (struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph);
+	const char * (*font_atlas_glyph) (struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph, struct soluna_font_glyph *atlas);
+	int (*font_metrics) (struct soluna_font_manager font, int font_id, int size, struct soluna_font_metrics *out);
+	int (*font_atlas) (struct soluna_font_manager font, struct soluna_font_atlas *out);
 };
 
 static struct soluna_api API;
@@ -49,6 +54,11 @@ soluna_material_stream_read(struct soluna_material_stream_context ctx, int index
 	return API.material_stream_read(ctx, index, payload_size, payload, out);
 }
 
+int
+soluna_material_stream_read_basis(struct soluna_material_stream_context ctx, int index, size_t payload_size, void *payload, struct soluna_material_stream_basis *out) {
+	return API.material_stream_read_basis(ctx, index, payload_size, payload, out);
+}
+
 void
 soluna_material_stream_error(struct soluna_material_stream_context ctx, const char *error) {
 	API.material_stream_error(ctx, error);
@@ -57,6 +67,26 @@ soluna_material_stream_error(struct soluna_material_stream_context ctx, const ch
 int
 soluna_material_stream_failed(struct soluna_material_stream_context ctx) {
 	return API.material_stream_failed(ctx);
+}
+
+const char *
+soluna_font_measure(struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph) {
+	return API.font_measure(font, font_id, codepoint, size, glyph);
+}
+
+const char *
+soluna_font_atlas_glyph(struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph, struct soluna_font_glyph *atlas) {
+	return API.font_atlas_glyph(font, font_id, codepoint, size, glyph, atlas);
+}
+
+int
+soluna_font_metrics(struct soluna_font_manager font, int font_id, int size, struct soluna_font_metrics *out) {
+	return API.font_metrics(font, font_id, size, out);
+}
+
+int
+soluna_font_atlas(struct soluna_font_manager font, struct soluna_font_atlas *out) {
+	return API.font_atlas(font, out);
 }
 
 

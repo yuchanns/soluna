@@ -60,6 +60,17 @@ local apis = {
 		},
 	},
 	{
+		ret = "int",
+		name = "soluna_material_stream_read_basis",
+		params = {
+			{ type = "struct soluna_material_stream_context ", name = "ctx" },
+			{ type = "int ", name = "index" },
+			{ type = "size_t ", name = "payload_size" },
+			{ type = "void *", name = "payload" },
+			{ type = "struct soluna_material_stream_basis *", name = "out" },
+		},
+	},
+	{
 		ret = "void",
 		name = "soluna_material_stream_error",
 		params = {
@@ -74,10 +85,62 @@ local apis = {
 			{ type = "struct soluna_material_stream_context ", name = "ctx" },
 		},
 	},
+	{
+		ret = "const char *",
+		name = "soluna_font_measure",
+		params = {
+			{ type = "struct soluna_font_manager ", name = "font" },
+			{ type = "int ", name = "font_id" },
+			{ type = "int ", name = "codepoint" },
+			{ type = "int ", name = "size" },
+			{ type = "struct soluna_font_glyph *", name = "glyph" },
+		},
+	},
+	{
+		ret = "const char *",
+		name = "soluna_font_atlas_glyph",
+		params = {
+			{ type = "struct soluna_font_manager ", name = "font" },
+			{ type = "int ", name = "font_id" },
+			{ type = "int ", name = "codepoint" },
+			{ type = "int ", name = "size" },
+			{ type = "struct soluna_font_glyph *", name = "glyph" },
+			{ type = "struct soluna_font_glyph *", name = "atlas" },
+		},
+	},
+	{
+		ret = "int",
+		name = "soluna_font_metrics",
+		params = {
+			{ type = "struct soluna_font_manager ", name = "font" },
+			{ type = "int ", name = "font_id" },
+			{ type = "int ", name = "size" },
+			{ type = "struct soluna_font_metrics *", name = "out" },
+		},
+	},
+	{
+		ret = "int",
+		name = "soluna_font_atlas",
+		params = {
+			{ type = "struct soluna_font_manager ", name = "font" },
+			{ type = "struct soluna_font_atlas *", name = "out" },
+		},
+	},
 }
 
-local type_decl = [[
-#define SOLUNA_EXT_API_VERSION 1
+local base_type_decl = [[
+#define SOLUNA_EXT_API_VERSION 2
+
+struct soluna_vec2 {
+	float x;
+	float y;
+};
+
+struct soluna_basis {
+	struct soluna_vec2 origin;
+	struct soluna_vec2 axis_x;
+	struct soluna_vec2 axis_y;
+};
 
 struct soluna_sprite_rect {
 	int texture;
@@ -102,6 +165,11 @@ struct soluna_material_stream_data {
 	int sprite;
 };
 
+struct soluna_material_stream_basis {
+	struct soluna_basis basis;
+	int sprite;
+};
+
 struct soluna_material_stream {
 	char *data;
 	size_t size;
@@ -121,16 +189,39 @@ struct soluna_sprite_bank {
 	void *ctx;
 };
 
+struct soluna_font_manager {
+	void *ctx;
+};
+
+struct soluna_font_glyph {
+	int offset_x;
+	int offset_y;
+	int advance_x;
+	int advance_y;
+	int width;
+	int height;
+	int atlas_x;
+	int atlas_y;
+};
+
+struct soluna_font_metrics {
+	int ascent;
+	int descent;
+	int line_gap;
+};
+
+struct soluna_font_atlas {
+	int width;
+	int height;
+	int glyph_width;
+	int glyph_height;
+	float sdf_mask;
+	float sdf_distance;
+};
+
 typedef void (*soluna_material_submit_func)(void *ud, struct soluna_material_stream_context ctx, int n);
 typedef void (*soluna_material_stream_write_func)(void *ud, int index, struct soluna_material_stream_item *item);
 ]]
-
-local host_type_decl = [[
-#include <stddef.h>
-
-#include "sokol/sokol_gfx.h"
-
-]] .. type_decl
 
 local function readfile(filename)
 	local f = assert(io.open(filename))
@@ -224,13 +315,18 @@ local function gen_api_impl()
 end
 
 local convert = {
-	TYPE_DECL = type_decl,
+	TYPE_DECL = base_type_decl,
 	HEADER_DECL = gen_header_decl(),
 	API_DECL = gen_api_decl(),
 	API_STRUCT = gen_api_struct(),
 	API_EXTERN = gen_api_extern(),
 	API_IMPL = gen_api_impl(),
-	HOST_TYPE_DECL = host_type_decl,
+	HOST_TYPE_DECL = [[
+#include <stddef.h>
+
+#include "sokol/sokol_gfx.h"
+
+]] .. base_type_decl,
 }
 
 genfile("solunaapi.h.temp", convert)

@@ -314,6 +314,55 @@ font_manager_touch(struct font_manager *F, int font, int codepoint, struct font_
 	return r;
 }
 
+static int
+font_manager_measure_unsafe(struct font_manager *F, int font, int codepoint, struct font_glyph *glyph) {
+	int cp = codepoint_key(font, codepoint);
+	int slot = hash_lookup(F, cp);
+	if (slot >= 0) {
+		struct font_slot *s = &F->slots[slot];
+		glyph->offset_x = s->offset_x;
+		glyph->offset_y = s->offset_y;
+		glyph->advance_x = s->advance_x;
+		glyph->advance_y = s->advance_y;
+		glyph->w = s->w;
+		glyph->h = s->h;
+		glyph->u = 0;
+		glyph->v = 0;
+		return 1;
+	}
+
+	if (font == FONT_ICON) {
+		return get_icon(F, codepoint, glyph);
+	}
+
+	if (font_index(font) <= 0) {
+		memset(glyph, 0, sizeof(*glyph));
+		return -1;
+	}
+
+	const struct stbtt_fontinfo *fi = get_ttf_unsafe(F, font);
+	float scale = stbtt_ScaleForMappingEmToPixels(fi, ORIGINAL_SIZE);
+	int ascent, descent, lineGap;
+	int advance, lsb;
+	int ix0, iy0, ix1, iy1;
+
+	if (!stbtt_GetFontVMetricsOS2(fi, &ascent, &descent, &lineGap)) {
+		stbtt_GetFontVMetrics(fi, &ascent, &descent, &lineGap);
+	}
+	stbtt_GetCodepointHMetrics(fi, codepoint, &advance, &lsb);
+	stbtt_GetCodepointBitmapBox(fi, codepoint, scale, scale, &ix0, &iy0, &ix1, &iy1);
+
+	glyph->w = ix1-ix0 + DISTANCE_OFFSET * 2;
+	glyph->h = iy1-iy0 + DISTANCE_OFFSET * 2;
+	glyph->offset_x = (short)(lsb * scale) - DISTANCE_OFFSET;
+	glyph->offset_y = iy0 - DISTANCE_OFFSET;
+	glyph->advance_x = (short)(((float)advance) * scale + 0.5f);
+	glyph->advance_y = (short)((ascent - descent) * scale + 0.5f);
+	glyph->u = 0;
+	glyph->v = 0;
+	return 0;
+}
+
 static inline int
 scale_font(int v, float scale, int size) {
 	return ((int)(v * scale * size) + ORIGINAL_SIZE/2) / ORIGINAL_SIZE;
@@ -330,6 +379,7 @@ font_manager_fontheight(struct font_manager *F, int fontid, int size, int *ascen
 		*ascent = 0;
 		*descent = 0;
 		*lineGap = 0;
+		return;
 	}
 
 	const struct stbtt_fontinfo *fi = get_ttf(F, fontid);
@@ -496,7 +546,22 @@ font_manager_update(struct font_manager *F, int fontid, int codepoint, struct fo
 }
 
 const char *
-font_manager_glyph(struct font_manager *F, int fontid, int codepoint, int size, struct font_glyph *g, struct font_glyph *og) {
+font_manager_measure(struct font_manager *F, int fontid, int codepoint, int size, struct font_glyph *g) {
+	lock(F);
+	font_manager_measure_unsafe(F, fontid, codepoint, g);
+	unlock(F);
+	if (fontid == FONT_ICON) {
+		icon_scale(g, size);
+	} else {
+		font_manager_scale(F, g, size);
+	}
+	g->u = 0;
+	g->v = 0;
+	return NULL;
+}
+
+const char *
+font_manager_atlas_glyph(struct font_manager *F, int fontid, int codepoint, int size, struct font_glyph *g, struct font_glyph *og) {
 	int updated = font_manager_touch(F, fontid, codepoint, g);
 	*og = *g;
 	if (fontid != FONT_ICON && is_space_codepoint(codepoint)){

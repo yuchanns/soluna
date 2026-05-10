@@ -7,7 +7,18 @@
 
 #include "sokol/sokol_gfx.h"
 
-#define SOLUNA_EXT_API_VERSION 1
+#define SOLUNA_EXT_API_VERSION 2
+
+struct soluna_vec2 {
+	float x;
+	float y;
+};
+
+struct soluna_basis {
+	struct soluna_vec2 origin;
+	struct soluna_vec2 axis_x;
+	struct soluna_vec2 axis_y;
+};
 
 struct soluna_sprite_rect {
 	int texture;
@@ -32,6 +43,11 @@ struct soluna_material_stream_data {
 	int sprite;
 };
 
+struct soluna_material_stream_basis {
+	struct soluna_basis basis;
+	int sprite;
+};
+
 struct soluna_material_stream {
 	char *data;
 	size_t size;
@@ -49,6 +65,36 @@ struct soluna_render_bindings {
 
 struct soluna_sprite_bank {
 	void *ctx;
+};
+
+struct soluna_font_manager {
+	void *ctx;
+};
+
+struct soluna_font_glyph {
+	int offset_x;
+	int offset_y;
+	int advance_x;
+	int advance_y;
+	int width;
+	int height;
+	int atlas_x;
+	int atlas_y;
+};
+
+struct soluna_font_metrics {
+	int ascent;
+	int descent;
+	int line_gap;
+};
+
+struct soluna_font_atlas {
+	int width;
+	int height;
+	int glyph_width;
+	int glyph_height;
+	float sdf_mask;
+	float sdf_distance;
 };
 
 typedef void (*soluna_material_submit_func)(void *ud, struct soluna_material_stream_context ctx, int n);

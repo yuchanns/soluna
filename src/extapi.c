@@ -3,10 +3,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "sokol/sokol_gfx.h"
 #include "batch.h"
 #include "spritemgr.h"
+#include "font_manager.h"
 #include "render_bindings.h"
 #include "extapi_types.h"
 
@@ -146,6 +148,107 @@ material_bindings(struct soluna_render_bindings bindings) {
 	return b->bindings;
 }
 
+static void
+copy_font_glyph(struct soluna_font_glyph *out, const struct font_glyph *glyph) {
+	out->offset_x = glyph->offset_x;
+	out->offset_y = glyph->offset_y;
+	out->advance_x = glyph->advance_x;
+	out->advance_y = glyph->advance_y;
+	out->width = glyph->w;
+	out->height = glyph->h;
+	out->atlas_x = glyph->u;
+	out->atlas_y = glyph->v;
+}
+
+const char *
+font_measure(struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph) {
+	struct font_manager *F = (struct font_manager *)font.ctx;
+	struct font_glyph g;
+	const char *err;
+	if (glyph != NULL) {
+		memset(glyph, 0, sizeof(*glyph));
+	}
+	if (F == NULL) {
+		return "Missing font manager";
+	}
+	if (glyph == NULL) {
+		return "Missing font glyph output";
+	}
+	err = font_manager_measure(F, font_id, codepoint, size, &g);
+	if (err != NULL) {
+		return err;
+	}
+	copy_font_glyph(glyph, &g);
+	return NULL;
+}
+
+const char *
+font_atlas_glyph(struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph, struct soluna_font_glyph *atlas) {
+	struct font_manager *F = (struct font_manager *)font.ctx;
+	struct font_glyph g;
+	struct font_glyph og;
+	const char *err;
+	if (glyph != NULL) {
+		memset(glyph, 0, sizeof(*glyph));
+	}
+	if (atlas != NULL) {
+		memset(atlas, 0, sizeof(*atlas));
+	}
+	if (F == NULL) {
+		return "Missing font manager";
+	}
+	if (glyph == NULL && atlas == NULL) {
+		return "Missing font glyph output";
+	}
+	err = font_manager_atlas_glyph(F, font_id, codepoint, size, &g, &og);
+	if (err != NULL) {
+		return err;
+	}
+	if (glyph != NULL) {
+		copy_font_glyph(glyph, &g);
+		glyph->atlas_x = og.u;
+		glyph->atlas_y = og.v;
+	}
+	if (atlas != NULL) {
+		copy_font_glyph(atlas, &og);
+	}
+	return NULL;
+}
+
+int
+font_metrics(struct soluna_font_manager font, int font_id, int size, struct soluna_font_metrics *out) {
+	struct font_manager *F = (struct font_manager *)font.ctx;
+	if (out != NULL) {
+		memset(out, 0, sizeof(*out));
+	}
+	if (F == NULL || out == NULL) {
+		return 0;
+	}
+	if (font_id <= 0) {
+		return 0;
+	}
+	font_manager_fontheight(F, font_id, size, &out->ascent, &out->descent, &out->line_gap);
+	return 1;
+}
+
+int
+font_atlas(struct soluna_font_manager font, struct soluna_font_atlas *out) {
+	struct font_manager *F = (struct font_manager *)font.ctx;
+	if (out != NULL) {
+		memset(out, 0, sizeof(*out));
+	}
+	if (F == NULL || out == NULL) {
+		return 0;
+	}
+	out->width = FONT_MANAGER_TEXSIZE;
+	out->height = FONT_MANAGER_TEXSIZE;
+	out->glyph_width = FONT_MANAGER_GLYPHSIZE;
+	out->glyph_height = FONT_MANAGER_GLYPHSIZE;
+	out->sdf_mask = font_manager_sdf_mask(F);
+	out->sdf_distance = font_manager_sdf_distance(F, 1);
+	return 1;
+}
+
 static size_t
 stream_payload_max(void) {
 	return sizeof(struct draw_primitive) - sizeof(struct draw_primitive_external);
@@ -277,6 +380,102 @@ material_stream_read(struct soluna_material_stream_context ctx_, int index, size
 	}
 	out->x = (float)pos->x * STREAM_FIX_INV_SCALE;
 	out->y = (float)pos->y * STREAM_FIX_INV_SCALE;
+	out->sprite = ext->sprite;
+	if (payload_size > 0) {
+		memcpy(payload, (const char *)ext_prim + sizeof(*ext), payload_size);
+	}
+	return 1;
+}
+
+static void
+clear_stream_read_basis(size_t payload_size, void *payload, struct soluna_material_stream_basis *out) {
+	if (out != NULL) {
+		memset(out, 0, sizeof(*out));
+	}
+	if (payload != NULL && payload_size > 0 && payload_size <= stream_payload_max()) {
+		memset(payload, 0, payload_size);
+	}
+}
+
+static int
+fail_stream_read_basis(struct soluna_material_stream_context ctx, const char *error, size_t payload_size, void *payload, struct soluna_material_stream_basis *out) {
+	material_stream_error(ctx, error);
+	clear_stream_read_basis(payload_size, payload, out);
+	return 0;
+}
+
+static void
+decode_stream_basis(uint32_t sr, struct soluna_basis *basis) {
+	uint32_t scale_fix = sr >> 12;
+	uint32_t rot_fix = sr & 0xfff;
+	float scale = 1.0f;
+	if (scale_fix != 0) {
+		if (scale_fix >= 0xff000) {
+			scale = (float)(scale_fix & 0xfff) * (1.0f / 4096.0f);
+		} else {
+			scale = (float)scale_fix * (1.0f / 256.0f) + 1.0f;
+		}
+	}
+	if (rot_fix == 0) {
+		basis->axis_x.x = scale;
+		basis->axis_x.y = 0.0f;
+		basis->axis_y.x = 0.0f;
+		basis->axis_y.y = scale;
+	} else {
+		const float pi = 3.1415927f;
+		float rot = (float)rot_fix * (pi / 2048.0f);
+		float sinr = sinf(rot) * scale;
+		float cosr = cosf(rot) * scale;
+		basis->axis_x.x = cosr;
+		basis->axis_x.y = sinr;
+		basis->axis_y.x = -sinr;
+		basis->axis_y.y = cosr;
+	}
+}
+
+int
+material_stream_read_basis(struct soluna_material_stream_context ctx_, int index, size_t payload_size, void *payload, struct soluna_material_stream_basis *out) {
+	struct material_stream_context_impl *ctx = stream_context(ctx_);
+	size_t payload_max = stream_payload_max();
+	if (ctx == NULL) {
+		clear_stream_read_basis(payload_size, payload, out);
+		return 0;
+	}
+	if (ctx->error != NULL) {
+		clear_stream_read_basis(payload_size, payload, out);
+		return 0;
+	}
+	if (payload_size > payload_max) {
+		return fail_stream_read_basis(ctx_, "Invalid material payload size", payload_size, payload, out);
+	}
+	if (ctx->data == NULL) {
+		return fail_stream_read_basis(ctx_, "Missing material stream", payload_size, payload, out);
+	}
+	if (index < 0) {
+		return fail_stream_read_basis(ctx_, "Invalid material stream index", payload_size, payload, out);
+	}
+	if (index >= ctx->n) {
+		return fail_stream_read_basis(ctx_, "Invalid material stream index", payload_size, payload, out);
+	}
+	if (ctx->material_id <= 0) {
+		return fail_stream_read_basis(ctx_, "Invalid material id", payload_size, payload, out);
+	}
+	if (out == NULL) {
+		return fail_stream_read_basis(ctx_, "Missing material stream output", payload_size, payload, out);
+	}
+	if (payload_size > 0 && payload == NULL) {
+		return fail_stream_read_basis(ctx_, "Missing material stream payload output", payload_size, payload, out);
+	}
+	const struct draw_primitive *prim = (const struct draw_primitive *)ctx->data;
+	const struct draw_primitive *pos = &prim[index * 2];
+	const struct draw_primitive *ext_prim = pos + 1;
+	const struct draw_primitive_external *ext = (const struct draw_primitive_external *)ext_prim;
+	if (pos->sprite != -ctx->material_id) {
+		return fail_stream_read_basis(ctx_, "Invalid material marker", payload_size, payload, out);
+	}
+	out->basis.origin.x = (float)pos->x * STREAM_FIX_INV_SCALE;
+	out->basis.origin.y = (float)pos->y * STREAM_FIX_INV_SCALE;
+	decode_stream_basis(pos->sr, &out->basis);
 	out->sprite = ext->sprite;
 	if (payload_size > 0) {
 		memcpy(payload, (const char *)ext_prim + sizeof(*ext), payload_size);

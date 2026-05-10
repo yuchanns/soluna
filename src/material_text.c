@@ -58,7 +58,7 @@ submit(lua_State *L, void *m_, struct draw_primitive *prim, int n) {
 		
 		struct text * t = (struct text *)&prim[i*2+1];
 		struct font_glyph g, og;
-		const char* err = font_manager_glyph(m->font, t->font, t->codepoint, t->size, &g, &og);
+		const char* err = font_manager_atlas_glyph(m->font, t->font, t->codepoint, t->size, &g, &og);
 		if (err == NULL) {
 			tmp[count].offset = (-og.offset_x + 0x8000) << 16 | (-og.offset_y + 0x8000);
 			tmp[count].u = og.u << 16 | FONT_MANAGER_GLYPHSIZE;
@@ -518,8 +518,8 @@ ltext_(lua_State *L, struct position *pos) {
 				if (newline(&ctx, prim, n, pos))
 					break;
 			} else {
-				struct font_glyph g, og;
-				if (font_manager_glyph(mgr, fontid, ' ', fontsize, &g, &og) == NULL) {
+				struct font_glyph g;
+				if (font_manager_measure(mgr, fontid, ' ', fontsize, &g) == NULL) {
 					if (ctx.x > ctx.line_width)
 						ctx.line_width = ctx.x;
 					if (advance(&ctx, g.advance_x)) {
@@ -559,8 +559,8 @@ ltext_(lua_State *L, struct position *pos) {
 				prim[n].pos.sprite = -material_id;
 			}
 			
-			struct font_glyph g, og;
-			if (font_manager_glyph(mgr, font, codepoint, fontsize, &g, &og) == NULL) {
+			struct font_glyph g;
+			if (font_manager_measure(mgr, font, codepoint, fontsize, &g) == NULL) {
 				advance_position(pos, &ctx);
 				if (ctx.x > ctx.line_width)
 					ctx.line_width = ctx.x;

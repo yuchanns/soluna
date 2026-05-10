@@ -9,7 +9,18 @@
 
 #include "sokol/sokol_gfx.h"
 
-#define SOLUNA_EXT_API_VERSION 1
+#define SOLUNA_EXT_API_VERSION 2
+
+struct soluna_vec2 {
+	float x;
+	float y;
+};
+
+struct soluna_basis {
+	struct soluna_vec2 origin;
+	struct soluna_vec2 axis_x;
+	struct soluna_vec2 axis_y;
+};
 
 struct soluna_sprite_rect {
 	int texture;
@@ -34,6 +45,11 @@ struct soluna_material_stream_data {
 	int sprite;
 };
 
+struct soluna_material_stream_basis {
+	struct soluna_basis basis;
+	int sprite;
+};
+
 struct soluna_material_stream {
 	char *data;
 	size_t size;
@@ -53,6 +69,36 @@ struct soluna_sprite_bank {
 	void *ctx;
 };
 
+struct soluna_font_manager {
+	void *ctx;
+};
+
+struct soluna_font_glyph {
+	int offset_x;
+	int offset_y;
+	int advance_x;
+	int advance_y;
+	int width;
+	int height;
+	int atlas_x;
+	int atlas_y;
+};
+
+struct soluna_font_metrics {
+	int ascent;
+	int descent;
+	int line_gap;
+};
+
+struct soluna_font_atlas {
+	int width;
+	int height;
+	int glyph_width;
+	int glyph_height;
+	float sdf_mask;
+	float sdf_distance;
+};
+
 typedef void (*soluna_material_submit_func)(void *ud, struct soluna_material_stream_context ctx, int n);
 typedef void (*soluna_material_stream_write_func)(void *ud, int index, struct soluna_material_stream_item *item);
 
@@ -64,7 +110,12 @@ sg_bindings soluna_material_bindings(struct soluna_render_bindings bindings);
 soluna_material_error soluna_material_push_stream(int material_id, int count, size_t payload_size, soluna_material_stream_write_func write, void *ud, struct soluna_material_stream *out);
 void soluna_material_stream_free(void *ptr);
 int soluna_material_stream_read(struct soluna_material_stream_context ctx, int index, size_t payload_size, void *payload, struct soluna_material_stream_data *out);
+int soluna_material_stream_read_basis(struct soluna_material_stream_context ctx, int index, size_t payload_size, void *payload, struct soluna_material_stream_basis *out);
 void soluna_material_stream_error(struct soluna_material_stream_context ctx, const char *error);
 int soluna_material_stream_failed(struct soluna_material_stream_context ctx);
+const char * soluna_font_measure(struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph);
+const char * soluna_font_atlas_glyph(struct soluna_font_manager font, int font_id, int codepoint, int size, struct soluna_font_glyph *glyph, struct soluna_font_glyph *atlas);
+int soluna_font_metrics(struct soluna_font_manager font, int font_id, int size, struct soluna_font_metrics *out);
+int soluna_font_atlas(struct soluna_font_manager font, struct soluna_font_atlas *out);
 
 #endif

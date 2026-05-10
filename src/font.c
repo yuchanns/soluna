@@ -81,7 +81,7 @@ ltouch(lua_State *L) {
 	int fontid = luaL_checkinteger(L, 1);
 	int codepoint = luaL_checkinteger(L, 2);
 	struct font_glyph tmp1, tmp2;
-	font_manager_glyph(F, fontid, codepoint, 16, &tmp1, &tmp2);
+	font_manager_atlas_glyph(F, fontid, codepoint, 16, &tmp1, &tmp2);
 	return 0;
 }
 
