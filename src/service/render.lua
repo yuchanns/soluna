@@ -150,6 +150,7 @@ end
 
 -- todo: update mutiple images
 local update_image
+local new_targets = {}
 
 local function delay_update_image(imgmem)
 	function update_image()
@@ -180,6 +181,12 @@ local function frame(count)
 	-- todo: do not wait all batch commits
 	local batch_n = #batch
 	if update_image then update_image() end
+	if new_targets[1] then
+		for _, f in ipairs(new_targets) do
+			f()
+		end
+		new_targets = {}
+	end
 	STATE.drawmgr:reset()
 	for _, mat in pairs(STATE.materials_cobj) do
 		mat:reset()
@@ -193,39 +200,65 @@ local function frame(count)
 	end
 	local materials = STATE.materials_cobj
 	local views = STATE.views
-	local from
-	while true do
-		local to, pass
-		pass, from, to = STATE.drawmgr:nextpass(from)
-		if pass == nil then
-			break
+	-- offscreen segments first, then the screen segments: the screen is one swapchain pass
+	local screen = STATE.drawmgr:nextpass()
+	local segments = {}
+	local n = 0
+	for offscreen = 1, 2 do
+		local from
+		while true do
+			local to, pass
+			pass, from, to = STATE.drawmgr:nextpass(from)
+			if pass == nil then
+				break
+			end
+			if (pass ~= screen) == (offscreen == 1) then
+				segments[n + 1] = pass
+				segments[n + 2] = from
+				segments[n + 3] = to
+				n = n + 3
+			end
+			from = to + 1
 		end
-		for i = from , to do
+	end
+	for k = 1, n, 3 do
+		for i = segments[k + 1], segments[k + 2] do
 			local mat, ptr, n, tex = STATE.drawmgr(i)
 			materials[mat]:submit(ptr, n)
 		end
-		from = to + 1
 	end
 
 	STATE.srbuffer:update(STATE.transient_buffer, STATE.srbuffer_mem:ptr())
 	font.submit(STATE.font_texture)
 	STATE.transient_buffer:copy()
 
-	local from
-	while true do
-		local to, pass
-		pass, from, to = STATE.drawmgr:nextpass(from)
-		if pass == nil then
-			break
+	local entered = {}
+	local current
+	for k = 1, n, 3 do
+		local pass = segments[k]
+		if pass ~= current then
+			if current then
+				render.end_pass(current)
+			end
+			render.begin_pass(pass, entered[pass])
+			entered[pass] = true
+			current = pass
 		end
-		render.begin_pass(pass)
-		for i = from , to do
+		for i = segments[k + 1], segments[k + 2] do
 			local mat_id, ptr, n, tex = STATE.drawmgr(i)
 			local mat = materials[mat_id]
 			mat:draw(ptr, n, tex and views[tex+1] or views[mat], pass)
 		end
-		render.end_pass(pass)
-		from = to + 1
+	end
+	if current ~= screen and screen then
+		if current then
+			render.end_pass(current)
+		end
+		render.begin_pass(screen)
+		current = screen
+	end
+	if current then
+		render.end_pass(current)
 	end
 	render.submit()
 end
@@ -268,6 +301,34 @@ function S.quit()
 	font.shutdown()
 end
 
+local function new_target(id, texid, w, h, color)
+	local img = render.image { width = w, height = h, color_attachment = true }
+	STATE.textures[texid + 1] = img
+	STATE.views[texid + 1] = render.texture_view {
+		width = w,
+		height = h,
+		view = render.view { texture = img },
+		premultiplied = true,
+	}
+	STATE.pass[id] = render.pass {
+		color0 = color or "clear",
+		attachment = { color0 = render.view { color_attachment = img } },
+		width = w,
+		height = h,
+	}
+end
+
+function S.target(w, h, color)
+	local loader = ltask.uniqueservice "loader"
+	local sprite, texid = ltask.call(loader, "target", w, h)
+	STATE.pass_n = STATE.pass_n + 1
+	local id = STATE.pass_n
+	new_targets[#new_targets + 1] = function()
+		new_target(id, texid, w, h, color)
+	end
+	return id, sprite
+end
+
 function S.load_sprites(name)
 	local loader = ltask.uniqueservice "loader"
 	local spr = ltask.call(loader, "loadbundle", name)
@@ -307,12 +368,16 @@ local function render_init(arg)
 		storage = render.view { storage = sr_buffer },
 	}
 
+	local sprite_sampler = setting.sprite_sampler
+	sprite_sampler.label = sprite_sampler.label or "texquad-sampler"
+
 	STATE = {
 		pass = {
 			-- 1. default pass
 			render.pass { color0 = setting.background, swapchain = true },
 		},
-		default_sampler = render.sampler { label = "texquad-sampler", max_anisotropy = 16 },
+		pass_n = 1,
+		default_sampler = render.sampler(sprite_sampler),
 		textures = {},
 		font_texture = font_texture,
 		views = views,

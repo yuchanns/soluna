@@ -3,12 +3,26 @@
 
 #include "sokol/sokol_gfx.h"
 
+#define RENDER_CLIP_MAX 64
+
+struct render_clip {
+	int x;
+	int y;
+	int w;
+	int h;
+};
+
 struct render_target {
 	sg_pass pass;
 	int width;
 	int height;
 	float inv_width;
 	float inv_height;
+	float framesize[4];
+	int clip_n;
+	struct render_clip clip[RENDER_CLIP_MAX];
 };
+
+void render_target_scissor(struct render_target *rt);
 
 #endif
